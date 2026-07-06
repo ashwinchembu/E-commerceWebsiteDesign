@@ -1,5 +1,5 @@
 import { QuickAddProduct } from './QuickAddProduct';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 
 export function ProductGrid() {

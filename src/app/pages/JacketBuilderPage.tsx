@@ -81,9 +81,6 @@ export function JacketBuilderPage() {
 
   const price = 895;
 
-  const prevView = () => setViewIndex((i) => (i === 0 ? JACKET_VIEWS.length - 1 : i - 1));
-  const nextView = () => setViewIndex((i) => (i === JACKET_VIEWS.length - 1 ? 0 : i + 1));
-
   const getSwatchColor = (section: string) => {
     const sel = selections[section];
     const opts = SECTION_OPTIONS[section] || [];

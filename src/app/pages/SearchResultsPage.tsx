@@ -3,7 +3,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { products } from '../data/products';
 import { Heart } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface SearchResultsPageProps {
   wishlist: { id: number; name: string; price: number; image: string }[];

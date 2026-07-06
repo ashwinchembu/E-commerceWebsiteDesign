@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Toaster } from 'sonner@2.0.3';
+import { Toaster } from 'sonner';
 import { Header } from './components/Header';
 import { NewsletterModal } from './components/NewsletterModal';
 import { SearchModal } from './components/SearchModal';
@@ -51,6 +51,8 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    if (window.location.pathname === '/jacket-builder') return;
+
     // Check if newsletter has been shown before
     const newsletterShown = localStorage.getItem('newsletterShown');
 

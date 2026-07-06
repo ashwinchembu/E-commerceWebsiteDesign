@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { User, Package, Heart, Settings, LogOut, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import logoImage from 'figma:asset/49db8db3192aa070a09b2e638fd91cfc6cf1ca1e.png';
 
 interface AccountPageProps {

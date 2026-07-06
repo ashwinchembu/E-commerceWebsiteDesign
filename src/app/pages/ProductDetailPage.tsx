@@ -4,7 +4,7 @@ import { Heart, Truck, RotateCcw, Shield } from 'lucide-react';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { products } from '../data/products';
 import { CartItem } from '../App';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface ProductDetailPageProps {
   onAddToCart: (item: Omit<CartItem, 'quantity'>) => void;

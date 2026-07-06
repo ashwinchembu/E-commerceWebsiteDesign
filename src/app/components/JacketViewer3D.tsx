@@ -19,18 +19,18 @@ type ViewerState = {
 
 const MODEL_PATH = "/models/leather_jacket/scene.gltf";
 
-export function JacketViewer3D({ bodyColor }: JacketViewer3DProps) {
+export function JacketViewer3D({ bodyColor, sleeveColor, collarColor, cuffColor }: JacketViewer3DProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<ViewerState | null>(null);
   const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.05, rotX: -0.04 });
-  const colorRef = useRef(bodyColor);
+  const colorsRef = useRef({ bodyColor, sleeveColor, collarColor, cuffColor });
 
   useEffect(() => {
-    colorRef.current = bodyColor;
+    colorsRef.current = { bodyColor, sleeveColor, collarColor, cuffColor };
     const state = sceneRef.current;
     if (!state) return;
-    tintLeatherModel(state.modelRoot, bodyColor);
-  }, [bodyColor]);
+    tintLeatherModel(state.modelRoot, colorsRef.current);
+  }, [bodyColor, sleeveColor, collarColor, cuffColor]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -92,7 +92,7 @@ export function JacketViewer3D({ bodyColor }: JacketViewer3DProps) {
         disposeObject(placeholder);
 
         const jacket = gltf.scene;
-        prepareLeatherModel(jacket, colorRef.current);
+        prepareLeatherModel(jacket, colorsRef.current);
         frameLeatherModel(jacket);
         modelRoot.add(jacket);
       },
@@ -171,38 +171,43 @@ export function JacketViewer3D({ bodyColor }: JacketViewer3DProps) {
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       sceneRef.current = null;
     };
-  }, [bodyColor]);
+  }, []);
 
   return <div ref={mountRef} className="h-full w-full cursor-grab active:cursor-grabbing" />;
 }
 
-function prepareLeatherModel(root: THREE.Group, color: string) {
+function prepareLeatherModel(root: THREE.Group, colors: JacketColors) {
   root.traverse((node) => {
     if (!(node instanceof THREE.Mesh)) return;
     node.castShadow = true;
     node.receiveShadow = true;
     node.userData.leatherModel = true;
+    node.geometry = node.geometry.clone();
     const material = Array.isArray(node.material) ? node.material[0] : node.material;
-    node.material = upgradeLeatherMaterial(material, color);
+    node.material = upgradeLeatherMaterial(material);
+    applyPartColors(node, colors);
   });
 }
 
-function tintLeatherModel(root: THREE.Group, color: string) {
+type JacketColors = {
+  bodyColor: string;
+  sleeveColor: string;
+  collarColor: string;
+  cuffColor: string;
+};
+
+function tintLeatherModel(root: THREE.Group, colors: JacketColors) {
   root.traverse((node) => {
     if (!(node instanceof THREE.Mesh) || !node.userData.leatherModel) return;
-    const materials = Array.isArray(node.material) ? node.material : [node.material];
-    materials.forEach((material) => {
-      updateLeatherMaterialColor(material, color);
-    });
+    applyPartColors(node, colors);
   });
 }
 
-function upgradeLeatherMaterial(source: THREE.Material, color: string) {
+function upgradeLeatherMaterial(source: THREE.Material) {
   const original = source as THREE.MeshStandardMaterial;
-  const displayColor = displayLeatherColorForHex(color);
   const material = new THREE.MeshPhysicalMaterial({
-    color: displayColor.display,
-    map: displayColor.usesColorMap ? makeLeatherTintTexture(color) : null,
+    color: "#ffffff",
+    map: null,
     normalMap: original.normalMap ?? null,
     roughnessMap: original.roughnessMap ?? null,
     metalnessMap: original.metalnessMap ?? null,
@@ -212,10 +217,10 @@ function upgradeLeatherMaterial(source: THREE.Material, color: string) {
     clearcoatRoughness: 0.34,
     normalScale: new THREE.Vector2(0.82, 0.82),
     side: THREE.DoubleSide,
+    vertexColors: true,
   });
-  material.emissive.copy(displayColor.emissive);
-  material.emissiveIntensity = displayColor.emissiveIntensity;
-  material.userData.generatedTintMap = material.map;
+  material.emissive.set("#050505");
+  material.emissiveIntensity = 0.06;
 
   [material.map, material.normalMap, material.roughnessMap, material.metalnessMap].forEach((texture) => {
     if (!texture) return;
@@ -226,70 +231,49 @@ function upgradeLeatherMaterial(source: THREE.Material, color: string) {
   return material;
 }
 
-function updateLeatherMaterialColor(material: THREE.Material, color: string) {
-  const editable = material as THREE.MeshStandardMaterial;
-  const displayColor = displayLeatherColorForHex(color);
-  const generatedMap = editable.userData.generatedTintMap;
-  if (generatedMap instanceof THREE.Texture) generatedMap.dispose();
-  if (editable.color instanceof THREE.Color) editable.color.copy(displayColor.display);
-  editable.map = displayColor.usesColorMap ? makeLeatherTintTexture(color) : null;
-  if (editable.emissive instanceof THREE.Color) {
-    editable.emissive.copy(displayColor.emissive);
-    editable.emissiveIntensity = displayColor.emissiveIntensity;
-  }
-  editable.userData.generatedTintMap = editable.map;
-  editable.roughness = 0.38;
-  editable.metalness = 0;
-  editable.needsUpdate = true;
-}
+function applyPartColors(mesh: THREE.Mesh, colors: JacketColors) {
+  const geometry = mesh.geometry;
+  const position = geometry.getAttribute("position");
+  if (!position) return;
 
-function makeLeatherTintTexture(color: string) {
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return new THREE.CanvasTexture(canvas);
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  if (!box) return;
 
-  const base = new THREE.Color(color);
-  const isLight = base.r > 0.86 && base.g > 0.86 && base.b > 0.8;
-  const isVeryDark = isBlackLeatherColor(color, base);
-  const fill = displayLeatherColor(base, isLight, isVeryDark);
+  const body = displayLeatherColorForHex(colors.bodyColor).display;
+  const sleeve = displayLeatherColorForHex(colors.sleeveColor).display;
+  const collar = displayLeatherColorForHex(colors.collarColor).display;
+  const cuff = displayLeatherColorForHex(colors.cuffColor).display;
+  const vertexColors = new Float32Array(position.count * 3);
+  const point = new THREE.Vector3();
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
 
-  ctx.fillStyle = `rgb(${Math.round(fill.r * 255)}, ${Math.round(fill.g * 255)}, ${Math.round(fill.b * 255)})`;
-  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < position.count; i += 1) {
+    point.fromBufferAttribute(position, i);
+    const ny = size.y ? (point.y - box.min.y) / size.y : 0.5;
+    const nz = size.z ? (point.z - box.min.z) / size.z : 0.5;
+    const distanceFromCenterX = Math.abs(point.x - center.x) / Math.max(size.x / 2, 0.0001);
+    const lowerArmBias = ny < 0.42 && distanceFromCenterX > 0.42;
+    const sleeveBias = distanceFromCenterX > 0.48 || (distanceFromCenterX > 0.34 && ny > 0.22 && ny < 0.82);
+    const cuffBias = distanceFromCenterX > 0.72 && (ny < 0.28 || nz > 0.62);
+    const collarBias = ny > 0.76 && distanceFromCenterX < 0.42;
+    const selected = collarBias ? collar : cuffBias ? cuff : sleeveBias || lowerArmBias ? sleeve : body;
 
-  for (let i = 0; i < 5200; i += 1) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const shade = 1 + (Math.random() - 0.5) * (isLight ? 0.12 : 0.38);
-    const r = Math.max(0, Math.min(255, Math.round(fill.r * 255 * shade)));
-    const g = Math.max(0, Math.min(255, Math.round(fill.g * 255 * shade)));
-    const b = Math.max(0, Math.min(255, Math.round(fill.b * 255 * shade)));
-    ctx.globalAlpha = 0.28;
-    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-    ctx.fillRect(x, y, 2 + Math.random() * 3, 1 + Math.random() * 2);
+    vertexColors[i * 3] = selected.r;
+    vertexColors[i * 3 + 1] = selected.g;
+    vertexColors[i * 3 + 2] = selected.b;
   }
 
-  ctx.globalAlpha = isLight ? 0.12 : 0.2;
-  ctx.strokeStyle = isLight ? "#b8b8b0" : "#ffffff";
-  for (let i = 0; i < 160; i += 1) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + (Math.random() - 0.5) * 70, y + (Math.random() - 0.5) * 16);
-    ctx.stroke();
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(3, 3);
-  texture.anisotropy = 8;
-  texture.needsUpdate = true;
-  return texture;
+  geometry.setAttribute("color", new THREE.BufferAttribute(vertexColors, 3));
+  geometry.getAttribute("color").needsUpdate = true;
+  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  materials.forEach((material) => {
+    if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhysicalMaterial) {
+      material.vertexColors = true;
+      material.needsUpdate = true;
+    }
+  });
 }
 
 function displayLeatherColorForHex(color: string) {
@@ -297,12 +281,7 @@ function displayLeatherColorForHex(color: string) {
   const isLight = base.r > 0.86 && base.g > 0.86 && base.b > 0.8;
   const isVeryDark = isBlackLeatherColor(color, base);
   const display = displayLeatherColor(base, isLight, isVeryDark);
-  return {
-    display,
-    usesColorMap: isVeryDark,
-    emissive: isVeryDark ? new THREE.Color("#000000") : display.clone().multiplyScalar(isLight ? 0.08 : 0.34),
-    emissiveIntensity: isVeryDark ? 0 : isLight ? 0.04 : 0.55,
-  };
+  return { display };
 }
 
 function displayLeatherColor(base: THREE.Color, isLight: boolean, isVeryDark: boolean) {

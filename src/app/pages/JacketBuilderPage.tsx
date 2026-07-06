@@ -223,7 +223,7 @@ export function JacketBuilderPage() {
             bodyColor={bodyColor}
             sleeveColor={sleeveColor}
             collarColor={SECTION_OPTIONS["Collar"].find(o => o.label === selections["Collar"])?.color ?? "#e8e4dc"}
-            cuffColor={SECTION_OPTIONS["Snaps"].find(o => o.label === selections["Snaps"])?.color ?? "#dddddd"}
+            cuffColor={sleeveColor}
           />
 
           {/* Drag hint */}

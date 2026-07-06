@@ -7,11 +7,11 @@ const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
 const SECTION_OPTIONS: Record<string, { label: string; color: string }[]> = {
   Body: [
-    { label: "Bright White Wool", color: "#f5f5f0" },
-    { label: "Black Quilted", color: "#1a1a1a" },
-    { label: "Navy Wool", color: "#1e2d5a" },
-    { label: "Burgundy Wool", color: "#6b1e2a" },
-    { label: "Forest Wool", color: "#1a3d2b" },
+    { label: "Bright White Leather", color: "#f5f5f0" },
+    { label: "Black Leather", color: "#1a1a1a" },
+    { label: "Navy Leather", color: "#1e2d5a" },
+    { label: "Burgundy Leather", color: "#6b1e2a" },
+    { label: "Forest Leather", color: "#1a3d2b" },
   ],
   Sleeves: [
     { label: "Bright White Leather", color: "#f5f5f0" },
@@ -66,7 +66,7 @@ export function JacketBuilderPage() {
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Body");
   const [selections, setSelections] = useState<Record<string, string>>({
-    Body: "Bright White Wool",
+    Body: "Bright White Leather",
     Sleeves: "Bright White Leather",
     Lining: "No Shoulder Inserts",
     "Shoulder Inserts": "Bright White Leather",

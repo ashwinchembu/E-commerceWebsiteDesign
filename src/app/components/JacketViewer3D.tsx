@@ -171,7 +171,7 @@ export function JacketViewer3D({ bodyColor }: JacketViewer3DProps) {
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       sceneRef.current = null;
     };
-  }, []);
+  }, [bodyColor]);
 
   return <div ref={mountRef} className="h-full w-full cursor-grab active:cursor-grabbing" />;
 }
@@ -192,19 +192,17 @@ function tintLeatherModel(root: THREE.Group, color: string) {
     if (!(node instanceof THREE.Mesh) || !node.userData.leatherModel) return;
     const materials = Array.isArray(node.material) ? node.material : [node.material];
     materials.forEach((material) => {
-      if ("color" in material && material.color instanceof THREE.Color) {
-        material.color.copy(colorForSelection(color));
-        material.needsUpdate = true;
-      }
+      updateLeatherMaterialColor(material, color);
     });
   });
 }
 
 function upgradeLeatherMaterial(source: THREE.Material, color: string) {
   const original = source as THREE.MeshStandardMaterial;
+  const displayColor = displayLeatherColorForHex(color);
   const material = new THREE.MeshPhysicalMaterial({
-    color: colorForSelection(color),
-    map: original.map ?? null,
+    color: displayColor.display,
+    map: displayColor.usesColorMap ? makeLeatherTintTexture(color) : null,
     normalMap: original.normalMap ?? null,
     roughnessMap: original.roughnessMap ?? null,
     metalnessMap: original.metalnessMap ?? null,
@@ -215,6 +213,9 @@ function upgradeLeatherMaterial(source: THREE.Material, color: string) {
     normalScale: new THREE.Vector2(0.82, 0.82),
     side: THREE.DoubleSide,
   });
+  material.emissive.copy(displayColor.emissive);
+  material.emissiveIntensity = displayColor.emissiveIntensity;
+  material.userData.generatedTintMap = material.map;
 
   [material.map, material.normalMap, material.roughnessMap, material.metalnessMap].forEach((texture) => {
     if (!texture) return;
@@ -225,10 +226,100 @@ function upgradeLeatherMaterial(source: THREE.Material, color: string) {
   return material;
 }
 
-function colorForSelection(color: string) {
-  const selected = new THREE.Color(color);
-  const whiteLeather = selected.r > 0.9 && selected.g > 0.9 && selected.b > 0.85;
-  return whiteLeather ? new THREE.Color("#1b1b1a") : selected;
+function updateLeatherMaterialColor(material: THREE.Material, color: string) {
+  const editable = material as THREE.MeshStandardMaterial;
+  const displayColor = displayLeatherColorForHex(color);
+  const generatedMap = editable.userData.generatedTintMap;
+  if (generatedMap instanceof THREE.Texture) generatedMap.dispose();
+  if (editable.color instanceof THREE.Color) editable.color.copy(displayColor.display);
+  editable.map = displayColor.usesColorMap ? makeLeatherTintTexture(color) : null;
+  if (editable.emissive instanceof THREE.Color) {
+    editable.emissive.copy(displayColor.emissive);
+    editable.emissiveIntensity = displayColor.emissiveIntensity;
+  }
+  editable.userData.generatedTintMap = editable.map;
+  editable.roughness = 0.38;
+  editable.metalness = 0;
+  editable.needsUpdate = true;
+}
+
+function makeLeatherTintTexture(color: string) {
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  const base = new THREE.Color(color);
+  const isLight = base.r > 0.86 && base.g > 0.86 && base.b > 0.8;
+  const isVeryDark = isBlackLeatherColor(color, base);
+  const fill = displayLeatherColor(base, isLight, isVeryDark);
+
+  ctx.fillStyle = `rgb(${Math.round(fill.r * 255)}, ${Math.round(fill.g * 255)}, ${Math.round(fill.b * 255)})`;
+  ctx.fillRect(0, 0, size, size);
+
+  for (let i = 0; i < 5200; i += 1) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const shade = 1 + (Math.random() - 0.5) * (isLight ? 0.12 : 0.38);
+    const r = Math.max(0, Math.min(255, Math.round(fill.r * 255 * shade)));
+    const g = Math.max(0, Math.min(255, Math.round(fill.g * 255 * shade)));
+    const b = Math.max(0, Math.min(255, Math.round(fill.b * 255 * shade)));
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.fillRect(x, y, 2 + Math.random() * 3, 1 + Math.random() * 2);
+  }
+
+  ctx.globalAlpha = isLight ? 0.12 : 0.2;
+  ctx.strokeStyle = isLight ? "#b8b8b0" : "#ffffff";
+  for (let i = 0; i < 160; i += 1) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (Math.random() - 0.5) * 70, y + (Math.random() - 0.5) * 16);
+    ctx.stroke();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(3, 3);
+  texture.anisotropy = 8;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function displayLeatherColorForHex(color: string) {
+  const base = new THREE.Color(color);
+  const isLight = base.r > 0.86 && base.g > 0.86 && base.b > 0.8;
+  const isVeryDark = isBlackLeatherColor(color, base);
+  const display = displayLeatherColor(base, isLight, isVeryDark);
+  return {
+    display,
+    usesColorMap: isVeryDark,
+    emissive: isVeryDark ? new THREE.Color("#000000") : display.clone().multiplyScalar(isLight ? 0.08 : 0.34),
+    emissiveIntensity: isVeryDark ? 0 : isLight ? 0.04 : 0.55,
+  };
+}
+
+function displayLeatherColor(base: THREE.Color, isLight: boolean, isVeryDark: boolean) {
+  if (isVeryDark) return new THREE.Color("#111111");
+  if (isLight) return base;
+
+  const brightestChannel = Math.max(base.r, base.g, base.b, 0.01);
+  const scale = Math.max(1.35, 0.78 / brightestChannel);
+  return new THREE.Color(
+    Math.min(base.r * scale, 1),
+    Math.min(base.g * scale, 1),
+    Math.min(base.b * scale, 1),
+  );
+}
+
+function isBlackLeatherColor(color: string, base: THREE.Color) {
+  return color.trim().toLowerCase() === "#1a1a1a" || (base.r < 0.03 && base.g < 0.03 && base.b < 0.03);
 }
 
 function frameLeatherModel(model: THREE.Group) {

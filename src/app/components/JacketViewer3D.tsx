@@ -156,7 +156,7 @@ export function JacketViewer3D({ bodyColor, sleeveColor, collarColor, cuffColor 
 function buildLeatherJacket(bodyColor: string, sleeveColor: string, collarColor: string, cuffColor: string) {
   const group = new THREE.Group();
   group.scale.setScalar(0.86);
-  group.position.y = -0.12;
+  group.position.y = -0.45;
 
   const bodyMat = leatherMaterial(bodyColor);
   const sleeveMat = leatherMaterial(sleeveColor);

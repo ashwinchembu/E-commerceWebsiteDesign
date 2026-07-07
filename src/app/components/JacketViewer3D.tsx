@@ -28,6 +28,20 @@ type PartMaterials = {
   snap: THREE.MeshPhysicalMaterial;
 };
 
+/** Canvases used to re-tint the baked texture per pixel on color changes. */
+type RecolorKit = {
+  detail: HTMLCanvasElement;
+  masks: Record<"body" | "sleeve" | "pocket" | "trim", HTMLCanvasElement>;
+  tmp: HTMLCanvasElement;
+  composite: HTMLCanvasElement;
+  texture: THREE.CanvasTexture;
+};
+
+type JacketParts = {
+  materials: PartMaterials;
+  kit: RecolorKit;
+};
+
 type BackOverlay = {
   mesh: THREE.Mesh;
   canvas: HTMLCanvasElement;
@@ -39,7 +53,7 @@ type ViewerState = {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   modelRoot: THREE.Group;
-  materials: PartMaterials | null;
+  parts: JacketParts | null;
   backOverlay: BackOverlay | null;
   frameId: number;
 };
@@ -52,8 +66,15 @@ const CLASS_SLEEVE = 1;
 const CLASS_TRIM = 2;
 
 // UV rect of the (hidden) chest letter patch, whose imprint is baked into
-// the base color, occlusion, and roughness textures.
-const PATCH_RECT = { u0: 0.27, v0: 0.21, u1: 0.42, v1: 0.4 };
+// the base color, occlusion/roughness, and normal textures.
+const PATCH_RECT = { u0: 0.26, v0: 0.2, u1: 0.43, v1: 0.41 };
+
+// UV rects around the two welt pockets on the front body panel; light
+// (leather-colored) texels inside them take the pocket color.
+const POCKET_RECTS = [
+  { u0: 0.05, v0: 0.07, u1: 0.2, v1: 0.17 },
+  { u0: 0.31, v0: 0.07, u1: 0.45, v1: 0.17 },
+];
 
 export function JacketViewer3D({
   bodyColor,
@@ -73,8 +94,8 @@ export function JacketViewer3D({
   useEffect(() => {
     colorsRef.current = { bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor };
     const state = sceneRef.current;
-    if (!state?.materials) return;
-    applyColors(state.materials, colorsRef.current);
+    if (!state?.parts) return;
+    applyColors(state.parts, colorsRef.current);
   }, [bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor]);
 
   useEffect(() => {
@@ -143,7 +164,7 @@ export function JacketViewer3D({
       (gltf) => {
         if (disposed) return;
         try {
-          const materials = prepareJacket(gltf.scene, colorsRef.current);
+          const parts = prepareJacket(gltf.scene, colorsRef.current);
           frameModel(gltf.scene);
           modelRoot.remove(placeholder);
           disposeObject(placeholder);
@@ -158,7 +179,7 @@ export function JacketViewer3D({
 
           const state = sceneRef.current;
           if (state) {
-            state.materials = materials;
+            state.parts = parts;
             state.backOverlay = overlay;
           }
         } catch (error) {
@@ -228,7 +249,7 @@ export function JacketViewer3D({
       scene,
       camera,
       modelRoot,
-      materials: null,
+      parts: null,
       backOverlay: null,
       frameId: requestAnimationFrame(animate),
     };
@@ -262,21 +283,21 @@ type JacketColors = {
   liningColor: string;
 };
 
-function applyColors(materials: PartMaterials, colors: JacketColors) {
-  materials.body.color.set(colors.bodyColor);
-  materials.sleeve.color.set(colors.sleeveColor);
-  materials.trim.color.set(colors.trimColor);
-  materials.snap.color.set(colors.snapColor);
+function applyColors(parts: JacketParts, colors: JacketColors) {
+  composeColorMap(parts.kit, colors);
+  parts.materials.snap.color.set(colors.snapColor);
 }
 
 /**
- * The GLB bakes body/sleeve colors into one texture, so per-part recoloring
- * works by classifying each triangle from the baked base color (white texels
- * are the leather sleeves, dark ones the wool body), carving the ribbed trim
- * out of the body class by position, then re-tinting everything over a
- * luminance-neutralized copy of the base texture that keeps seam/fold detail.
+ * The GLB bakes body/sleeve colors into one texture, so recoloring works per
+ * pixel in texture space: every texel is classified by chroma (maroon = wool
+ * body, neutral = leather), ribbed-trim triangles are rasterized into a mask
+ * from their UVs, pocket welts are the light texels inside known UV rects,
+ * and color changes composite a fresh tinted map from a luminance-neutralized
+ * detail copy of the base color. Boundaries follow the real garment seams
+ * instead of triangle edges.
  */
-function prepareJacket(root: THREE.Group, colors: JacketColors): PartMaterials {
+function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   root.updateMatrixWorld(true);
 
   let jacketMesh: THREE.Mesh | null = null;
@@ -297,12 +318,18 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): PartMaterials {
   const baseImage = source.map?.image as CanvasImageSource & { width: number; height: number };
   if (!baseImage) throw new Error("base color texture missing");
 
-  const { detailTexture, isLightTexel } = neutralizeBaseColor(baseImage);
+  const neutral = neutralizeBaseColor(baseImage);
   const cleanedPBR = cleanPatchImprint(source.roughnessMap);
+  const cleanedNormal = cleanNormalImprint(source.normalMap);
+
+  const trimTriangleUVs = segmentJacketGeometry(jacketMesh, neutral.isLightTexel);
+  const kit = buildRecolorKit(neutral, trimTriangleUVs);
+  composeColorMap(kit, colors);
 
   const shared = {
-    map: detailTexture,
-    normalMap: source.normalMap,
+    map: kit.texture,
+    color: "#ffffff",
+    normalMap: cleanedNormal,
     roughnessMap: cleanedPBR,
     metalnessMap: cleanedPBR,
     aoMap: cleanedPBR,
@@ -311,34 +338,35 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): PartMaterials {
   };
 
   const materials: PartMaterials = {
-    body: new THREE.MeshStandardMaterial({ ...shared, color: colors.bodyColor, roughness: 0.92 }),
+    body: new THREE.MeshStandardMaterial({ ...shared, roughness: 0.92 }),
     sleeve: new THREE.MeshPhysicalMaterial({
       ...shared,
-      color: colors.sleeveColor,
       roughness: 0.5,
       clearcoat: 0.35,
       clearcoatRoughness: 0.5,
     }),
-    trim: new THREE.MeshStandardMaterial({ ...shared, color: colors.trimColor, roughness: 0.88 }),
+    trim: new THREE.MeshStandardMaterial({ ...shared, roughness: 0.88 }),
     snap: new THREE.MeshPhysicalMaterial({
-      map: detailTexture,
-      normalMap: source.normalMap,
       color: colors.snapColor,
+      normalMap: cleanedNormal,
       roughness: 0.35,
       metalness: 0.3,
       side: THREE.DoubleSide,
     }),
   };
 
-  segmentJacketGeometry(jacketMesh, isLightTexel);
   (jacketMesh as THREE.Mesh).material = [materials.body, materials.sleeve, materials.trim];
-
   if (buttonMesh) (buttonMesh as THREE.Mesh).material = materials.snap;
 
-  return materials;
+  return { materials, kit };
 }
 
-/** Split the jacket mesh index into body / sleeve / trim groups. */
+/**
+ * Split the jacket mesh index into body / sleeve / trim groups (the groups
+ * carry material properties: wool vs leather vs knit). Returns the UV
+ * coordinates of trim triangles so the trim region can be rasterized into
+ * the recolor mask.
+ */
 function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: number) => boolean) {
   const geometry = mesh.geometry;
   const index = geometry.getIndex();
@@ -353,6 +381,7 @@ function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: nu
   const triCount = index.count / 3;
   const classes = new Uint8Array(triCount);
   const point = new THREE.Vector3();
+  const trimTriangleUVs: number[] = [];
 
   for (let t = 0; t < triCount; t += 1) {
     const a = index.getX(t * 3);
@@ -377,14 +406,18 @@ function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: nu
     const ny = size.y ? (point.y - bounds.min.y) / size.y : 0.5;
     const nx = size.x ? Math.abs(point.x - center.x) / (size.x / 2) : 0;
 
-    if (lightVotes >= 3) {
+    // The knit trim is light gray in the baked texture, so the geometric
+    // rules must run before the light-texel test or the trim gets classed
+    // as sleeve leather.
+    if (
+      (ny < 0.1 && nx < 0.55) || // waistband
+      (ny > 0.88 && nx < 0.35) || // collar
+      nx > 0.84 // cuffs
+    ) {
+      classes[t] = CLASS_TRIM;
+      trimTriangleUVs.push(uv.getX(a), uv.getY(a), uv.getX(b), uv.getY(b), uv.getX(c), uv.getY(c));
+    } else if (lightVotes >= 3) {
       classes[t] = CLASS_SLEEVE;
-    } else if (ny < 0.1 && nx < 0.55) {
-      classes[t] = CLASS_TRIM; // waistband
-    } else if (ny > 0.88 && nx < 0.35) {
-      classes[t] = CLASS_TRIM; // collar
-    } else if (nx > 0.8) {
-      classes[t] = CLASS_TRIM; // cuffs
     } else {
       classes[t] = CLASS_BODY;
     }
@@ -405,17 +438,26 @@ function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: nu
     geometry.addGroup(start, offset - start, cls);
   }
   geometry.setIndex(new THREE.BufferAttribute(sorted, 1));
+
+  return trimTriangleUVs;
 }
+
+type NeutralizedBase = {
+  canvas: HTMLCanvasElement;
+  light: Uint8Array;
+  width: number;
+  height: number;
+  isLightTexel: (u: number, v: number) => boolean;
+};
 
 /**
  * Turn the baked base color into a grayscale detail map: each pixel's
- * luminance divided by the mean of its region (light vs dark) so that
- * `material.color * map` re-tints both regions to any target color while
- * preserving stitches, seams, and fold shading.
+ * luminance divided by the mean of its region (light vs dark) so a tint can
+ * be multiplied on top while keeping stitches, seams, and fold shading.
  */
-function neutralizeBaseColor(image: CanvasImageSource & { width: number; height: number }) {
-  const width = Math.min(image.width, 2048);
-  const height = Math.min(image.height, 2048);
+function neutralizeBaseColor(image: CanvasImageSource & { width: number; height: number }): NeutralizedBase {
+  const width = Math.min(image.width, 1024);
+  const height = Math.min(image.height, 1024);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -459,8 +501,8 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
     data[i * 4 + 2] = value;
   }
 
-  // Flatten the letter-patch shadow baked into the chest area of the base
-  // color (the patch mesh itself is hidden), otherwise it shows as a smudge.
+  // Erase the letter-patch shadow baked into the chest area (the patch mesh
+  // itself is hidden): pull those pixels almost fully to the fabric mean.
   const px0 = Math.floor(PATCH_RECT.u0 * width);
   const px1 = Math.ceil(PATCH_RECT.u1 * width);
   const py0 = Math.floor(PATCH_RECT.v0 * height);
@@ -469,7 +511,7 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
     for (let x = px0; x < px1; x += 1) {
       const i = y * width + x;
       if (light[i]) continue;
-      const value = Math.max(data[i * 4], 195);
+      const value = data[i * 4] + (205 - data[i * 4]) * 0.85;
       data[i * 4] = value;
       data[i * 4 + 1] = value;
       data[i * 4 + 2] = value;
@@ -477,19 +519,106 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
   }
   ctx.putImageData(imageData, 0, 0);
 
-  const detailTexture = new THREE.CanvasTexture(canvas);
-  detailTexture.flipY = false;
-  detailTexture.colorSpace = THREE.SRGBColorSpace;
-  detailTexture.wrapS = detailTexture.wrapT = THREE.RepeatWrapping;
-  detailTexture.anisotropy = 8;
-
   const isLightTexel = (u: number, v: number) => {
     const x = Math.min(width - 1, Math.max(0, Math.floor((u % 1 + 1) % 1 * width)));
     const y = Math.min(height - 1, Math.max(0, Math.floor((v % 1 + 1) % 1 * height)));
     return light[y * width + x] === 1;
   };
 
-  return { detailTexture, isLightTexel };
+  return { canvas, light, width, height, isLightTexel };
+}
+
+/** Build the per-region alpha masks and working canvases for recoloring. */
+function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): RecolorKit {
+  const { width, height, light } = neutral;
+
+  const inPocketRect = (x: number, y: number) => {
+    const u = x / width;
+    const v = y / height;
+    return POCKET_RECTS.some((r) => u >= r.u0 && u <= r.u1 && v >= r.v0 && v <= r.v1);
+  };
+
+  const makeMask = (test: (i: number, x: number, y: number) => boolean) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d")!;
+    const imageData = ctx.createImageData(width, height);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const i = y * width + x;
+        imageData.data[i * 4 + 3] = test(i, x, y) ? 255 : 0;
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return canvas;
+  };
+
+  const body = makeMask((i) => light[i] === 0);
+  const sleeve = makeMask((i, x, y) => light[i] === 1 && !inPocketRect(x, y));
+  const pocket = makeMask((i, x, y) => light[i] === 1 && inPocketRect(x, y));
+
+  // Trim region comes from geometry, rasterized into UV space
+  const trim = document.createElement("canvas");
+  trim.width = width;
+  trim.height = height;
+  const trimCtx = trim.getContext("2d")!;
+  trimCtx.fillStyle = "#ffffff";
+  trimCtx.strokeStyle = "#ffffff";
+  trimCtx.lineWidth = 1.5;
+  for (let i = 0; i < trimTriangleUVs.length; i += 6) {
+    trimCtx.beginPath();
+    trimCtx.moveTo(trimTriangleUVs[i] * width, trimTriangleUVs[i + 1] * height);
+    trimCtx.lineTo(trimTriangleUVs[i + 2] * width, trimTriangleUVs[i + 3] * height);
+    trimCtx.lineTo(trimTriangleUVs[i + 4] * width, trimTriangleUVs[i + 5] * height);
+    trimCtx.closePath();
+    trimCtx.fill();
+    trimCtx.stroke();
+  }
+
+  const tmp = document.createElement("canvas");
+  tmp.width = width;
+  tmp.height = height;
+  const composite = document.createElement("canvas");
+  composite.width = width;
+  composite.height = height;
+
+  const texture = new THREE.CanvasTexture(composite);
+  texture.flipY = false;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 8;
+
+  return { detail: neutral.canvas, masks: { body, sleeve, pocket, trim }, tmp, composite, texture };
+}
+
+/** Re-tint the detail map region by region into the composite color map. */
+function composeColorMap(kit: RecolorKit, colors: JacketColors) {
+  const { width, height } = kit.composite;
+  const compositeCtx = kit.composite.getContext("2d")!;
+  const tmpCtx = kit.tmp.getContext("2d")!;
+  compositeCtx.clearRect(0, 0, width, height);
+
+  const layers: Array<[HTMLCanvasElement, string]> = [
+    [kit.masks.body, colors.bodyColor],
+    [kit.masks.sleeve, colors.sleeveColor],
+    [kit.masks.pocket, colors.pocketColor],
+    [kit.masks.trim, colors.trimColor],
+  ];
+
+  for (const [mask, color] of layers) {
+    tmpCtx.globalCompositeOperation = "source-over";
+    tmpCtx.clearRect(0, 0, width, height);
+    tmpCtx.drawImage(kit.detail, 0, 0);
+    tmpCtx.globalCompositeOperation = "multiply";
+    tmpCtx.fillStyle = color;
+    tmpCtx.fillRect(0, 0, width, height);
+    tmpCtx.globalCompositeOperation = "destination-in";
+    tmpCtx.drawImage(mask, 0, 0);
+    compositeCtx.drawImage(kit.tmp, 0, 0);
+  }
+
+  kit.texture.needsUpdate = true;
 }
 
 /**
@@ -520,6 +649,40 @@ function cleanPatchImprint(sourceTexture: THREE.Texture | null): THREE.Texture |
   }
   ctx.putImageData(region, px0, py0);
 
+  return canvasTextureLike(canvas, sourceTexture);
+}
+
+/**
+ * The patch outline is embossed in the normal map too; blend the patch rect
+ * mostly back to a flat normal so no raised edge catches the light.
+ */
+function cleanNormalImprint(sourceTexture: THREE.Texture | null): THREE.Texture | null {
+  const image = sourceTexture?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
+  if (!sourceTexture || !image) return sourceTexture ?? null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(image, 0, 0);
+
+  const px0 = Math.floor(PATCH_RECT.u0 * canvas.width);
+  const py0 = Math.floor(PATCH_RECT.v0 * canvas.height);
+  const pw = Math.ceil((PATCH_RECT.u1 - PATCH_RECT.u0) * canvas.width);
+  const ph = Math.ceil((PATCH_RECT.v1 - PATCH_RECT.v0) * canvas.height);
+  const region = ctx.getImageData(px0, py0, pw, ph);
+  const data = region.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = data[i] + (128 - data[i]) * 0.7;
+    data[i + 1] = data[i + 1] + (128 - data[i + 1]) * 0.7;
+    data[i + 2] = data[i + 2] + (255 - data[i + 2]) * 0.7;
+  }
+  ctx.putImageData(region, px0, py0);
+
+  return canvasTextureLike(canvas, sourceTexture);
+}
+
+function canvasTextureLike(canvas: HTMLCanvasElement, sourceTexture: THREE.Texture) {
   const texture = new THREE.CanvasTexture(canvas);
   texture.flipY = false;
   texture.colorSpace = THREE.NoColorSpace;

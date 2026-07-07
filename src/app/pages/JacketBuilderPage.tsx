@@ -6,40 +6,50 @@ import { useNavigate } from "react-router-dom";
 const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
 const SECTION_OPTIONS: Record<string, { label: string; color: string }[]> = {
+  Collar: [
+    { label: "Regular", color: "#f0efe9" },
+  ],
   Body: [
-    { label: "Black Leather", color: "#1a1a1a" },
-    { label: "Bright White Leather", color: "#f5f5f0" },
-    { label: "Navy Leather", color: "#1e2d5a" },
-    { label: "Burgundy Leather", color: "#6b1e2a" },
-    { label: "Forest Leather", color: "#1a3d2b" },
+    { label: "Bright White Wool", color: "#f0e9d8" },
+    { label: "Black Wool", color: "#1a1a1a" },
+    { label: "Navy Wool", color: "#1e2d5a" },
+    { label: "Burgundy Wool", color: "#6b1e2a" },
+    { label: "Forest Wool", color: "#1a3d2b" },
+  ],
+  "Inside Lining": [
+    { label: "Black Quilted", color: "#141414" },
+    { label: "White Quilted", color: "#fafafa" },
+    { label: "Gold Satin", color: "#c8a94a" },
   ],
   Sleeves: [
-    { label: "Bright White Leather", color: "#f5f5f0" },
+    { label: "Bright White Leather", color: "#f4f2ea" },
     { label: "Black Leather", color: "#1a1a1a" },
     { label: "Caramel Leather", color: "#b07d3a" },
     { label: "Burgundy Leather", color: "#6b1e2a" },
     { label: "Navy Leather", color: "#1e2d5a" },
   ],
-  Lining: [
-    { label: "No Shoulder Inserts", color: "#e8e8e8" },
-    { label: "Black Satin", color: "#1a1a1a" },
-    { label: "White Satin", color: "#fafafa" },
-    { label: "Gold Satin", color: "#c8a94a" },
-  ],
   "Shoulder Inserts": [
-    { label: "Bright White Leather", color: "#f5f5f0" },
+    { label: "No Shoulder Inserts", color: "#e8e8e8" },
+    { label: "Bright White Leather", color: "#f4f2ea" },
     { label: "Black Leather", color: "#1a1a1a" },
-    { label: "None", color: "#e8e8e8" },
   ],
-  Collar: [
-    { label: "Off White Snaps", color: "#f0ede6" },
-    { label: "Black Snaps", color: "#1a1a1a" },
-    { label: "Gold Snaps", color: "#c8a94a" },
+  Pockets: [
+    { label: "Bright White Leather", color: "#f4f2ea" },
+    { label: "Black Leather", color: "#1a1a1a" },
+    { label: "Caramel Leather", color: "#b07d3a" },
+    { label: "Burgundy Leather", color: "#6b1e2a" },
+    { label: "Navy Leather", color: "#1e2d5a" },
   ],
   Snaps: [
-    { label: "Solid Bright White", color: "#f5f5f0" },
+    { label: "Off White Snaps", color: "#efe9dc" },
+    { label: "Black Snaps", color: "#1a1a1a" },
+    { label: "Antique Gold Snaps", color: "#c9a84c" },
+  ],
+  "Knit Trim": [
+    { label: "Solid Bright White", color: "#f0efe9" },
     { label: "Solid Black", color: "#1a1a1a" },
-    { label: "Two-Tone", color: "#888" },
+    { label: "Solid Navy", color: "#1e2d5a" },
+    { label: "Solid Burgundy", color: "#6b1e2a" },
   ],
 };
 
@@ -66,15 +76,17 @@ export function JacketBuilderPage() {
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Body");
   const [selections, setSelections] = useState<Record<string, string>>({
-    Body: "Black Leather",
+    Collar: "Regular",
+    Body: "Bright White Wool",
+    "Inside Lining": "Black Quilted",
     Sleeves: "Bright White Leather",
-    Lining: "No Shoulder Inserts",
-    "Shoulder Inserts": "Bright White Leather",
-    Collar: "Off White Snaps",
-    Snaps: "Solid Bright White",
+    "Shoulder Inserts": "No Shoulder Inserts",
+    Pockets: "Bright White Leather",
+    Snaps: "Off White Snaps",
+    "Knit Trim": "Solid Bright White",
   });
-  const bodyColor = SECTION_OPTIONS["Body"].find(o => o.label === selections["Body"])?.color ?? "#f5f5f0";
-  const sleeveColor = SECTION_OPTIONS["Sleeves"].find(o => o.label === selections["Sleeves"])?.color ?? "#f5f5f0";
+  const colorOf = (section: string, fallback: string) =>
+    SECTION_OPTIONS[section]?.find((o) => o.label === selections[section])?.color ?? fallback;
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [wishlisted, setWishlisted] = useState(false);
@@ -220,10 +232,12 @@ export function JacketBuilderPage() {
         {/* Jacket preview */}
         <div className="flex-1 relative bg-[#f0ede8] overflow-hidden">
           <JacketViewer3D
-            bodyColor={bodyColor}
-            sleeveColor={sleeveColor}
-            collarColor={SECTION_OPTIONS["Collar"].find(o => o.label === selections["Collar"])?.color ?? "#e8e4dc"}
-            cuffColor={sleeveColor}
+            bodyColor={colorOf("Body", "#f0e9d8")}
+            sleeveColor={colorOf("Sleeves", "#f4f2ea")}
+            trimColor={colorOf("Knit Trim", "#f0efe9")}
+            snapColor={colorOf("Snaps", "#efe9dc")}
+            pocketColor={colorOf("Pockets", "#f4f2ea")}
+            liningColor={colorOf("Inside Lining", "#141414")}
           />
 
           {/* Drag hint */}
@@ -275,8 +289,7 @@ export function JacketBuilderPage() {
             </button>
 
             <p className="text-[10px] text-gray-400 text-center mt-3">
-              We accept all debit/credit cards, as well as payment via PayPal.{" "}
-              <span className="font-semibold text-black">FREE DELIVERY</span> worldwide.
+              We accept all debit/credit cards, as well as payment via PayPal.
             </p>
 
             <div className="mt-3 bg-amber-50 border border-amber-200 p-3 text-center">

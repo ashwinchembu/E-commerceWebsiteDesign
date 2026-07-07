@@ -61,8 +61,48 @@ const CLASS_SLEEVE = 1;
 const CLASS_TRIM = 2;
 
 // UV rect of the (hidden) chest letter patch, whose imprint is baked into
-// the base color, occlusion/roughness, and normal textures.
+// the base color, occlusion/roughness, and normal textures. It gets covered
+// by cloning clean fabric from the same panel, offset left of the placket.
 const PATCH_RECT = { u0: 0.26, v0: 0.2, u1: 0.43, v1: 0.41 };
+const PATCH_SOURCE_OFFSET_U = -0.21;
+
+/**
+ * Clone-stamp clean fabric over the patch imprint: copy an equally sized
+ * region of plain fabric from the same panel and paste it over the patch
+ * rect with feathered edges so the grain stays continuous.
+ */
+function clonePatchRegion(ctx: CanvasRenderingContext2D) {
+  const { width, height } = ctx.canvas;
+  const dx = Math.floor(PATCH_RECT.u0 * width);
+  const dy = Math.floor(PATCH_RECT.v0 * height);
+  const dw = Math.ceil((PATCH_RECT.u1 - PATCH_RECT.u0) * width);
+  const dh = Math.ceil((PATCH_RECT.v1 - PATCH_RECT.v0) * height);
+  const sx = dx + Math.round(PATCH_SOURCE_OFFSET_U * width);
+
+  const patch = document.createElement("canvas");
+  patch.width = dw;
+  patch.height = dh;
+  const patchCtx = patch.getContext("2d")!;
+  patchCtx.drawImage(ctx.canvas, sx, dy, dw, dh, 0, 0, dw, dh);
+
+  const feather = Math.max(4, Math.round(dw * 0.08));
+  patchCtx.globalCompositeOperation = "destination-in";
+  const edges: Array<[number, number, number, number]> = [
+    [0, 0, feather, 0], // left
+    [dw, 0, dw - feather, 0], // right
+    [0, 0, 0, feather], // top
+    [0, dh, 0, dh - feather], // bottom
+  ];
+  for (const [x0, y0, x1, y1] of edges) {
+    const gradient = patchCtx.createLinearGradient(x0, y0, x1, y1);
+    gradient.addColorStop(0, "rgba(0,0,0,0)");
+    gradient.addColorStop(1, "rgba(0,0,0,1)");
+    patchCtx.fillStyle = gradient;
+    patchCtx.fillRect(0, 0, dw, dh);
+  }
+
+  ctx.drawImage(patch, dx, dy);
+}
 
 // UV rects around the two welt pockets on the front body panel; light
 // (leather-colored) texels inside them take the pocket color.
@@ -315,8 +355,8 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   if (!baseImage) throw new Error("base color texture missing");
 
   const neutral = neutralizeBaseColor(baseImage);
-  const cleanedPBR = cleanPatchImprint(source.roughnessMap);
-  const cleanedNormal = cleanNormalImprint(source.normalMap);
+  const cleanedPBR = cleanImprintTexture(source.roughnessMap);
+  const cleanedNormal = cleanImprintTexture(source.normalMap);
 
   const trimTriangleUVs = segmentJacketGeometry(jacketMesh, neutral.isLightTexel);
   const kit = buildRecolorKit(neutral, trimTriangleUVs);
@@ -512,23 +552,11 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
     data[i * 4 + 2] = value;
   }
 
-  // Erase the letter-patch shadow baked into the chest area (the patch mesh
-  // itself is hidden): pull those pixels almost fully to the fabric mean.
-  const px0 = Math.floor(PATCH_RECT.u0 * width);
-  const px1 = Math.ceil(PATCH_RECT.u1 * width);
-  const py0 = Math.floor(PATCH_RECT.v0 * height);
-  const py1 = Math.ceil(PATCH_RECT.v1 * height);
-  for (let y = py0; y < py1; y += 1) {
-    for (let x = px0; x < px1; x += 1) {
-      const i = y * width + x;
-      if (light[i]) continue;
-      const value = data[i * 4] + (205 - data[i * 4]) * 0.85;
-      data[i * 4] = value;
-      data[i * 4 + 1] = value;
-      data[i * 4 + 2] = value;
-    }
-  }
   ctx.putImageData(imageData, 0, 0);
+
+  // Erase the letter-patch shadow baked into the chest area (the patch mesh
+  // itself is hidden) by cloning clean fabric over it.
+  clonePatchRegion(ctx);
 
   const isLightTexel = (u: number, v: number) => {
     const x = Math.min(width - 1, Math.max(0, Math.floor((u % 1 + 1) % 1 * width)));
@@ -651,12 +679,11 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
 }
 
 /**
- * The chest patch's dark imprint is also baked into the occlusion (R) and
- * roughness (G) channels of the metallicRoughness texture. Lift those
- * channels back to the surrounding fabric's values inside the patch rect so
- * no shadow of the removed patch remains.
+ * The chest patch's imprint is also baked into the occlusion/roughness
+ * texture and embossed in the normal map. Clone clean fabric over the patch
+ * rect in each so no trace of the removed patch remains.
  */
-function cleanPatchImprint(sourceTexture: THREE.Texture | null): THREE.Texture | null {
+function cleanImprintTexture(sourceTexture: THREE.Texture | null): THREE.Texture | null {
   const image = sourceTexture?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
   if (!sourceTexture || !image) return sourceTexture ?? null;
 
@@ -665,48 +692,7 @@ function cleanPatchImprint(sourceTexture: THREE.Texture | null): THREE.Texture |
   canvas.height = image.height;
   const ctx = canvas.getContext("2d")!;
   ctx.drawImage(image, 0, 0);
-
-  const px0 = Math.floor(PATCH_RECT.u0 * canvas.width);
-  const py0 = Math.floor(PATCH_RECT.v0 * canvas.height);
-  const pw = Math.ceil((PATCH_RECT.u1 - PATCH_RECT.u0) * canvas.width);
-  const ph = Math.ceil((PATCH_RECT.v1 - PATCH_RECT.v0) * canvas.height);
-  const region = ctx.getImageData(px0, py0, pw, ph);
-  const data = region.data;
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] = Math.max(data[i], 235); // occlusion → unoccluded
-    data[i + 1] = Math.max(data[i + 1], 210); // roughness → matte fabric
-  }
-  ctx.putImageData(region, px0, py0);
-
-  return canvasTextureLike(canvas, sourceTexture);
-}
-
-/**
- * The patch outline is embossed in the normal map too; blend the patch rect
- * mostly back to a flat normal so no raised edge catches the light.
- */
-function cleanNormalImprint(sourceTexture: THREE.Texture | null): THREE.Texture | null {
-  const image = sourceTexture?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
-  if (!sourceTexture || !image) return sourceTexture ?? null;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = image.width;
-  canvas.height = image.height;
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(image, 0, 0);
-
-  const px0 = Math.floor(PATCH_RECT.u0 * canvas.width);
-  const py0 = Math.floor(PATCH_RECT.v0 * canvas.height);
-  const pw = Math.ceil((PATCH_RECT.u1 - PATCH_RECT.u0) * canvas.width);
-  const ph = Math.ceil((PATCH_RECT.v1 - PATCH_RECT.v0) * canvas.height);
-  const region = ctx.getImageData(px0, py0, pw, ph);
-  const data = region.data;
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] = data[i] + (128 - data[i]) * 0.7;
-    data[i + 1] = data[i + 1] + (128 - data[i + 1]) * 0.7;
-    data[i + 2] = data[i + 2] + (255 - data[i + 2]) * 0.7;
-  }
-  ctx.putImageData(region, px0, py0);
+  clonePatchRegion(ctx);
 
   return canvasTextureLike(canvas, sourceTexture);
 }

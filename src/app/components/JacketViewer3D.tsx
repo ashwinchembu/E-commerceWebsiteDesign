@@ -51,6 +51,10 @@ const CLASS_BODY = 0;
 const CLASS_SLEEVE = 1;
 const CLASS_TRIM = 2;
 
+// UV rect of the (hidden) chest letter patch, whose imprint is baked into
+// the base color, occlusion, and roughness textures.
+const PATCH_RECT = { u0: 0.27, v0: 0.21, u1: 0.42, v1: 0.4 };
+
 export function JacketViewer3D({
   bodyColor,
   sleeveColor,
@@ -294,13 +298,14 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): PartMaterials {
   if (!baseImage) throw new Error("base color texture missing");
 
   const { detailTexture, isLightTexel } = neutralizeBaseColor(baseImage);
+  const cleanedPBR = cleanPatchImprint(source.roughnessMap);
 
   const shared = {
     map: detailTexture,
     normalMap: source.normalMap,
-    roughnessMap: source.roughnessMap,
-    metalnessMap: source.metalnessMap,
-    aoMap: source.aoMap,
+    roughnessMap: cleanedPBR,
+    metalnessMap: cleanedPBR,
+    aoMap: cleanedPBR,
     metalness: 0,
     side: THREE.DoubleSide as THREE.Side,
   };
@@ -456,10 +461,10 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
 
   // Flatten the letter-patch shadow baked into the chest area of the base
   // color (the patch mesh itself is hidden), otherwise it shows as a smudge.
-  const px0 = Math.floor(0.27 * width);
-  const px1 = Math.ceil(0.42 * width);
-  const py0 = Math.floor(0.21 * height);
-  const py1 = Math.ceil(0.4 * height);
+  const px0 = Math.floor(PATCH_RECT.u0 * width);
+  const px1 = Math.ceil(PATCH_RECT.u1 * width);
+  const py0 = Math.floor(PATCH_RECT.v0 * height);
+  const py1 = Math.ceil(PATCH_RECT.v1 * height);
   for (let y = py0; y < py1; y += 1) {
     for (let x = px0; x < px1; x += 1) {
       const i = y * width + x;
@@ -485,6 +490,43 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
   };
 
   return { detailTexture, isLightTexel };
+}
+
+/**
+ * The chest patch's dark imprint is also baked into the occlusion (R) and
+ * roughness (G) channels of the metallicRoughness texture. Lift those
+ * channels back to the surrounding fabric's values inside the patch rect so
+ * no shadow of the removed patch remains.
+ */
+function cleanPatchImprint(sourceTexture: THREE.Texture | null): THREE.Texture | null {
+  const image = sourceTexture?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
+  if (!sourceTexture || !image) return sourceTexture ?? null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(image, 0, 0);
+
+  const px0 = Math.floor(PATCH_RECT.u0 * canvas.width);
+  const py0 = Math.floor(PATCH_RECT.v0 * canvas.height);
+  const pw = Math.ceil((PATCH_RECT.u1 - PATCH_RECT.u0) * canvas.width);
+  const ph = Math.ceil((PATCH_RECT.v1 - PATCH_RECT.v0) * canvas.height);
+  const region = ctx.getImageData(px0, py0, pw, ph);
+  const data = region.data;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = Math.max(data[i], 235); // occlusion → unoccluded
+    data[i + 1] = Math.max(data[i + 1], 210); // roughness → matte fabric
+  }
+  ctx.putImageData(region, px0, py0);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.flipY = false;
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.channel = sourceTexture.channel;
+  texture.anisotropy = 8;
+  return texture;
 }
 
 /**

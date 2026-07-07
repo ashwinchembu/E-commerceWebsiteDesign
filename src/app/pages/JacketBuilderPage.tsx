@@ -96,11 +96,16 @@ const BLOCKED_PLAYER_NAMES = [
 ];
 
 function isBlockedPlayerName(name: string) {
-  const normalized = name.trim().toLowerCase().replace(/\s+/g, " ");
+  const normalized = name.trim().toLowerCase();
   if (!normalized) return false;
-  return BLOCKED_PLAYER_NAMES.some(
-    (player) => normalized === player || normalized.split(" ").includes(player),
-  );
+  const words = normalized.split(/[^a-z]+/).filter(Boolean);
+  const compact = normalized.replace(/[^a-z]/g, "");
+  return BLOCKED_PLAYER_NAMES.some((player) => {
+    const key = player.replace(/[^a-z]/g, "");
+    // Exact word match always blocks; longer distinctive names also block
+    // as substrings so "MESSI10" or "DEBRUYNE7" can't sneak through.
+    return words.includes(key) || (key.length >= 5 && compact.includes(key));
+  });
 }
 
 

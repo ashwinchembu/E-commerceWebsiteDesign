@@ -26,6 +26,7 @@ type PartMaterials = {
   sleeve: THREE.MeshPhysicalMaterial;
   trim: THREE.MeshStandardMaterial;
   snap: THREE.MeshPhysicalMaterial;
+  lining: THREE.MeshStandardMaterial;
 };
 
 /** Canvases used to re-tint the baked texture per pixel on color changes. */
@@ -34,6 +35,7 @@ type RecolorKit = {
   masks: Record<"body" | "sleeve" | "pocket" | "trim", HTMLCanvasElement>;
   tmp: HTMLCanvasElement;
   composite: HTMLCanvasElement;
+  design: HTMLCanvasElement;
   texture: THREE.CanvasTexture;
 };
 
@@ -42,19 +44,12 @@ type JacketParts = {
   kit: RecolorKit;
 };
 
-type BackOverlay = {
-  mesh: THREE.Mesh;
-  canvas: HTMLCanvasElement;
-  texture: THREE.CanvasTexture;
-};
-
 type ViewerState = {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   modelRoot: THREE.Group;
   parts: JacketParts | null;
-  backOverlay: BackOverlay | null;
   frameId: number;
 };
 
@@ -75,6 +70,12 @@ const POCKET_RECTS = [
   { u0: 0.05, v0: 0.07, u1: 0.2, v1: 0.17 },
   { u0: 0.31, v0: 0.07, u1: 0.45, v1: 0.17 },
 ];
+
+// Where the back design prints onto the back body panel in UV space. The
+// design is drawn straight into the composited texture so it sits on the
+// fabric and follows the garment when rotated.
+const BACK_DESIGN_RECT = { u0: 0.55, v0: 0.06, u1: 0.87, v1: 0.44 };
+const BACK_DESIGN_MIRRORED = false;
 
 export function JacketViewer3D({
   bodyColor,
@@ -100,13 +101,13 @@ export function JacketViewer3D({
 
   useEffect(() => {
     designRef.current = backDesign;
-    const overlay = sceneRef.current?.backOverlay;
-    if (!overlay) return;
+    const parts = sceneRef.current?.parts;
+    if (!parts) return;
     let cancelled = false;
     void loadCrest().then((crest) => {
       if (cancelled) return;
-      drawBackDesign(overlay.canvas, designRef.current, crest);
-      overlay.texture.needsUpdate = true;
+      drawBackDesign(parts.kit.design, designRef.current, crest);
+      composeColorMap(parts.kit, colorsRef.current);
     });
     return () => {
       cancelled = true;
@@ -168,20 +169,15 @@ export function JacketViewer3D({
           frameModel(gltf.scene);
           modelRoot.remove(placeholder);
           disposeObject(placeholder);
-          const overlay = createBackOverlay(gltf.scene);
           modelRoot.add(gltf.scene);
-          modelRoot.add(overlay.mesh);
           void loadCrest().then((crest) => {
             if (disposed) return;
-            drawBackDesign(overlay.canvas, designRef.current, crest);
-            overlay.texture.needsUpdate = true;
+            drawBackDesign(parts.kit.design, designRef.current, crest);
+            composeColorMap(parts.kit, colorsRef.current);
           });
 
           const state = sceneRef.current;
-          if (state) {
-            state.parts = parts;
-            state.backOverlay = overlay;
-          }
+          if (state) state.parts = parts;
         } catch (error) {
           console.error("Failed to prepare jacket model", error);
         }
@@ -250,7 +246,6 @@ export function JacketViewer3D({
       camera,
       modelRoot,
       parts: null,
-      backOverlay: null,
       frameId: requestAnimationFrame(animate),
     };
 
@@ -286,6 +281,7 @@ type JacketColors = {
 function applyColors(parts: JacketParts, colors: JacketColors) {
   composeColorMap(parts.kit, colors);
   parts.materials.snap.color.set(colors.snapColor);
+  parts.materials.lining.color.set(colors.liningColor);
 }
 
 /**
@@ -326,6 +322,8 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   const kit = buildRecolorKit(neutral, trimTriangleUVs);
   composeColorMap(kit, colors);
 
+  // Outer shell renders front faces only; a back-face copy of the same
+  // geometry shows the inside lining color through the collar and openings.
   const shared = {
     map: kit.texture,
     color: "#ffffff",
@@ -334,7 +332,7 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
     metalnessMap: cleanedPBR,
     aoMap: cleanedPBR,
     metalness: 0,
-    side: THREE.DoubleSide as THREE.Side,
+    side: THREE.FrontSide as THREE.Side,
   };
 
   const materials: PartMaterials = {
@@ -353,11 +351,24 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
       metalness: 0.3,
       side: THREE.DoubleSide,
     }),
+    lining: new THREE.MeshStandardMaterial({
+      color: colors.liningColor,
+      roughness: 0.78,
+      side: THREE.BackSide,
+    }),
   };
 
   (jacketMesh as THREE.Mesh).material = [materials.body, materials.sleeve, materials.trim];
   if (buttonMesh) (buttonMesh as THREE.Mesh).material = materials.snap;
 
+  const liningShell = new THREE.Mesh((jacketMesh as THREE.Mesh).geometry, [
+    materials.lining,
+    materials.lining,
+    materials.lining,
+  ]);
+  (jacketMesh as THREE.Mesh).add(liningShell);
+
+  if (import.meta.env.DEV) (window as any).__kit = kit;
   return { materials, kit };
 }
 
@@ -582,6 +593,9 @@ function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): R
   const composite = document.createElement("canvas");
   composite.width = width;
   composite.height = height;
+  const design = document.createElement("canvas");
+  design.width = 512;
+  design.height = 696;
 
   const texture = new THREE.CanvasTexture(composite);
   texture.flipY = false;
@@ -589,7 +603,7 @@ function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): R
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.anisotropy = 8;
 
-  return { detail: neutral.canvas, masks: { body, sleeve, pocket, trim }, tmp, composite, texture };
+  return { detail: neutral.canvas, masks: { body, sleeve, pocket, trim }, tmp, composite, design, texture };
 }
 
 /** Re-tint the detail map region by region into the composite color map. */
@@ -617,6 +631,21 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
     tmpCtx.drawImage(mask, 0, 0);
     compositeCtx.drawImage(kit.tmp, 0, 0);
   }
+
+  // Print the back design straight onto the back body panel
+  const dx0 = BACK_DESIGN_RECT.u0 * width;
+  const dy0 = BACK_DESIGN_RECT.v0 * height;
+  const dw = (BACK_DESIGN_RECT.u1 - BACK_DESIGN_RECT.u0) * width;
+  const dh = (BACK_DESIGN_RECT.v1 - BACK_DESIGN_RECT.v0) * height;
+  compositeCtx.save();
+  if (BACK_DESIGN_MIRRORED) {
+    compositeCtx.translate(dx0 + dw, dy0);
+    compositeCtx.scale(-1, 1);
+    compositeCtx.drawImage(kit.design, 0, 0, dw, dh);
+  } else {
+    compositeCtx.drawImage(kit.design, dx0, dy0, dw, dh);
+  }
+  compositeCtx.restore();
 
   kit.texture.needsUpdate = true;
 }
@@ -690,41 +719,6 @@ function canvasTextureLike(canvas: HTMLCanvasElement, sourceTexture: THREE.Textu
   texture.channel = sourceTexture.channel;
   texture.anisotropy = 8;
   return texture;
-}
-
-/**
- * Curved transparent canvas hovering just off the jacket's back, carrying the
- * printed design (name, stars, crest, city, EST 2026, numbers). It lives in
- * the rotating model root so it follows the jacket when spun around.
- */
-function createBackOverlay(model: THREE.Object3D): BackOverlay {
-  const box = new THREE.Box3().setFromObject(model);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-
-  const width = size.x * 0.27;
-  const height = width * 1.35;
-
-  const geometry = new THREE.PlaneGeometry(width, height, 24, 1);
-  const position = geometry.getAttribute("position");
-  for (let i = 0; i < position.count; i += 1) {
-    const nx = position.getX(i) / (width / 2);
-    position.setZ(i, -width * 0.14 * nx * nx);
-  }
-  geometry.rotateY(Math.PI);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 696;
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
-
-  const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.position.set(center.x, center.y + size.y * 0.03, box.min.z - 0.02);
-  mesh.renderOrder = 1;
-  return { mesh, canvas, texture };
 }
 
 let crestElement: HTMLCanvasElement | null = null;

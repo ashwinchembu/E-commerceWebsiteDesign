@@ -24,7 +24,7 @@ export function CheckoutPage({ cart, clearCart }: CheckoutPageProps) {
   });
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = subtotal > 200 ? 0 : 15;
+  const shipping = 15;
   const tax = subtotal * 0.08;
   const total = subtotal + shipping + tax;
 
@@ -222,7 +222,7 @@ export function CheckoutPage({ cart, clearCart }: CheckoutPageProps) {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Shipping</span>
-                  <span>{shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}</span>
+                  <span>${shipping.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Tax</span>

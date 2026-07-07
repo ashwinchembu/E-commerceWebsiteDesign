@@ -42,9 +42,9 @@ export function TermsPage() {
             </div>
 
             <div>
-              <h3 className="text-xl tracking-wide mb-4 font-light">5. Returns and Exchanges</h3>
+              <h3 className="text-xl tracking-wide mb-4 font-light">5. Final Sale</h3>
               <p className="text-sm leading-relaxed">
-                We accept returns within 14 days of delivery for unworn items with original tags attached. Return shipping costs are the responsibility of the customer unless the item is defective or we made an error. Refunds will be processed to the original payment method within 7-10 business days of receiving the return.
+                All sales are final. Because each piece is made to order, we do not accept returns or exchanges. Please review your sizing and customization carefully before placing an order. If your item arrives defective or damaged, contact us within 7 days of delivery and we will make it right.
               </p>
             </div>
 

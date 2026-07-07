@@ -128,9 +128,9 @@ export function ContactPage() {
 
           <div className="max-w-3xl mx-auto space-y-6">
             <div className="bg-white p-6">
-              <h3 className="text-sm tracking-wide mb-2">What is your return policy?</h3>
+              <h3 className="text-sm tracking-wide mb-2">Can I return or exchange my order?</h3>
               <p className="text-sm text-gray-600">
-                We offer a 14-day return policy for all unworn items with original tags attached.
+                All sales are final — every piece is made to order, so we do not offer returns or exchanges. If your item arrives defective or damaged, contact us within 7 days and we will make it right.
               </p>
             </div>
 

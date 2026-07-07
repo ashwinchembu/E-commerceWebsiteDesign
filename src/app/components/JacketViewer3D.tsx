@@ -1,6 +1,15 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import crestImage from "figma:asset/65260e3ff07725a684ad1d29eb3db00cb66a8976.png";
+
+export interface BackDesign {
+  stars: number;
+  numbers: string[];
+  name: string;
+  city: string;
+  color: string;
+}
 
 interface JacketViewer3DProps {
   bodyColor: string;
@@ -9,6 +18,7 @@ interface JacketViewer3DProps {
   snapColor: string;
   pocketColor: string;
   liningColor: string;
+  backDesign: BackDesign;
 }
 
 type PartMaterials = {
@@ -18,12 +28,19 @@ type PartMaterials = {
   snap: THREE.MeshPhysicalMaterial;
 };
 
+type BackOverlay = {
+  mesh: THREE.Mesh;
+  canvas: HTMLCanvasElement;
+  texture: THREE.CanvasTexture;
+};
+
 type ViewerState = {
   renderer: THREE.WebGLRenderer;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   modelRoot: THREE.Group;
   materials: PartMaterials | null;
+  backOverlay: BackOverlay | null;
   frameId: number;
 };
 
@@ -41,11 +58,13 @@ export function JacketViewer3D({
   snapColor,
   pocketColor,
   liningColor,
+  backDesign,
 }: JacketViewer3DProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<ViewerState | null>(null);
   const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.05, rotX: -0.04 });
   const colorsRef = useRef({ bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor });
+  const designRef = useRef(backDesign);
 
   useEffect(() => {
     colorsRef.current = { bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor };
@@ -53,6 +72,21 @@ export function JacketViewer3D({
     if (!state?.materials) return;
     applyColors(state.materials, colorsRef.current);
   }, [bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor]);
+
+  useEffect(() => {
+    designRef.current = backDesign;
+    const overlay = sceneRef.current?.backOverlay;
+    if (!overlay) return;
+    let cancelled = false;
+    void loadCrest().then((crest) => {
+      if (cancelled) return;
+      drawBackDesign(overlay.canvas, designRef.current, crest);
+      overlay.texture.needsUpdate = true;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [backDesign]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -109,9 +143,20 @@ export function JacketViewer3D({
           frameModel(gltf.scene);
           modelRoot.remove(placeholder);
           disposeObject(placeholder);
+          const overlay = createBackOverlay(gltf.scene);
           modelRoot.add(gltf.scene);
+          modelRoot.add(overlay.mesh);
+          void loadCrest().then((crest) => {
+            if (disposed) return;
+            drawBackDesign(overlay.canvas, designRef.current, crest);
+            overlay.texture.needsUpdate = true;
+          });
+
           const state = sceneRef.current;
-          if (state) state.materials = materials;
+          if (state) {
+            state.materials = materials;
+            state.backOverlay = overlay;
+          }
         } catch (error) {
           console.error("Failed to prepare jacket model", error);
         }
@@ -174,7 +219,15 @@ export function JacketViewer3D({
       if (state) state.frameId = requestAnimationFrame(animate);
     };
 
-    sceneRef.current = { renderer, scene, camera, modelRoot, materials: null, frameId: requestAnimationFrame(animate) };
+    sceneRef.current = {
+      renderer,
+      scene,
+      camera,
+      modelRoot,
+      materials: null,
+      backOverlay: null,
+      frameId: requestAnimationFrame(animate),
+    };
 
     return () => {
       disposed = true;
@@ -432,6 +485,153 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
   };
 
   return { detailTexture, isLightTexel };
+}
+
+/**
+ * Curved transparent canvas hovering just off the jacket's back, carrying the
+ * printed design (name, stars, crest, city, EST 2026, numbers). It lives in
+ * the rotating model root so it follows the jacket when spun around.
+ */
+function createBackOverlay(model: THREE.Object3D): BackOverlay {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+
+  const width = size.x * 0.27;
+  const height = width * 1.35;
+
+  const geometry = new THREE.PlaneGeometry(width, height, 24, 1);
+  const position = geometry.getAttribute("position");
+  for (let i = 0; i < position.count; i += 1) {
+    const nx = position.getX(i) / (width / 2);
+    position.setZ(i, -width * 0.14 * nx * nx);
+  }
+  geometry.rotateY(Math.PI);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 696;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+
+  const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(center.x, center.y + size.y * 0.03, box.min.z - 0.02);
+  mesh.renderOrder = 1;
+  return { mesh, canvas, texture };
+}
+
+let crestElement: HTMLCanvasElement | null = null;
+let crestLoading: Promise<HTMLCanvasElement | null> | null = null;
+
+/** Load the brand crest and crop it to its visible (non-transparent) bounds. */
+function loadCrest(): Promise<HTMLCanvasElement | null> {
+  if (crestElement) return Promise.resolve(crestElement);
+  if (crestLoading) return crestLoading;
+  crestLoading = new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const scan = document.createElement("canvas");
+      scan.width = image.width;
+      scan.height = image.height;
+      const ctx = scan.getContext("2d")!;
+      ctx.drawImage(image, 0, 0);
+      const { data } = ctx.getImageData(0, 0, scan.width, scan.height);
+      let minX = scan.width;
+      let minY = scan.height;
+      let maxX = 0;
+      let maxY = 0;
+      for (let y = 0; y < scan.height; y += 1) {
+        for (let x = 0; x < scan.width; x += 1) {
+          if (data[(y * scan.width + x) * 4 + 3] < 16) continue;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+      if (maxX <= minX || maxY <= minY) {
+        resolve(null);
+        return;
+      }
+      const cropped = document.createElement("canvas");
+      cropped.width = maxX - minX + 1;
+      cropped.height = maxY - minY + 1;
+      cropped.getContext("2d")!.drawImage(scan, -minX, -minY);
+      crestElement = cropped;
+      resolve(cropped);
+    };
+    image.onerror = () => resolve(null);
+    image.src = crestImage;
+  });
+  return crestLoading;
+}
+
+function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, crest: HTMLCanvasElement | null) {
+  const ctx = canvas.getContext("2d")!;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = design.color;
+  ctx.strokeStyle = design.color;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  const name = design.name.trim().toUpperCase();
+  if (name) {
+    const fontSize = name.length > 10 ? 50 : 64;
+    ctx.font = `700 ${fontSize}px 'League Spartan', sans-serif`;
+    ctx.fillText(name, w / 2, 56, w * 0.92);
+  }
+
+  const starGap = 82;
+  for (let i = 0; i < 5; i += 1) {
+    drawStar(ctx, w / 2 + (i - 2) * starGap, 148, 24, i < design.stars);
+  }
+
+  // Brand crest stays as-is (gold artwork); city + EST line change under it
+  if (crest) {
+    const crestWidth = 200;
+    const crestHeight = crestWidth * (crest.height / crest.width);
+    ctx.drawImage(crest, w / 2 - crestWidth / 2, 330 - crestHeight / 2, crestWidth, crestHeight);
+  }
+
+  const city = design.city.trim().toUpperCase();
+  if (city) {
+    ctx.font = "700 46px 'League Spartan', sans-serif";
+    ctx.fillText(city, w / 2, 496, w * 0.92);
+  }
+  ctx.font = "600 30px 'League Spartan', sans-serif";
+  ctx.fillText("EST. 2026", w / 2, 548);
+
+  const numbers = design.numbers.map((value) => value.trim()).filter(Boolean);
+  if (numbers.length) {
+    ctx.font = "700 56px 'League Spartan', sans-serif";
+    numbers.forEach((value, i) => {
+      const x = numbers.length === 1 ? w / 2 : w * 0.1 + ((w * 0.8) / (numbers.length - 1)) * i;
+      ctx.fillText(value, x, 640);
+    });
+  }
+}
+
+function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, filled: boolean) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i += 1) {
+    const r = i % 2 === 0 ? radius : radius * 0.45;
+    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+    const x = cx + r * Math.cos(angle);
+    const y = cy + r * Math.sin(angle);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  if (filled) {
+    ctx.fill();
+  } else {
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
 }
 
 function frameModel(model: THREE.Object3D) {

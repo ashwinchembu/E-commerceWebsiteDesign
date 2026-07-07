@@ -1,4 +1,4 @@
-import { Truck, RotateCcw, Shield } from 'lucide-react';
+import { Truck, Tag, Shield } from 'lucide-react';
 
 export function BenefitTiles() {
   const benefits = [
@@ -8,9 +8,9 @@ export function BenefitTiles() {
       description: 'US & International Shipping Rates Apply'
     },
     {
-      icon: RotateCcw,
-      title: 'EASY RETURNS',
-      description: '14 Day Return Policy'
+      icon: Tag,
+      title: 'FINAL SALE',
+      description: 'All Sales Final — Made to Order'
     },
     {
       icon: Shield,

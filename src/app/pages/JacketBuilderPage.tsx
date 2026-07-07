@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronRight, X, Star } from "lucide-react";
-import { JacketViewer3D } from "../components/JacketViewer3D";
+import { JacketViewer3D, type BackDesign } from "../components/JacketViewer3D";
 import { useNavigate } from "react-router-dom";
 
 const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
@@ -53,22 +53,55 @@ const SECTION_OPTIONS: Record<string, { label: string; color: string }[]> = {
   ],
 };
 
-const PATCH_ZONES = [
-  { id: "right-chest", label: "Right Chest" },
-  { id: "left-chest", label: "Left Chest" },
-  { id: "right-shoulder", label: "Right Shoulder" },
-  { id: "left-shoulder", label: "Left Shoulder" },
-  { id: "sleeve-right-elbow", label: "Sleeve right elbow" },
-  { id: "sleeve-left-elbow", label: "Sleeve left elbow" },
-  { id: "sleeve-right-below", label: "Sleeve right below elbow" },
-  { id: "sleeve-left-below", label: "Sleeve left below elbow" },
-  { id: "bottom-right-pocket", label: "Bottom right pocket" },
-  { id: "bottom-left-pocket", label: "Bottom left pocket" },
-  { id: "above-right-pocket", label: "Above right pocket" },
-  { id: "above-left-pocket", label: "Above left pocket" },
-  { id: "back", label: "Back" },
-  { id: "collar", label: "Collar" },
+const CITIES = [
+  "Madrid",
+  "Barcelona",
+  "Manchester",
+  "Liverpool",
+  "London",
+  "Munich",
+  "Dortmund",
+  "Milan",
+  "Turin",
+  "Rome",
+  "Naples",
+  "Paris",
+  "Marseille",
+  "Lyon",
+  "Amsterdam",
+  "Lisbon",
+  "Porto",
+  "Sevilla",
+  "Glasgow",
+  "Istanbul",
 ];
+
+const PRINT_COLORS = [
+  { label: "Bright White", color: "#f5f5f0" },
+  { label: "Black", color: "#1a1a1a" },
+  { label: "Gold", color: "#c9a84c" },
+  { label: "Navy", color: "#1e2d5a" },
+  { label: "Burgundy", color: "#6b1e2a" },
+];
+
+// Personalization can't use a pro player's name
+const BLOCKED_PLAYER_NAMES = [
+  "messi", "ronaldo", "cristiano", "neymar", "mbappe", "haaland", "bellingham",
+  "salah", "kane", "modric", "benzema", "lewandowski", "vinicius", "foden",
+  "saka", "griezmann", "pedri", "gavi", "yamal", "zidane", "beckham",
+  "maradona", "pele", "ronaldinho", "ibrahimovic", "zlatan", "suarez",
+  "aguero", "hazard", "de bruyne", "debruyne", "kroos", "iniesta", "xavi",
+  "buffon", "dybala", "pogba", "rashford", "sterling", "sancho", "musiala",
+  "wirtz", "odegaard", "rice", "palmer", "rodri", "henry", "drogba", "kaka",
+];
+
+function isBlockedPlayerName(name: string) {
+  const normalized = name.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!normalized) return false;
+  return BLOCKED_PLAYER_NAMES.some(
+    (player) => normalized === player || normalized.split(" ").includes(player),
+  );
+}
 
 
 export function JacketBuilderPage() {
@@ -90,6 +123,33 @@ export function JacketBuilderPage() {
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [wishlisted, setWishlisted] = useState(false);
+
+  const [backName, setBackName] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [backStars, setBackStars] = useState(5);
+  const [backNumbers, setBackNumbers] = useState(["", "", "", "", ""]);
+  const [backCity, setBackCity] = useState("Madrid");
+  const [printColor, setPrintColor] = useState(PRINT_COLORS[0].color);
+
+  const backDesign: BackDesign = {
+    stars: backStars,
+    numbers: backNumbers,
+    name: nameError ? "" : backName,
+    city: backCity,
+    color: printColor,
+  };
+
+  const onNameChange = (value: string) => {
+    setBackName(value);
+    setNameError(
+      isBlockedPlayerName(value) ? "Player names aren't allowed — make it your own." : null,
+    );
+  };
+
+  const onNumberChange = (index: number, value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 2);
+    setBackNumbers((numbers) => numbers.map((n, i) => (i === index ? digits : n)));
+  };
 
   const price = 895;
 
@@ -207,24 +267,97 @@ export function JacketBuilderPage() {
               })}
             </div>
           ) : (
-            <div className="p-3 grid grid-cols-2 gap-2">
-              {PATCH_ZONES.map((zone) => (
-                <button
-                  key={zone.id}
-                  className="border border-gray-200 hover:border-black transition-colors rounded overflow-hidden group"
-                >
-                  <div className="bg-gray-100 aspect-square flex items-center justify-center">
-                    <svg viewBox="0 0 60 60" className="w-10 h-10 opacity-40 group-hover:opacity-70 transition-opacity" fill="none">
-                      <path d="M18 18 L12 24 L9 48 L51 48 L48 24 L42 18 Z" fill="#888" stroke="#555" strokeWidth="1"/>
-                      <path d="M18 18 L9 21 L4 36 L12 39 L15 27 L20 22 Z" fill="#aaa" stroke="#555" strokeWidth="1"/>
-                      <path d="M42 18 L51 21 L56 36 L48 39 L45 27 L40 22 Z" fill="#aaa" stroke="#555" strokeWidth="1"/>
-                    </svg>
-                  </div>
-                  <div className="px-1.5 py-1.5 text-center">
-                    <span className="text-[9px] tracking-wide text-gray-600 leading-tight block">{zone.label}</span>
-                  </div>
-                </button>
-              ))}
+            <div className="p-4 space-y-6">
+              <p className="text-[10px] tracking-widest uppercase text-gray-400">
+                Back Design · Drag the jacket to see the back
+              </p>
+
+              {/* Name */}
+              <div>
+                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={backName}
+                  onChange={(e) => onNameChange(e.target.value)}
+                  maxLength={14}
+                  placeholder="YOUR NAME"
+                  className={`w-full border px-3 py-2 text-xs tracking-widest uppercase focus:outline-none ${
+                    nameError ? "border-red-400" : "border-gray-300 focus:border-black"
+                  }`}
+                />
+                {nameError && <p className="text-[10px] text-red-500 mt-1">{nameError}</p>}
+              </div>
+
+              {/* Stars */}
+              <div>
+                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
+                  Stars ({backStars} of 5)
+                </label>
+                <div className="flex gap-1">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setBackStars(backStars === n ? n - 1 : n)}
+                      className="p-1"
+                    >
+                      <Star
+                        className={`w-5 h-5 ${
+                          n <= backStars ? "fill-black text-black" : "text-gray-300"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Numbers */}
+              <div>
+                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
+                  Numbers (2 digits each)
+                </label>
+                <div className="flex gap-1.5">
+                  {backNumbers.map((value, i) => (
+                    <input
+                      key={i}
+                      type="text"
+                      inputMode="numeric"
+                      value={value}
+                      onChange={(e) => onNumberChange(i, e.target.value)}
+                      placeholder="00"
+                      className="w-10 border border-gray-300 px-0 py-2 text-center text-xs tracking-widest focus:outline-none focus:border-black"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Print color */}
+              <div>
+                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
+                  Print Color
+                </label>
+                <div className="flex gap-2">
+                  {PRINT_COLORS.map((option) => (
+                    <button
+                      key={option.color}
+                      title={option.label}
+                      onClick={() => setPrintColor(option.color)}
+                      className={`w-7 h-7 rounded-full border ${
+                        printColor === option.color
+                          ? "border-black ring-1 ring-black"
+                          : "border-gray-300"
+                      }`}
+                      style={{ backgroundColor: option.color }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <p className="text-[10px] text-gray-400 leading-relaxed">
+                The Manoir Kits crest and “EST. 2026” always appear on the back. Pick your city
+                below the jacket.
+              </p>
             </div>
           )}
         </div>
@@ -238,11 +371,25 @@ export function JacketBuilderPage() {
             snapColor={colorOf("Snaps", "#efe9dc")}
             pocketColor={colorOf("Pockets", "#f4f2ea")}
             liningColor={colorOf("Inside Lining", "#141414")}
+            backDesign={backDesign}
           />
 
-          {/* Drag hint */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[10px] tracking-widest uppercase text-gray-400 pointer-events-none select-none">
-            Drag to rotate · Scroll to zoom
+          {/* City picker + drag hint */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+            <select
+              value={backCity}
+              onChange={(e) => setBackCity(e.target.value)}
+              className="bg-white border border-gray-300 px-4 py-2 text-xs tracking-widest uppercase focus:outline-none focus:border-black cursor-pointer"
+            >
+              {CITIES.map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+            </select>
+            <span className="text-[10px] tracking-widest uppercase text-gray-400 pointer-events-none select-none">
+              Drag to rotate · Scroll to zoom
+            </span>
           </div>
         </div>
       </div>

@@ -167,15 +167,15 @@ export function ProductDetailPage({ onAddToCart, wishlist, onToggleWishlist }: P
               <div className="flex items-start gap-4">
                 <Truck className="w-5 h-5 mt-1" />
                 <div>
-                  <p className="text-sm tracking-wide mb-1">Free US Shipping</p>
-                  <p className="text-xs text-gray-600">On orders over $200</p>
+                  <p className="text-sm tracking-wide mb-1">Worldwide Shipping</p>
+                  <p className="text-xs text-gray-600">US & international rates apply</p>
                 </div>
               </div>
               <div className="flex items-start gap-4">
                 <RotateCcw className="w-5 h-5 mt-1" />
                 <div>
-                  <p className="text-sm tracking-wide mb-1">Easy Returns</p>
-                  <p className="text-xs text-gray-600">30-day return policy</p>
+                  <p className="text-sm tracking-wide mb-1">Final Sale</p>
+                  <p className="text-xs text-gray-600">No returns or exchanges — made to order</p>
                 </div>
               </div>
               <div className="flex items-start gap-4">

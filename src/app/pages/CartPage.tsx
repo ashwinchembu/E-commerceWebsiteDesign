@@ -10,7 +10,7 @@ interface CartPageProps {
 
 export function CartPage({ cart, updateQuantity, removeFromCart }: CartPageProps) {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = subtotal >= 200 ? 0 : 15;
+  const shipping = 15;
   const total = subtotal + shipping;
 
   if (cart.length === 0) {
@@ -94,13 +94,8 @@ export function CartPage({ cart, updateQuantity, removeFromCart }: CartPageProps
             </div>
             <div className="flex justify-between text-sm">
               <span>Shipping</span>
-              <span>{shipping === 0 ? 'FREE' : `$${shipping.toFixed(2)}`}</span>
+              <span>${shipping.toFixed(2)}</span>
             </div>
-            {subtotal < 200 && (
-              <p className="text-xs text-gray-600">
-                Add ${(200 - subtotal).toFixed(2)} more for FREE US SHIPPING
-              </p>
-            )}
             <div className="border-t border-gray-300 pt-4">
               <div className="flex justify-between">
                 <span>Total</span>

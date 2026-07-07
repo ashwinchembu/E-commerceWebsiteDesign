@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 interface JacketViewer3DProps {
   bodyColor: string;
@@ -15,9 +15,7 @@ type PartMaterials = {
   body: THREE.MeshStandardMaterial;
   sleeve: THREE.MeshPhysicalMaterial;
   trim: THREE.MeshStandardMaterial;
-  snap: THREE.MeshStandardMaterial;
-  pocket: THREE.MeshPhysicalMaterial;
-  lining: THREE.MeshStandardMaterial;
+  snap: THREE.MeshPhysicalMaterial;
 };
 
 type ViewerState = {
@@ -25,9 +23,16 @@ type ViewerState = {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   modelRoot: THREE.Group;
-  materials: PartMaterials;
+  materials: PartMaterials | null;
   frameId: number;
 };
+
+const MODEL_PATH = "/models/letterman_jacket.glb";
+
+// Triangle classes inside the jacket mesh
+const CLASS_BODY = 0;
+const CLASS_SLEEVE = 1;
+const CLASS_TRIM = 2;
 
 export function JacketViewer3D({
   bodyColor,
@@ -45,7 +50,7 @@ export function JacketViewer3D({
   useEffect(() => {
     colorsRef.current = { bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor };
     const state = sceneRef.current;
-    if (!state) return;
+    if (!state?.materials) return;
     applyColors(state.materials, colorsRef.current);
   }, [bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor]);
 
@@ -57,21 +62,17 @@ export function JacketViewer3D({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(28, mount.clientWidth / mount.clientHeight, 0.1, 100);
-    camera.position.set(0, -0.02, 6.8);
+    camera.position.set(0, -0.02, 6.4);
 
     scene.add(new THREE.HemisphereLight("#ffffff", "#aab6c2", 1.5));
 
-    const key = new THREE.DirectionalLight("#ffffff", 2.3);
+    const key = new THREE.DirectionalLight("#ffffff", 2.2);
     key.position.set(2.4, 4, 3.2);
-    key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
     scene.add(key);
 
     const fill = new THREE.DirectionalLight("#dceaff", 1.1);
@@ -86,9 +87,8 @@ export function JacketViewer3D({
     modelRoot.rotation.set(dragRef.current.rotX, dragRef.current.rotY, 0);
     scene.add(modelRoot);
 
-    const { jacket, materials } = buildVarsityJacket(colorsRef.current);
-    jacket.position.y = -0.05;
-    modelRoot.add(jacket);
+    const placeholder = buildLoadingSilhouette();
+    modelRoot.add(placeholder);
 
     const shadow = new THREE.Mesh(
       new THREE.CircleGeometry(1.4, 64),
@@ -98,6 +98,29 @@ export function JacketViewer3D({
     shadow.scale.set(1.6, 0.42, 1);
     shadow.position.set(0, -1.18, 0.15);
     scene.add(shadow);
+
+    let disposed = false;
+    new GLTFLoader().load(
+      MODEL_PATH,
+      (gltf) => {
+        if (disposed) return;
+        try {
+          const materials = prepareJacket(gltf.scene, colorsRef.current);
+          frameModel(gltf.scene);
+          modelRoot.remove(placeholder);
+          disposeObject(placeholder);
+          modelRoot.add(gltf.scene);
+          const state = sceneRef.current;
+          if (state) state.materials = materials;
+        } catch (error) {
+          console.error("Failed to prepare jacket model", error);
+        }
+      },
+      undefined,
+      (error) => {
+        console.error("Failed to load jacket model", error);
+      },
+    );
 
     const onPointerDown = (event: PointerEvent) => {
       dragRef.current.active = true;
@@ -121,7 +144,7 @@ export function JacketViewer3D({
     };
 
     const onWheel = (event: WheelEvent) => {
-      camera.position.z = THREE.MathUtils.clamp(camera.position.z + event.deltaY * 0.003, 5, 9.5);
+      camera.position.z = THREE.MathUtils.clamp(camera.position.z + event.deltaY * 0.003, 4.5, 9.5);
     };
 
     mount.addEventListener("pointerdown", onPointerDown);
@@ -151,9 +174,10 @@ export function JacketViewer3D({
       if (state) state.frameId = requestAnimationFrame(animate);
     };
 
-    sceneRef.current = { renderer, scene, camera, modelRoot, materials, frameId: requestAnimationFrame(animate) };
+    sceneRef.current = { renderer, scene, camera, modelRoot, materials: null, frameId: requestAnimationFrame(animate) };
 
     return () => {
+      disposed = true;
       const state = sceneRef.current;
       if (state) cancelAnimationFrame(state.frameId);
       window.removeEventListener("resize", onResize);
@@ -186,182 +210,259 @@ function applyColors(materials: PartMaterials, colors: JacketColors) {
   materials.sleeve.color.set(colors.sleeveColor);
   materials.trim.color.set(colors.trimColor);
   materials.snap.color.set(colors.snapColor);
-  materials.pocket.color.set(colors.pocketColor);
-  materials.lining.color.set(colors.liningColor);
 }
 
-function buildVarsityJacket(colors: JacketColors) {
-  const jacket = new THREE.Group();
+/**
+ * The GLB bakes body/sleeve colors into one texture, so per-part recoloring
+ * works by classifying each triangle from the baked base color (white texels
+ * are the leather sleeves, dark ones the wool body), carving the ribbed trim
+ * out of the body class by position, then re-tinting everything over a
+ * luminance-neutralized copy of the base texture that keeps seam/fold detail.
+ */
+function prepareJacket(root: THREE.Group, colors: JacketColors): PartMaterials {
+  root.updateMatrixWorld(true);
 
-  const woolBump = makeNoiseTexture(256, 26);
-  woolBump.repeat.set(3, 3);
-  const leatherBump = makeNoiseTexture(256, 10);
-  leatherBump.repeat.set(4, 4);
-  const ribBump = makeRibTexture();
+  let jacketMesh: THREE.Mesh | null = null;
+  let buttonMesh: THREE.Mesh | null = null;
+  let patchMesh: THREE.Mesh | null = null;
+  root.traverse((node) => {
+    if (!(node instanceof THREE.Mesh)) return;
+    const key = `${node.name} ${node.parent?.name ?? ""}`.toLowerCase();
+    if (key.includes("patch")) patchMesh = node;
+    else if (key.includes("button")) buttonMesh = node;
+    else jacketMesh = node;
+  });
+  if (!jacketMesh) throw new Error("jacket mesh not found in GLB");
+
+  if (patchMesh) (patchMesh as THREE.Mesh).visible = false;
+
+  const source = (Array.isArray(jacketMesh.material) ? jacketMesh.material[0] : jacketMesh.material) as THREE.MeshStandardMaterial;
+  const baseImage = source.map?.image as CanvasImageSource & { width: number; height: number };
+  if (!baseImage) throw new Error("base color texture missing");
+
+  const { detailTexture, isLightTexel } = neutralizeBaseColor(baseImage);
+
+  const shared = {
+    map: detailTexture,
+    normalMap: source.normalMap,
+    roughnessMap: source.roughnessMap,
+    metalnessMap: source.metalnessMap,
+    aoMap: source.aoMap,
+    metalness: 0,
+    side: THREE.DoubleSide as THREE.Side,
+  };
 
   const materials: PartMaterials = {
-    body: new THREE.MeshStandardMaterial({
-      color: colors.bodyColor,
-      roughness: 0.94,
-      bumpMap: woolBump,
-      bumpScale: 0.6,
-    }),
+    body: new THREE.MeshStandardMaterial({ ...shared, color: colors.bodyColor, roughness: 0.92 }),
     sleeve: new THREE.MeshPhysicalMaterial({
+      ...shared,
       color: colors.sleeveColor,
-      roughness: 0.42,
-      clearcoat: 0.4,
-      clearcoatRoughness: 0.45,
-      bumpMap: leatherBump,
-      bumpScale: 0.25,
+      roughness: 0.5,
+      clearcoat: 0.35,
+      clearcoatRoughness: 0.5,
     }),
-    trim: new THREE.MeshStandardMaterial({
-      color: colors.trimColor,
-      roughness: 0.88,
-      bumpMap: ribBump,
-      bumpScale: 0.9,
-      side: THREE.DoubleSide,
-    }),
-    snap: new THREE.MeshStandardMaterial({
+    trim: new THREE.MeshStandardMaterial({ ...shared, color: colors.trimColor, roughness: 0.88 }),
+    snap: new THREE.MeshPhysicalMaterial({
+      map: detailTexture,
+      normalMap: source.normalMap,
       color: colors.snapColor,
       roughness: 0.35,
-      metalness: 0.25,
-    }),
-    pocket: new THREE.MeshPhysicalMaterial({
-      color: colors.pocketColor,
-      roughness: 0.42,
-      clearcoat: 0.4,
-      clearcoatRoughness: 0.45,
-    }),
-    lining: new THREE.MeshStandardMaterial({
-      color: colors.liningColor,
-      roughness: 0.75,
+      metalness: 0.3,
+      side: THREE.DoubleSide,
     }),
   };
 
-  // Torso — rounded box with a slight taper toward the shoulders
-  const bodyGeometry = new RoundedBoxGeometry(1.14, 1.42, 0.54, 5, 0.15);
-  taperShoulders(bodyGeometry);
-  const body = new THREE.Mesh(bodyGeometry, materials.body);
-  body.position.y = 0.08;
-  body.castShadow = true;
-  jacket.add(body);
+  segmentJacketGeometry(jacketMesh, isLightTexel);
+  (jacketMesh as THREE.Mesh).material = [materials.body, materials.sleeve, materials.trim];
 
-  // Snap placket down the center front
-  const placket = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.34, 0.045), materials.body);
-  placket.position.set(0, 0.1, 0.265);
-  jacket.add(placket);
+  if (buttonMesh) (buttonMesh as THREE.Mesh).material = materials.snap;
 
-  // Snaps
-  for (let i = 0; i < 6; i += 1) {
-    const snap = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.02, 20), materials.snap);
-    snap.rotation.x = Math.PI / 2;
-    snap.position.set(0, 0.56 - i * 0.204, 0.294);
-    jacket.add(snap);
-  }
-
-  // Angled welt pockets
-  for (const side of [-1, 1]) {
-    const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.27, 0.028), materials.pocket);
-    pocket.rotation.z = side * 0.42;
-    pocket.position.set(0.4 * side, -0.24, 0.272);
-    jacket.add(pocket);
-  }
-
-  // Ribbed knit hem
-  const hem = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.52, 0.2, 48), materials.trim);
-  hem.scale.z = 0.46;
-  hem.position.y = -0.68;
-  jacket.add(hem);
-
-  // Standing knit collar with a front opening; dark lining visible inside the neck
-  const collar = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.24, 0.27, 0.16, 48, 1, true, 0.5, Math.PI * 2 - 1),
-    materials.trim,
-  );
-  collar.scale.z = 0.85;
-  collar.position.y = 0.81;
-  jacket.add(collar);
-
-  const neckLining = new THREE.Mesh(new THREE.SphereGeometry(0.21, 32, 16), materials.lining);
-  neckLining.scale.set(1, 0.42, 0.8);
-  neckLining.position.y = 0.78;
-  jacket.add(neckLining);
-
-  // Leather sleeves — tube along a curve, shoulder blend sphere, knit cuff at the end
-  for (const side of [-1, 1]) {
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.3 * side, 0.58, 0),
-      new THREE.Vector3(0.56 * side, 0.48, 0.02),
-      new THREE.Vector3(0.76 * side, 0.16, 0.06),
-      new THREE.Vector3(0.84 * side, -0.24, 0.1),
-      new THREE.Vector3(0.87 * side, -0.5, 0.12),
-    ]);
-    const sleeve = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.15, 20, false), materials.sleeve);
-    sleeve.castShadow = true;
-    jacket.add(sleeve);
-
-    const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.17, 24, 16), materials.sleeve);
-    shoulder.position.set(0.44 * side, 0.52, 0.02);
-    jacket.add(shoulder);
-
-    const tangent = curve.getTangent(1).normalize();
-    const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.12, 0.19, 32), materials.trim);
-    cuff.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent.clone().negate());
-    const end = curve.getPoint(1);
-    cuff.position.copy(end).addScaledVector(tangent, 0.06);
-    jacket.add(cuff);
-  }
-
-  return { jacket, materials };
+  return materials;
 }
 
-function taperShoulders(geometry: THREE.BufferGeometry) {
+/** Split the jacket mesh index into body / sleeve / trim groups. */
+function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: number) => boolean) {
+  const geometry = mesh.geometry;
+  const index = geometry.getIndex();
+  const uv = geometry.getAttribute("uv");
   const position = geometry.getAttribute("position");
-  for (let i = 0; i < position.count; i += 1) {
-    const y = position.getY(i);
-    if (y <= 0.3) continue;
-    const t = (y - 0.3) / 0.45;
-    const shrink = 1 - 0.16 * t * t;
-    position.setX(i, position.getX(i) * shrink);
-    position.setZ(i, position.getZ(i) * (1 - 0.08 * t * t));
+  if (!index || !uv || !position) throw new Error("jacket geometry missing attributes");
+
+  const bounds = new THREE.Box3().setFromObject(mesh);
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+
+  const triCount = index.count / 3;
+  const classes = new Uint8Array(triCount);
+  const point = new THREE.Vector3();
+
+  for (let t = 0; t < triCount; t += 1) {
+    const a = index.getX(t * 3);
+    const b = index.getX(t * 3 + 1);
+    const c = index.getX(t * 3 + 2);
+
+    const centroidU = (uv.getX(a) + uv.getX(b) + uv.getX(c)) / 3;
+    const centroidV = (uv.getY(a) + uv.getY(b) + uv.getY(c)) / 3;
+    let lightVotes = isLightTexel(centroidU, centroidV) ? 2 : 0;
+    for (const vertex of [a, b, c]) {
+      if (isLightTexel(uv.getX(vertex), uv.getY(vertex))) lightVotes += 1;
+    }
+
+    point
+      .set(
+        (position.getX(a) + position.getX(b) + position.getX(c)) / 3,
+        (position.getY(a) + position.getY(b) + position.getY(c)) / 3,
+        (position.getZ(a) + position.getZ(b) + position.getZ(c)) / 3,
+      )
+      .applyMatrix4(mesh.matrixWorld);
+
+    const ny = size.y ? (point.y - bounds.min.y) / size.y : 0.5;
+    const nx = size.x ? Math.abs(point.x - center.x) / (size.x / 2) : 0;
+
+    if (lightVotes >= 3) {
+      classes[t] = CLASS_SLEEVE;
+    } else if (ny < 0.1 && nx < 0.55) {
+      classes[t] = CLASS_TRIM; // waistband
+    } else if (ny > 0.88 && nx < 0.35) {
+      classes[t] = CLASS_TRIM; // collar
+    } else if (nx > 0.8) {
+      classes[t] = CLASS_TRIM; // cuffs
+    } else {
+      classes[t] = CLASS_BODY;
+    }
   }
-  position.needsUpdate = true;
+
+  const sorted = new Uint32Array(index.count);
+  let offset = 0;
+  geometry.clearGroups();
+  for (const cls of [CLASS_BODY, CLASS_SLEEVE, CLASS_TRIM]) {
+    const start = offset;
+    for (let t = 0; t < triCount; t += 1) {
+      if (classes[t] !== cls) continue;
+      sorted[offset] = index.getX(t * 3);
+      sorted[offset + 1] = index.getX(t * 3 + 1);
+      sorted[offset + 2] = index.getX(t * 3 + 2);
+      offset += 3;
+    }
+    geometry.addGroup(start, offset - start, cls);
+  }
+  geometry.setIndex(new THREE.BufferAttribute(sorted, 1));
 }
 
-function makeNoiseTexture(size: number, intensity: number) {
+/**
+ * Turn the baked base color into a grayscale detail map: each pixel's
+ * luminance divided by the mean of its region (light vs dark) so that
+ * `material.color * map` re-tints both regions to any target color while
+ * preserving stitches, seams, and fold shading.
+ */
+function neutralizeBaseColor(image: CanvasImageSource & { width: number; height: number }) {
+  const width = Math.min(image.width, 2048);
+  const height = Math.min(image.height, 2048);
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d")!;
-  const image = ctx.createImageData(size, size);
-  for (let i = 0; i < image.data.length; i += 4) {
-    const value = 128 + (Math.random() - 0.5) * 2 * intensity;
-    image.data[i] = value;
-    image.data[i + 1] = value;
-    image.data[i + 2] = value;
-    image.data[i + 3] = 255;
+  ctx.drawImage(image, 0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  // The body/trim fabric is maroon (strong red dominance) while the sleeve
+  // leather is near-neutral white/gray, so chroma separates the regions far
+  // more reliably than luminance (shadowed sleeve areas are dark but neutral).
+  let lightSum = 0;
+  let lightCount = 0;
+  let darkSum = 0;
+  let darkCount = 0;
+  const luminance = new Float32Array(width * height);
+  const light = new Uint8Array(width * height);
+
+  for (let i = 0; i < width * height; i += 1) {
+    const lum = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+    luminance[i] = lum;
+    const redDominance = data[i * 4] - data[i * 4 + 2];
+    if (redDominance < 28) {
+      light[i] = 1;
+      lightSum += lum;
+      lightCount += 1;
+    } else {
+      darkSum += lum;
+      darkCount += 1;
+    }
   }
-  ctx.putImageData(image, 0, 0);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  return texture;
+
+  const lightMean = lightCount ? lightSum / lightCount : 255;
+  const darkMean = darkCount ? darkSum / darkCount : 1;
+
+  for (let i = 0; i < width * height; i += 1) {
+    const mean = light[i] ? lightMean : darkMean;
+    const value = Math.min(255, Math.max(90, (luminance[i] / mean) * 205));
+    data[i * 4] = value;
+    data[i * 4 + 1] = value;
+    data[i * 4 + 2] = value;
+  }
+
+  // Flatten the letter-patch shadow baked into the chest area of the base
+  // color (the patch mesh itself is hidden), otherwise it shows as a smudge.
+  const px0 = Math.floor(0.27 * width);
+  const px1 = Math.ceil(0.42 * width);
+  const py0 = Math.floor(0.21 * height);
+  const py1 = Math.ceil(0.4 * height);
+  for (let y = py0; y < py1; y += 1) {
+    for (let x = px0; x < px1; x += 1) {
+      const i = y * width + x;
+      if (light[i]) continue;
+      const value = Math.max(data[i * 4], 195);
+      data[i * 4] = value;
+      data[i * 4 + 1] = value;
+      data[i * 4 + 2] = value;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+
+  const detailTexture = new THREE.CanvasTexture(canvas);
+  detailTexture.flipY = false;
+  detailTexture.colorSpace = THREE.SRGBColorSpace;
+  detailTexture.wrapS = detailTexture.wrapT = THREE.RepeatWrapping;
+  detailTexture.anisotropy = 8;
+
+  const isLightTexel = (u: number, v: number) => {
+    const x = Math.min(width - 1, Math.max(0, Math.floor((u % 1 + 1) % 1 * width)));
+    const y = Math.min(height - 1, Math.max(0, Math.floor((v % 1 + 1) % 1 * height)));
+    return light[y * width + x] === 1;
+  };
+
+  return { detailTexture, isLightTexel };
 }
 
-function makeRibTexture() {
-  const size = 128;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d")!;
-  for (let x = 0; x < size; x += 1) {
-    const value = Math.round(150 + Math.sin((x / size) * Math.PI * 2 * 18) * 70);
-    ctx.fillStyle = `rgb(${value},${value},${value})`;
-    ctx.fillRect(x, 0, 1, size);
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(8, 1);
-  return texture;
+function frameModel(model: THREE.Object3D) {
+  const box = new THREE.Box3().setFromObject(model);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDimension = Math.max(size.x, size.y, size.z) || 1;
+
+  model.position.sub(center);
+  model.scale.setScalar(1.9 / maxDimension);
+  model.position.multiplyScalar(1.9 / maxDimension);
+  model.position.y -= 0.12;
+}
+
+function buildLoadingSilhouette() {
+  const group = new THREE.Group();
+  const material = new THREE.MeshStandardMaterial({ color: "#d8d3c8", roughness: 0.6 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(1.15, 1.6, 0.18), material);
+  group.add(body);
+
+  const leftSleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 1.25, 12, 24), material);
+  leftSleeve.position.set(-0.72, -0.04, 0);
+  leftSleeve.rotation.z = -0.35;
+  group.add(leftSleeve);
+
+  const rightSleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 1.25, 12, 24), material);
+  rightSleeve.position.set(0.72, -0.04, 0);
+  rightSleeve.rotation.z = 0.35;
+  group.add(rightSleeve);
+  group.position.y = -0.08;
+  return group;
 }
 
 function disposeObject(root: THREE.Object3D) {

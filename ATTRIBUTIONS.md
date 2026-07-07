@@ -2,4 +2,4 @@ This Figma Make file includes components from [shadcn/ui](https://ui.shadcn.com/
 
 This Figma Make file includes photos from [Unsplash](https://unsplash.com) used under [license](https://unsplash.com/license).
 
-The jacket builder uses "Leather Jacket" by zacharykozak on Sketchfab, licensed under CC-BY-4.0: https://sketchfab.com/3d-models/leather-jacket-c9e54b0c51a8424e8f05b774d42c7f80
+The jacket builder uses "Letterman Jacket" by Jerry Gibbons (G Squared Art) on Sketchfab, licensed under CC Attribution: https://sketchfab.com/3d-models/letterman-jacket-7c1ffd91594c46759bff62385604f219

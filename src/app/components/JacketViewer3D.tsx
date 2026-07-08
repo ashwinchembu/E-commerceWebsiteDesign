@@ -152,6 +152,15 @@ const TRIM_RECTS = [
   { u0: 0, v0: 0.86, u1: 1, v1: 1 },
 ];
 
+// The two wool body panels (front, back). Inside them the only light
+// material is the welt/placket leather, so classification can use a much
+// stricter light threshold — washed-out fabric at the neckline seams stays
+// wool instead of picking up the sleeve color.
+const BODY_PANEL_RECTS = [
+  { u0: 0, v0: 0, u1: 0.47, v1: 0.44 },
+  { u0: 0.47, v0: 0, u1: 0.96, v1: 0.44 },
+];
+
 // Where the back design prints onto the back body panel in UV space. The
 // panel is oriented upside down in the texture, so the design is drawn
 // rotated 180° (see composeColorMap).
@@ -571,11 +580,22 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
   const luminance = new Float32Array(width * height);
   const light = new Uint8Array(width * height);
 
+  const inRects = (rects: typeof BODY_PANEL_RECTS, x: number, y: number) => {
+    const u = x / width;
+    const v = y / height;
+    return rects.some((r) => u >= r.u0 && u <= r.u1 && v >= r.v0 && v <= r.v1);
+  };
+
   for (let i = 0; i < width * height; i += 1) {
     const lum = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
     luminance[i] = lum;
     const redDominance = data[i * 4] - data[i * 4 + 2];
-    if (redDominance < 28) {
+    const x = i % width;
+    const y = Math.floor(i / width);
+    // Strict threshold inside the wool panels (washed-out seam fabric stays
+    // wool), except around the welt pockets, which really are leather.
+    const threshold = inRects(BODY_PANEL_RECTS, x, y) && !inRects(POCKET_RECTS, x, y) ? 12 : 28;
+    if (redDominance < threshold) {
       light[i] = 1;
       lightSum += lum;
       lightCount += 1;
@@ -843,9 +863,10 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, crest: HT
     ctx.fillText(name, w / 2, 56, w * 0.92);
   }
 
+  // Only the selected stars, centered as a row
   const starGap = 82;
-  for (let i = 0; i < 5; i += 1) {
-    drawStar(ctx, w / 2 + (i - 2) * starGap, 148, 24, i < design.stars);
+  for (let i = 0; i < design.stars; i += 1) {
+    drawStar(ctx, w / 2 + (i - (design.stars - 1) / 2) * starGap, 148, 24, true);
   }
 
   // Brand crest stays as-is (gold artwork); city + EST line change under it

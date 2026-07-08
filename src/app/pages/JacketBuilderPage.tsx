@@ -376,6 +376,11 @@ export function JacketBuilderPage() {
             snapColor={colorOf("Snaps", "#efe9dc")}
             pocketColor={colorOf("Pockets", "#f4f2ea")}
             liningColor={colorOf("Inside Lining", "#141414")}
+            insertColor={
+              selections["Shoulder Inserts"] === "No Shoulder Inserts"
+                ? colorOf("Body", "#f0e9d8")
+                : colorOf("Shoulder Inserts", "#f4f2ea")
+            }
             backDesign={backDesign}
           />
 

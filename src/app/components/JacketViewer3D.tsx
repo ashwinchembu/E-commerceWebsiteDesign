@@ -18,6 +18,8 @@ interface JacketViewer3DProps {
   snapColor: string;
   pocketColor: string;
   liningColor: string;
+  /** Shoulder yoke pieces; pass the body color for "no inserts". */
+  insertColor: string;
   backDesign: BackDesign;
 }
 
@@ -32,7 +34,7 @@ type PartMaterials = {
 /** Canvases used to re-tint the baked texture per pixel on color changes. */
 type RecolorKit = {
   detail: HTMLCanvasElement;
-  masks: Record<"body" | "sleeve" | "pocket" | "trim", HTMLCanvasElement>;
+  masks: Record<"body" | "sleeve" | "pocket" | "insert" | "trim", HTMLCanvasElement>;
   tmp: HTMLCanvasElement;
   composite: HTMLCanvasElement;
   design: HTMLCanvasElement;
@@ -161,6 +163,11 @@ const BODY_PANEL_RECTS = [
   { u0: 0.47, v0: 0, u1: 0.96, v1: 0.44 },
 ];
 
+// The shoulder yoke pieces live in the band between the body panels and the
+// sleeve panels. They take the shoulder-insert color (the body color when
+// "no inserts" is selected).
+const YOKE_RECT = { u0: 0.345, v0: 0.43, u1: 0.96, v1: 0.478 };
+
 // Where the back design prints onto the back body panel in UV space. The
 // panel is oriented upside down in the texture, so the design is drawn
 // rotated 180° (see composeColorMap).
@@ -173,20 +180,21 @@ export function JacketViewer3D({
   snapColor,
   pocketColor,
   liningColor,
+  insertColor,
   backDesign,
 }: JacketViewer3DProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<ViewerState | null>(null);
   const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.05, rotX: -0.04 });
-  const colorsRef = useRef({ bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor });
+  const colorsRef = useRef({ bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor, insertColor });
   const designRef = useRef(backDesign);
 
   useEffect(() => {
-    colorsRef.current = { bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor };
+    colorsRef.current = { bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor, insertColor };
     const state = sceneRef.current;
     if (!state?.parts) return;
     applyColors(state.parts, colorsRef.current);
-  }, [bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor]);
+  }, [bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor, insertColor]);
 
   useEffect(() => {
     designRef.current = backDesign;
@@ -361,6 +369,7 @@ type JacketColors = {
   snapColor: string;
   pocketColor: string;
   liningColor: string;
+  insertColor: string;
 };
 
 function applyColors(parts: JacketParts, colors: JacketColors) {
@@ -677,8 +686,15 @@ function buildRecolorKit(neutral: NeutralizedBase): RecolorKit {
     return canvas;
   };
 
+  const inYokeRect = (x: number, y: number) => {
+    const u = x / width;
+    const v = y / height;
+    return u >= YOKE_RECT.u0 && u <= YOKE_RECT.u1 && v >= YOKE_RECT.v0 && v <= YOKE_RECT.v1;
+  };
+
   const sleeve = soften(makeMask((i) => light[i] === 1));
   const pocket = soften(makeMask((i, x, y) => light[i] === 1 && inPocketRect(x, y)));
+  const insert = soften(makeMask((i, x, y) => inYokeRect(x, y)));
   const body = document.createElement("canvas");
   body.width = width;
   body.height = height;
@@ -713,7 +729,7 @@ function buildRecolorKit(neutral: NeutralizedBase): RecolorKit {
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.anisotropy = 8;
 
-  return { detail: neutral.canvas, masks: { body, sleeve, pocket, trim }, tmp, composite, design, texture };
+  return { detail: neutral.canvas, masks: { body, sleeve, pocket, insert, trim }, tmp, composite, design, texture };
 }
 
 /** Re-tint the detail map region by region into the composite color map. */
@@ -727,6 +743,7 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
     [kit.masks.body, colors.bodyColor],
     [kit.masks.sleeve, colors.sleeveColor],
     [kit.masks.pocket, colors.pocketColor],
+    [kit.masks.insert, colors.insertColor],
     [kit.masks.trim, colors.trimColor],
   ];
 

@@ -694,7 +694,9 @@ function buildRecolorKit(neutral: NeutralizedBase): RecolorKit {
 
   const sleeve = soften(makeMask((i) => light[i] === 1));
   const pocket = soften(makeMask((i, x, y) => light[i] === 1 && inPocketRect(x, y)));
-  const insert = soften(makeMask((i, x, y) => inYokeRect(x, y)));
+  // Light texels only: the band also clips edge pixels of the body panels
+  // and collar, which must keep their own region colors.
+  const insert = soften(makeMask((i, x, y) => light[i] === 1 && inYokeRect(x, y)));
   const body = document.createElement("canvas");
   body.width = width;
   body.height = height;

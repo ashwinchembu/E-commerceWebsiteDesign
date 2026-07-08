@@ -111,11 +111,20 @@ const POCKET_RECTS = [
   { u0: 0.31, v0: 0.07, u1: 0.45, v1: 0.17 },
 ];
 
+// UV regions holding the knit trim pieces (collar arc + ribbed bands on the
+// left, waistband/collar/cuff arcs along the bottom). Everything inside is
+// trim — this follows the texture's island layout exactly, unlike the old
+// geometric position rules that clipped jagged triangle spikes out of the
+// body and sleeve panels.
+const TRIM_RECTS = [
+  { u0: 0, v0: 0.44, u1: 0.345, v1: 0.74 },
+  { u0: 0, v0: 0.86, u1: 1, v1: 1 },
+];
+
 // Where the back design prints onto the back body panel in UV space. The
-// design is drawn straight into the composited texture so it sits on the
-// fabric and follows the garment when rotated.
+// panel is oriented upside down in the texture, so the design is drawn
+// rotated 180° (see composeColorMap).
 const BACK_DESIGN_RECT = { u0: 0.55, v0: 0.06, u1: 0.87, v1: 0.44 };
-const BACK_DESIGN_MIRRORED = false;
 
 export function JacketViewer3D({
   bodyColor,
@@ -358,8 +367,8 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   const cleanedPBR = cleanImprintTexture(source.roughnessMap);
   const cleanedNormal = cleanImprintTexture(source.normalMap);
 
-  const trimTriangleUVs = segmentJacketGeometry(jacketMesh, neutral.isLightTexel);
-  const kit = buildRecolorKit(neutral, trimTriangleUVs);
+  segmentJacketGeometry(jacketMesh, neutral.isLightTexel);
+  const kit = buildRecolorKit(neutral);
   composeColorMap(kit, colors);
 
   // Outer shell renders front faces only; a back-face copy of the same
@@ -412,27 +421,52 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   return { materials, kit };
 }
 
+/** 5x5 majority filter over a binary mask, using a summed-area table. */
+function despeckle(mask: Uint8Array, width: number, height: number) {
+  const sat = new Uint32Array((width + 1) * (height + 1));
+  for (let y = 0; y < height; y += 1) {
+    let rowSum = 0;
+    for (let x = 0; x < width; x += 1) {
+      rowSum += mask[y * width + x];
+      sat[(y + 1) * (width + 1) + (x + 1)] = sat[y * (width + 1) + (x + 1)] + rowSum;
+    }
+  }
+  const radius = 2;
+  for (let y = 0; y < height; y += 1) {
+    const y0 = Math.max(0, y - radius);
+    const y1 = Math.min(height - 1, y + radius);
+    for (let x = 0; x < width; x += 1) {
+      const x0 = Math.max(0, x - radius);
+      const x1 = Math.min(width - 1, x + radius);
+      const count =
+        sat[(y1 + 1) * (width + 1) + (x1 + 1)] -
+        sat[y0 * (width + 1) + (x1 + 1)] -
+        sat[(y1 + 1) * (width + 1) + x0] +
+        sat[y0 * (width + 1) + x0];
+      const area = (y1 - y0 + 1) * (x1 - x0 + 1);
+      mask[y * width + x] = count * 2 > area ? 1 : 0;
+    }
+  }
+}
+
+function inTrimRect(u: number, v: number) {
+  return TRIM_RECTS.some((r) => u >= r.u0 && u <= r.u1 && v >= r.v0 && v <= r.v1);
+}
+
 /**
  * Split the jacket mesh index into body / sleeve / trim groups (the groups
- * carry material properties: wool vs leather vs knit). Returns the UV
- * coordinates of trim triangles so the trim region can be rasterized into
- * the recolor mask.
+ * carry material properties: wool vs leather vs knit). Classification is
+ * purely by UV: trim by texture island rects, sleeve vs body by texel
+ * chroma.
  */
 function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: number) => boolean) {
   const geometry = mesh.geometry;
   const index = geometry.getIndex();
   const uv = geometry.getAttribute("uv");
-  const position = geometry.getAttribute("position");
-  if (!index || !uv || !position) throw new Error("jacket geometry missing attributes");
-
-  const bounds = new THREE.Box3().setFromObject(mesh);
-  const size = bounds.getSize(new THREE.Vector3());
-  const center = bounds.getCenter(new THREE.Vector3());
+  if (!index || !uv) throw new Error("jacket geometry missing attributes");
 
   const triCount = index.count / 3;
   const classes = new Uint8Array(triCount);
-  const point = new THREE.Vector3();
-  const trimTriangleUVs: number[] = [];
 
   for (let t = 0; t < triCount; t += 1) {
     const a = index.getX(t * 3);
@@ -446,27 +480,8 @@ function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: nu
       if (isLightTexel(uv.getX(vertex), uv.getY(vertex))) lightVotes += 1;
     }
 
-    point
-      .set(
-        (position.getX(a) + position.getX(b) + position.getX(c)) / 3,
-        (position.getY(a) + position.getY(b) + position.getY(c)) / 3,
-        (position.getZ(a) + position.getZ(b) + position.getZ(c)) / 3,
-      )
-      .applyMatrix4(mesh.matrixWorld);
-
-    const ny = size.y ? (point.y - bounds.min.y) / size.y : 0.5;
-    const nx = size.x ? Math.abs(point.x - center.x) / (size.x / 2) : 0;
-
-    // The knit trim is light gray in the baked texture, so the geometric
-    // rules must run before the light-texel test or the trim gets classed
-    // as sleeve leather.
-    if (
-      (ny < 0.1 && nx < 0.55) || // waistband
-      (ny > 0.88 && nx < 0.35) || // collar
-      nx > 0.84 // cuffs
-    ) {
+    if (inTrimRect(centroidU, centroidV)) {
       classes[t] = CLASS_TRIM;
-      trimTriangleUVs.push(uv.getX(a), uv.getY(a), uv.getX(b), uv.getY(b), uv.getX(c), uv.getY(c));
     } else if (lightVotes >= 3) {
       classes[t] = CLASS_SLEEVE;
     } else {
@@ -489,8 +504,6 @@ function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: nu
     geometry.addGroup(start, offset - start, cls);
   }
   geometry.setIndex(new THREE.BufferAttribute(sorted, 1));
-
-  return trimTriangleUVs;
 }
 
 type NeutralizedBase = {
@@ -544,6 +557,11 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
   const lightMean = lightCount ? lightSum / lightCount : 255;
   const darkMean = darkCount ? darkSum / darkCount : 1;
 
+  // Majority-filter the light/dark classification: stray highlight texels
+  // inside the wool otherwise render as speckles of sleeve color (and vice
+  // versa on the leather).
+  despeckle(light, width, height);
+
   for (let i = 0; i < width * height; i += 1) {
     const mean = light[i] ? lightMean : darkMean;
     const value = Math.min(255, Math.max(90, (luminance[i] / mean) * 205));
@@ -568,7 +586,7 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
 }
 
 /** Build the per-region alpha masks and working canvases for recoloring. */
-function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): RecolorKit {
+function buildRecolorKit(neutral: NeutralizedBase): RecolorKit {
   const { width, height, light } = neutral;
 
   const inPocketRect = (x: number, y: number) => {
@@ -597,22 +615,15 @@ function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): R
   const sleeve = makeMask((i, x, y) => light[i] === 1 && !inPocketRect(x, y));
   const pocket = makeMask((i, x, y) => light[i] === 1 && inPocketRect(x, y));
 
-  // Trim region comes from geometry, rasterized into UV space
+  // Trim occupies fixed texture islands; painted last, it overrides the
+  // body/sleeve layers inside its rects.
   const trim = document.createElement("canvas");
   trim.width = width;
   trim.height = height;
   const trimCtx = trim.getContext("2d")!;
   trimCtx.fillStyle = "#ffffff";
-  trimCtx.strokeStyle = "#ffffff";
-  trimCtx.lineWidth = 1.5;
-  for (let i = 0; i < trimTriangleUVs.length; i += 6) {
-    trimCtx.beginPath();
-    trimCtx.moveTo(trimTriangleUVs[i] * width, trimTriangleUVs[i + 1] * height);
-    trimCtx.lineTo(trimTriangleUVs[i + 2] * width, trimTriangleUVs[i + 3] * height);
-    trimCtx.lineTo(trimTriangleUVs[i + 4] * width, trimTriangleUVs[i + 5] * height);
-    trimCtx.closePath();
-    trimCtx.fill();
-    trimCtx.stroke();
+  for (const r of TRIM_RECTS) {
+    trimCtx.fillRect(r.u0 * width, r.v0 * height, (r.u1 - r.u0) * width, (r.v1 - r.v0) * height);
   }
 
   const tmp = document.createElement("canvas");
@@ -660,19 +671,16 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
     compositeCtx.drawImage(kit.tmp, 0, 0);
   }
 
-  // Print the back design straight onto the back body panel
+  // Print the back design onto the back body panel. The panel is flipped
+  // vertically in the texture, so the design is drawn flipped to match.
   const dx0 = BACK_DESIGN_RECT.u0 * width;
   const dy0 = BACK_DESIGN_RECT.v0 * height;
   const dw = (BACK_DESIGN_RECT.u1 - BACK_DESIGN_RECT.u0) * width;
   const dh = (BACK_DESIGN_RECT.v1 - BACK_DESIGN_RECT.v0) * height;
   compositeCtx.save();
-  if (BACK_DESIGN_MIRRORED) {
-    compositeCtx.translate(dx0 + dw, dy0);
-    compositeCtx.scale(-1, 1);
-    compositeCtx.drawImage(kit.design, 0, 0, dw, dh);
-  } else {
-    compositeCtx.drawImage(kit.design, dx0, dy0, dw, dh);
-  }
+  compositeCtx.translate(dx0 + dw / 2, dy0 + dh / 2);
+  compositeCtx.scale(1, -1);
+  compositeCtx.drawImage(kit.design, -dw / 2, -dh / 2, dw, dh);
   compositeCtx.restore();
 
   kit.texture.needsUpdate = true;
@@ -710,7 +718,12 @@ function canvasTextureLike(canvas: HTMLCanvasElement, sourceTexture: THREE.Textu
 let crestElement: HTMLCanvasElement | null = null;
 let crestLoading: Promise<HTMLCanvasElement | null> | null = null;
 
-/** Load the brand crest and crop it to its visible (non-transparent) bounds. */
+/**
+ * Load the brand crest, crop it to the actual artwork, and knock out its
+ * background. The source PNG is a wide strip with the gold crest small in
+ * the middle on an opaque near-white background, so cropping and keying are
+ * done by "not near-white" content rather than alpha.
+ */
 function loadCrest(): Promise<HTMLCanvasElement | null> {
   if (crestElement) return Promise.resolve(crestElement);
   if (crestLoading) return crestLoading;
@@ -722,14 +735,21 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
       scan.height = image.height;
       const ctx = scan.getContext("2d")!;
       ctx.drawImage(image, 0, 0);
-      const { data } = ctx.getImageData(0, 0, scan.width, scan.height);
+      const imageData = ctx.getImageData(0, 0, scan.width, scan.height);
+      const { data } = imageData;
+
       let minX = scan.width;
       let minY = scan.height;
       let maxX = 0;
       let maxY = 0;
       for (let y = 0; y < scan.height; y += 1) {
         for (let x = 0; x < scan.width; x += 1) {
-          if (data[(y * scan.width + x) * 4 + 3] < 16) continue;
+          const i = (y * scan.width + x) * 4;
+          const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          // near-white background → transparent, artwork → opaque
+          const alpha = Math.min(255, Math.max(0, Math.round((242 - lum) * 6)));
+          data[i + 3] = Math.min(data[i + 3], alpha);
+          if (alpha < 32) continue;
           if (x < minX) minX = x;
           if (x > maxX) maxX = x;
           if (y < minY) minY = y;
@@ -740,6 +760,7 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
         resolve(null);
         return;
       }
+      ctx.putImageData(imageData, 0, 0);
       const cropped = document.createElement("canvas");
       cropped.width = maxX - minX + 1;
       cropped.height = maxY - minY + 1;

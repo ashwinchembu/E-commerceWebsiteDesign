@@ -416,8 +416,8 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   const cleanedPBR = cleanImprintTexture(source.roughnessMap);
   const cleanedNormal = cleanImprintTexture(source.normalMap);
 
-  segmentJacketGeometry(jacketMesh, neutral.isLightTexel);
-  const kit = buildRecolorKit(neutral);
+  const trimTriangleUVs = segmentJacketGeometry(jacketMesh, neutral.isLightTexel);
+  const kit = buildRecolorKit(neutral, trimTriangleUVs);
   composeColorMap(kit, colors);
 
   // Outer shell renders front faces only; a back-face copy of the same
@@ -504,18 +504,27 @@ function inTrimRect(u: number, v: number) {
 
 /**
  * Split the jacket mesh index into body / sleeve / trim groups (the groups
- * carry material properties: wool vs leather vs knit). Classification is
- * purely by UV: trim by texture island rects, sleeve vs body by texel
- * chroma.
+ * carry material properties: wool vs leather vs knit). Trim requires BOTH a
+ * geometric match (collar / waistband / cuff position) and UVs inside the
+ * knit texture islands: geometry alone paints spikes into the panels, and
+ * UV rects alone catch the sleeve-cap pieces stored between the knit
+ * islands. Returns the trim triangles' UVs for mask rasterization.
  */
 function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: number) => boolean) {
   const geometry = mesh.geometry;
   const index = geometry.getIndex();
   const uv = geometry.getAttribute("uv");
-  if (!index || !uv) throw new Error("jacket geometry missing attributes");
+  const position = geometry.getAttribute("position");
+  if (!index || !uv || !position) throw new Error("jacket geometry missing attributes");
+
+  const bounds = new THREE.Box3().setFromObject(mesh);
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
 
   const triCount = index.count / 3;
   const classes = new Uint8Array(triCount);
+  const point = new THREE.Vector3();
+  const trimTriangleUVs: number[] = [];
 
   for (let t = 0; t < triCount; t += 1) {
     const a = index.getX(t * 3);
@@ -529,8 +538,24 @@ function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: nu
       if (isLightTexel(uv.getX(vertex), uv.getY(vertex))) lightVotes += 1;
     }
 
-    if (inTrimRect(centroidU, centroidV)) {
+    point
+      .set(
+        (position.getX(a) + position.getX(b) + position.getX(c)) / 3,
+        (position.getY(a) + position.getY(b) + position.getY(c)) / 3,
+        (position.getZ(a) + position.getZ(b) + position.getZ(c)) / 3,
+      )
+      .applyMatrix4(mesh.matrixWorld);
+
+    const ny = size.y ? (point.y - bounds.min.y) / size.y : 0.5;
+    const nx = size.x ? Math.abs(point.x - center.x) / (size.x / 2) : 0;
+    const geometricTrim =
+      (ny < 0.12 && nx < 0.55) || // waistband
+      (ny > 0.88 && nx < 0.32) || // collar
+      nx > 0.82; // cuffs
+
+    if (geometricTrim && inTrimRect(centroidU, centroidV)) {
       classes[t] = CLASS_TRIM;
+      trimTriangleUVs.push(uv.getX(a), uv.getY(a), uv.getX(b), uv.getY(b), uv.getX(c), uv.getY(c));
     } else if (lightVotes >= 3) {
       classes[t] = CLASS_SLEEVE;
     } else {
@@ -553,6 +578,8 @@ function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: nu
     geometry.addGroup(start, offset - start, cls);
   }
   geometry.setIndex(new THREE.BufferAttribute(sorted, 1));
+
+  return trimTriangleUVs;
 }
 
 type NeutralizedBase = {
@@ -650,7 +677,7 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
 }
 
 /** Build the per-region alpha masks and working canvases for recoloring. */
-function buildRecolorKit(neutral: NeutralizedBase): RecolorKit {
+function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): RecolorKit {
   const { width, height, light } = neutral;
 
   const inPocketRect = (x: number, y: number) => {
@@ -708,16 +735,32 @@ function buildRecolorKit(neutral: NeutralizedBase): RecolorKit {
   bodyCtx.fillStyle = "#ffffff";
   bodyCtx.fillRect(0, 0, width, height);
 
-  // Trim occupies fixed texture islands; painted last, it overrides the
-  // body/sleeve layers inside its rects.
+  // Trim mask: rasterized trim triangles intersected with the knit UV
+  // rects — the same two-filter rule as the triangle classification, so the
+  // sleeve-cap pieces stored between the knit islands stay sleeve-colored.
   const trim = document.createElement("canvas");
   trim.width = width;
   trim.height = height;
   const trimCtx = trim.getContext("2d")!;
   trimCtx.fillStyle = "#ffffff";
-  for (const r of TRIM_RECTS) {
-    trimCtx.fillRect(r.u0 * width, r.v0 * height, (r.u1 - r.u0) * width, (r.v1 - r.v0) * height);
+  trimCtx.strokeStyle = "#ffffff";
+  trimCtx.lineWidth = 2;
+  for (let i = 0; i < trimTriangleUVs.length; i += 6) {
+    trimCtx.beginPath();
+    trimCtx.moveTo(trimTriangleUVs[i] * width, trimTriangleUVs[i + 1] * height);
+    trimCtx.lineTo(trimTriangleUVs[i + 2] * width, trimTriangleUVs[i + 3] * height);
+    trimCtx.lineTo(trimTriangleUVs[i + 4] * width, trimTriangleUVs[i + 5] * height);
+    trimCtx.closePath();
+    trimCtx.fill();
+    trimCtx.stroke();
   }
+  trimCtx.globalCompositeOperation = "destination-in";
+  trimCtx.beginPath();
+  for (const r of TRIM_RECTS) {
+    trimCtx.rect(r.u0 * width, r.v0 * height, (r.u1 - r.u0) * width, (r.v1 - r.v0) * height);
+  }
+  trimCtx.fill();
+  trimCtx.globalCompositeOperation = "source-over";
 
   const tmp = document.createElement("canvas");
   tmp.width = width;

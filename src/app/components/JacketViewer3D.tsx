@@ -69,9 +69,11 @@ const PATCH_SOURCE_OFFSET_U = -0.21;
 /**
  * Clone-stamp clean fabric over the patch imprint: copy an equally sized
  * region of plain fabric from the same panel and paste it over the patch
- * rect with feathered edges so the grain stays continuous.
+ * rect with feathered edges so the grain stays continuous. With `matchTone`
+ * the clone's brightness is offset to the destination's surroundings, since
+ * the panel carries a subtle lighting gradient.
  */
-function clonePatchRegion(ctx: CanvasRenderingContext2D) {
+function clonePatchRegion(ctx: CanvasRenderingContext2D, matchTone = false) {
   const { width, height } = ctx.canvas;
   const dx = Math.floor(PATCH_RECT.u0 * width);
   const dy = Math.floor(PATCH_RECT.v0 * height);
@@ -85,7 +87,36 @@ function clonePatchRegion(ctx: CanvasRenderingContext2D) {
   const patchCtx = patch.getContext("2d")!;
   patchCtx.drawImage(ctx.canvas, sx, dy, dw, dh, 0, 0, dw, dh);
 
-  const feather = Math.max(4, Math.round(dw * 0.08));
+  if (matchTone) {
+    // Compare the clone against a ring just outside the destination rect
+    // and shift its brightness by the difference.
+    const ring = Math.max(4, Math.round(dw * 0.08));
+    const ringData = ctx.getImageData(dx - ring, dy - ring, dw + ring * 2, dh + ring * 2);
+    let ringSum = 0;
+    let ringCount = 0;
+    const rw = dw + ring * 2;
+    const rh = dh + ring * 2;
+    for (let y = 0; y < rh; y += 1) {
+      for (let x = 0; x < rw; x += 1) {
+        if (x >= ring && x < rw - ring && y >= ring && y < rh - ring) continue;
+        ringSum += ringData.data[(y * rw + x) * 4];
+        ringCount += 1;
+      }
+    }
+    const patchData = patchCtx.getImageData(0, 0, dw, dh);
+    let patchSum = 0;
+    for (let i = 0; i < dw * dh; i += 1) patchSum += patchData.data[i * 4];
+    const delta = ringSum / Math.max(ringCount, 1) - patchSum / (dw * dh);
+    for (let i = 0; i < dw * dh; i += 1) {
+      const value = Math.min(255, Math.max(0, patchData.data[i * 4] + delta));
+      patchData.data[i * 4] = value;
+      patchData.data[i * 4 + 1] = value;
+      patchData.data[i * 4 + 2] = value;
+    }
+    patchCtx.putImageData(patchData, 0, 0);
+  }
+
+  const feather = Math.max(6, Math.round(dw * 0.14));
   patchCtx.globalCompositeOperation = "destination-in";
   const edges: Array<[number, number, number, number]> = [
     [0, 0, feather, 0], // left
@@ -520,8 +551,8 @@ type NeutralizedBase = {
  * be multiplied on top while keeping stitches, seams, and fold shading.
  */
 function neutralizeBaseColor(image: CanvasImageSource & { width: number; height: number }): NeutralizedBase {
-  const width = Math.min(image.width, 1024);
-  const height = Math.min(image.height, 1024);
+  const width = Math.min(image.width, 2048);
+  const height = Math.min(image.height, 2048);
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -573,8 +604,9 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
   ctx.putImageData(imageData, 0, 0);
 
   // Erase the letter-patch shadow baked into the chest area (the patch mesh
-  // itself is hidden) by cloning clean fabric over it.
-  clonePatchRegion(ctx);
+  // itself is hidden) by cloning clean fabric over it. Tone-matched because
+  // the panel has a subtle lighting gradient between source and chest.
+  clonePatchRegion(ctx, true);
 
   const isLightTexel = (u: number, v: number) => {
     const x = Math.min(width - 1, Math.max(0, Math.floor((u % 1 + 1) % 1 * width)));
@@ -611,9 +643,29 @@ function buildRecolorKit(neutral: NeutralizedBase): RecolorKit {
     return canvas;
   };
 
-  const body = makeMask((i) => light[i] === 0);
-  const sleeve = makeMask((i, x, y) => light[i] === 1 && !inPocketRect(x, y));
-  const pocket = makeMask((i, x, y) => light[i] === 1 && inPocketRect(x, y));
+  // Blur the binary classification slightly so region boundaries composite
+  // with anti-aliased edges instead of hard texel staircases. The body layer
+  // is fully opaque underneath, so blended seam texels mix body and sleeve
+  // color exactly.
+  const soften = (mask: HTMLCanvasElement) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d")!;
+    ctx.filter = "blur(1.5px)";
+    ctx.drawImage(mask, 0, 0);
+    ctx.filter = "none";
+    return canvas;
+  };
+
+  const sleeve = soften(makeMask((i) => light[i] === 1));
+  const pocket = soften(makeMask((i, x, y) => light[i] === 1 && inPocketRect(x, y)));
+  const body = document.createElement("canvas");
+  body.width = width;
+  body.height = height;
+  const bodyCtx = body.getContext("2d")!;
+  bodyCtx.fillStyle = "#ffffff";
+  bodyCtx.fillRect(0, 0, width, height);
 
   // Trim occupies fixed texture islands; painted last, it overrides the
   // body/sleeve layers inside its rects.

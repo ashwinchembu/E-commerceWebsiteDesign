@@ -319,10 +319,6 @@ export function JacketViewer3D({
 
     const animate = () => {
       const drag = dragRef.current;
-      if (!drag.active) {
-        drag.rotY += (0.05 - drag.rotY) * 0.018;
-        drag.rotX += (-0.04 - drag.rotX) * 0.018;
-      }
       modelRoot.rotation.set(drag.rotX, drag.rotY, 0);
       renderer.render(scene, camera);
       const state = sceneRef.current;
@@ -615,7 +611,10 @@ function neutralizeBaseColor(image: CanvasImageSource & { width: number; height:
 
   for (let i = 0; i < width * height; i += 1) {
     const mean = light[i] ? lightMean : darkMean;
-    const value = Math.min(255, Math.max(90, (luminance[i] / mean) * 205));
+    // Wool texels are capped tighter: the bake washes out near seams, and
+    // uncapped bright texels halo when tinted with a dark body color.
+    const cap = light[i] ? 255 : 222;
+    const value = Math.min(cap, Math.max(90, (luminance[i] / mean) * 205));
     data[i * 4] = value;
     data[i * 4 + 1] = value;
     data[i * 4 + 2] = value;

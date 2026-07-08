@@ -150,8 +150,8 @@ const POCKET_RECTS = [
 // geometric position rules that clipped jagged triangle spikes out of the
 // body and sleeve panels.
 const TRIM_RECTS = [
-  { u0: 0, v0: 0.44, u1: 0.345, v1: 0.74 },
-  { u0: 0, v0: 0.86, u1: 1, v1: 1 },
+  { u0: 0, v0: 0.53, u1: 0.345, v1: 0.74 }, // ribbed knit bands
+  { u0: 0, v0: 0.86, u1: 1, v1: 1 }, // waistband + collar/cuff arcs
 ];
 
 // The two wool body panels (front, back). Inside them the only light
@@ -163,10 +163,14 @@ const BODY_PANEL_RECTS = [
   { u0: 0.47, v0: 0, u1: 0.96, v1: 0.44 },
 ];
 
-// The shoulder yoke pieces live in the band between the body panels and the
-// sleeve panels. They take the shoulder-insert color (the body color when
-// "no inserts" is selected).
-const YOKE_RECT = { u0: 0.345, v0: 0.43, u1: 0.96, v1: 0.478 };
+// The shoulder yoke pieces (including the clavicle wings) are scattered
+// through the band between the body panels and the sleeve panels, plus the
+// left-shoulder wedge island. Light texels here take the shoulder-insert
+// color (the body color when "no inserts" is selected).
+const YOKE_RECTS = [
+  { u0: 0.2, v0: 0.4, u1: 0.96, v1: 0.492 },
+  { u0: 0, v0: 0.44, u1: 0.2, v1: 0.53 }, // left wedge + inner collar facing
+];
 
 // Where the back design prints onto the back body panel in UV space. The
 // panel is oriented upside down in the texture, so the design is drawn
@@ -689,7 +693,7 @@ function buildRecolorKit(neutral: NeutralizedBase): RecolorKit {
   const inYokeRect = (x: number, y: number) => {
     const u = x / width;
     const v = y / height;
-    return u >= YOKE_RECT.u0 && u <= YOKE_RECT.u1 && v >= YOKE_RECT.v0 && v <= YOKE_RECT.v1;
+    return YOKE_RECTS.some((r) => u >= r.u0 && u <= r.u1 && v >= r.v0 && v <= r.v1);
   };
 
   const sleeve = soften(makeMask((i) => light[i] === 1));

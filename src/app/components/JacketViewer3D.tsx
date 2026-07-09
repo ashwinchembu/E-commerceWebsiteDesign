@@ -193,6 +193,10 @@ const BACK_DESIGN_RECT = { u0: 0.55, v0: 0.06, u1: 0.87, v1: 0.44 };
 // The fixed gold chest badge, on the front-left chest (the old patch site).
 const FRONT_BADGE_RECT = { u0: 0.29, v0: 0.24, u1: 0.4, v1: 0.37 };
 
+// Fixed "MANOIR KITS" chest text on the opposite (front-right) chest panel.
+const FRONT_TEXT_RECT = { u0: 0.07, v0: 0.24, u1: 0.19, v1: 0.34 };
+const CHEST_TEXT_FILL = "#f2ede2";
+
 // A narrow UV strip down the outer face of each sleeve where the sleeve
 // numbers print, running shoulder → cuff. `flip` corrects the v direction
 // for the mirrored sleeve island.
@@ -883,6 +887,23 @@ function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): R
   };
 }
 
+let chestWordmarkCanvas: HTMLCanvasElement | null = null;
+
+/** Cached "MANOIR / KITS" chest wordmark, drawn upright (chenille style). */
+function chestWordmark(): HTMLCanvasElement {
+  if (chestWordmarkCanvas) return chestWordmarkCanvas;
+  const canvas = document.createElement("canvas");
+  canvas.width = 320;
+  canvas.height = 220;
+  const ctx = canvas.getContext("2d")!;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  arcedText(ctx, "MANOIR", canvas.width / 2, canvas.height / 2 + 230, 260, 46, CHEST_TEXT_FILL);
+  arcedText(ctx, "KITS", canvas.width / 2, canvas.height / 2 + 230 + 58, 260, 46, CHEST_TEXT_FILL);
+  chestWordmarkCanvas = canvas;
+  return canvas;
+}
+
 /** Re-tint the detail map region by region into the composite color map. */
 function composeColorMap(kit: RecolorKit, colors: JacketColors) {
   const { width, height } = kit.composite;
@@ -937,6 +958,22 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
     const bx = FRONT_BADGE_RECT.u0 * width;
     const by = ((FRONT_BADGE_RECT.v0 + FRONT_BADGE_RECT.v1) / 2) * height - badgeH / 2;
     compositeCtx.drawImage(crestElement, bx, by, badgeW, badgeH);
+  }
+
+  // Fixed "MANOIR KITS" wordmark on the opposite chest — MANOIR arched over
+  // KITS, white fill with a gold outline. The panel is vertically mirrored in
+  // UV, so it's drawn upright then blitted flipped (same as the back print).
+  {
+    const rx = FRONT_TEXT_RECT.u0 * width;
+    const ry = FRONT_TEXT_RECT.v0 * height;
+    const rw = (FRONT_TEXT_RECT.u1 - FRONT_TEXT_RECT.u0) * width;
+    const rh = (FRONT_TEXT_RECT.v1 - FRONT_TEXT_RECT.v0) * height;
+    const chest = chestWordmark();
+    compositeCtx.save();
+    compositeCtx.translate(rx + rw / 2, ry + rh / 2);
+    compositeCtx.scale(1, -1);
+    compositeCtx.drawImage(chest, -rw / 2, -rh / 2, rw, rh);
+    compositeCtx.restore();
   }
 
   // Sleeve numbers down each arm

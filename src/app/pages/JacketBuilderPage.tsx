@@ -5,164 +5,176 @@ import { useNavigate } from "react-router-dom";
 
 const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
-const SECTION_OPTIONS: Record<string, { label: string; color: string }[]> = {
-  Collar: [
-    { label: "Regular", color: "#f0efe9" },
-  ],
-  Body: [
-    { label: "Bright White Wool", color: "#f0e9d8" },
-    { label: "Black Wool", color: "#1a1a1a" },
-    { label: "Navy Wool", color: "#1e2d5a" },
-    { label: "Burgundy Wool", color: "#6b1e2a" },
-    { label: "Forest Wool", color: "#1a3d2b" },
-  ],
-  "Inside Lining": [
-    { label: "Black Quilted", color: "#141414" },
-    { label: "White Quilted", color: "#fafafa" },
-    { label: "Gold Satin", color: "#c8a94a" },
-  ],
-  Sleeves: [
-    { label: "Bright White Leather", color: "#f4f2ea" },
-    { label: "Black Leather", color: "#1a1a1a" },
-    { label: "Caramel Leather", color: "#b07d3a" },
-    { label: "Burgundy Leather", color: "#6b1e2a" },
-    { label: "Navy Leather", color: "#1e2d5a" },
-  ],
-  "Shoulder Inserts": [
-    { label: "No Shoulder Inserts", color: "#e8e8e8" },
-    { label: "Bright White Leather", color: "#f4f2ea" },
-    { label: "Black Leather", color: "#1a1a1a" },
-  ],
-  Pockets: [
-    { label: "Bright White Leather", color: "#f4f2ea" },
-    { label: "Black Leather", color: "#1a1a1a" },
-    { label: "Caramel Leather", color: "#b07d3a" },
-    { label: "Burgundy Leather", color: "#6b1e2a" },
-    { label: "Navy Leather", color: "#1e2d5a" },
-  ],
-  Snaps: [
-    { label: "Off White Snaps", color: "#efe9dc" },
-    { label: "Black Snaps", color: "#1a1a1a" },
-    { label: "Antique Gold Snaps", color: "#c9a84c" },
-  ],
-  "Knit Trim": [
-    { label: "Solid Bright White", color: "#f0efe9" },
-    { label: "Solid Black", color: "#1a1a1a" },
-    { label: "Solid Navy", color: "#1e2d5a" },
-    { label: "Solid Burgundy", color: "#6b1e2a" },
-  ],
-};
+// Grouped shade palette shared by the body (wool) and sleeves (leather).
+// Gold / metallic / goldenrod shades are intentionally excluded — gold is
+// reserved for the fixed brand details (chest badge, stars, accents).
+const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] }[] = [
+  {
+    group: "Neutrals",
+    shades: [
+      { label: "Bright White", color: "#f1ead9" },
+      { label: "Cream", color: "#e7dec8" },
+      { label: "Bone", color: "#d9cfba" },
+      { label: "Stone Grey", color: "#9a958c" },
+      { label: "Charcoal", color: "#2c2c2c" },
+      { label: "Black", color: "#141414" },
+    ],
+  },
+  {
+    group: "Reds",
+    shades: [
+      { label: "Maroon", color: "#5e1b26" },
+      { label: "Burgundy", color: "#6b1e2a" },
+      { label: "Cardinal", color: "#8f2130" },
+      { label: "Crimson", color: "#a11d2e" },
+      { label: "Brick", color: "#7c3a34" },
+    ],
+  },
+  {
+    group: "Greens",
+    shades: [
+      { label: "Forest", color: "#1a3d2b" },
+      { label: "Hunter", color: "#24503a" },
+      { label: "Bottle", color: "#0f3d2e" },
+      { label: "Olive", color: "#4a5320" },
+      { label: "Sage", color: "#7fa88a" },
+    ],
+  },
+  {
+    group: "Blues",
+    shades: [
+      { label: "Navy", color: "#1e2d5a" },
+      { label: "Royal Blue", color: "#20408f" },
+      { label: "Medium Blue", color: "#2f5fb0" },
+      { label: "France Blue", color: "#3a6bd6" },
+      { label: "Baby Blue", color: "#8fb8e0" },
+      { label: "Powder", color: "#aecbe8" },
+    ],
+  },
+  {
+    group: "Purples",
+    shades: [
+      { label: "Deep Purple", color: "#38265a" },
+      { label: "Grape", color: "#442a6b" },
+      { label: "Violet", color: "#5b3a86" },
+      { label: "Plum", color: "#5a2a52" },
+    ],
+  },
+  {
+    group: "Yellows",
+    shades: [
+      { label: "Pale Yellow", color: "#ece3ac" },
+      { label: "Butter", color: "#eede86" },
+      { label: "Canary", color: "#f0e24c" },
+    ],
+  },
+  {
+    group: "Oranges",
+    shades: [
+      { label: "Terracotta", color: "#bd6a45" },
+      { label: "Burnt Orange", color: "#b5531f" },
+      { label: "Rust", color: "#9c4419" },
+      { label: "Coral", color: "#d47a5a" },
+    ],
+  },
+];
 
+function labelForColor(color: string) {
+  for (const group of COLOR_GROUPS) {
+    const shade = group.shades.find((s) => s.color.toLowerCase() === color.toLowerCase());
+    if (shade) return shade.label;
+  }
+  return color;
+}
+
+// Major European football cities across the top five leagues.
 const CITIES = [
-  "Madrid",
-  "Barcelona",
+  // Premier League
+  "London",
   "Manchester",
   "Liverpool",
-  "London",
+  "Newcastle",
+  "Birmingham",
+  "Leeds",
+  // La Liga
+  "Madrid",
+  "Barcelona",
+  "Sevilla",
+  "Valencia",
+  "Bilbao",
+  "San Sebastián",
+  // Bundesliga
   "Munich",
   "Dortmund",
+  "Berlin",
+  "Hamburg",
+  "Leverkusen",
+  "Frankfurt",
+  // Serie A
   "Milan",
   "Turin",
   "Rome",
   "Naples",
+  "Florence",
+  "Bergamo",
+  // Ligue 1
   "Paris",
   "Marseille",
   "Lyon",
-  "Amsterdam",
+  "Monaco",
+  "Lille",
+  "Nice",
+  // Other iconic footballing cities
   "Lisbon",
   "Porto",
-  "Sevilla",
+  "Amsterdam",
   "Glasgow",
-  "Istanbul",
 ];
-
-const PRINT_COLORS = [
-  { label: "Bright White", color: "#f5f5f0" },
-  { label: "Black", color: "#1a1a1a" },
-  { label: "Gold", color: "#c9a84c" },
-  { label: "Navy", color: "#1e2d5a" },
-  { label: "Burgundy", color: "#6b1e2a" },
-];
-
-// Personalization can't use a pro player's name
-const BLOCKED_PLAYER_NAMES = [
-  "messi", "ronaldo", "cristiano", "neymar", "mbappe", "haaland", "bellingham",
-  "salah", "kane", "modric", "benzema", "lewandowski", "vinicius", "foden",
-  "saka", "griezmann", "pedri", "gavi", "yamal", "zidane", "beckham",
-  "maradona", "pele", "ronaldinho", "ibrahimovic", "zlatan", "suarez",
-  "aguero", "hazard", "de bruyne", "debruyne", "kroos", "iniesta", "xavi",
-  "buffon", "dybala", "pogba", "rashford", "sterling", "sancho", "musiala",
-  "wirtz", "odegaard", "rice", "palmer", "rodri", "henry", "drogba", "kaka",
-];
-
-function isBlockedPlayerName(name: string) {
-  const normalized = name.trim().toLowerCase();
-  if (!normalized) return false;
-  const words = normalized.split(/[^a-z]+/).filter(Boolean);
-  const compact = normalized.replace(/[^a-z]/g, "");
-  return BLOCKED_PLAYER_NAMES.some((player) => {
-    const key = player.replace(/[^a-z]/g, "");
-    // Exact word match always blocks; longer distinctive names also block
-    // as substrings so "MESSI10" or "DEBRUYNE7" can't sneak through.
-    return words.includes(key) || (key.length >= 5 && compact.includes(key));
-  });
-}
-
 
 export function JacketBuilderPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Body");
-  const [selections, setSelections] = useState<Record<string, string>>({
-    Collar: "Regular",
-    Body: "Bright White Wool",
-    "Inside Lining": "Black Quilted",
-    Sleeves: "Bright White Leather",
-    "Shoulder Inserts": "No Shoulder Inserts",
-    Pockets: "Bright White Leather",
-    Snaps: "Off White Snaps",
-    "Knit Trim": "Solid Bright White",
+  const [openColorGroup, setOpenColorGroup] = useState<Record<string, string | null>>({
+    Body: "Neutrals",
+    Sleeves: "Neutrals",
   });
-  const colorOf = (section: string, fallback: string) =>
-    SECTION_OPTIONS[section]?.find((o) => o.label === selections[section])?.color ?? fallback;
+
+  const [bodyColor, setBodyColor] = useState("#141414");
+  const [sleeveColor, setSleeveColor] = useState("#f1ead9");
+
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [wishlisted, setWishlisted] = useState(false);
 
-  const [backName, setBackName] = useState("");
-  const [nameError, setNameError] = useState<string | null>(null);
   const [backStars, setBackStars] = useState(5);
-  const [backNumbers, setBackNumbers] = useState(["", "", "", "", ""]);
+  const [backNumber, setBackNumber] = useState("10");
+  const [sleeveNumbers, setSleeveNumbers] = useState(["", "", "", "", ""]);
   const [backCity, setBackCity] = useState("Madrid");
-  const [printColor, setPrintColor] = useState(PRINT_COLORS[0].color);
 
   const backDesign: BackDesign = {
     stars: backStars,
-    numbers: backNumbers,
-    name: nameError ? "" : backName,
+    backNumber,
+    sleeveNumbers,
     city: backCity,
-    color: printColor,
   };
 
-  const onNameChange = (value: string) => {
-    setBackName(value);
-    setNameError(
-      isBlockedPlayerName(value) ? "Player names aren't allowed — make it your own." : null,
-    );
+  const onBackNumberChange = (value: string) => {
+    setBackNumber(value.replace(/\D/g, "").slice(0, 2));
   };
 
-  const onNumberChange = (index: number, value: string) => {
+  const onSleeveNumberChange = (index: number, value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 2);
-    setBackNumbers((numbers) => numbers.map((n, i) => (i === index ? digits : n)));
+    setSleeveNumbers((numbers) => numbers.map((n, i) => (i === index ? digits : n)));
   };
 
   const price = 895;
 
-  const getSwatchColor = (section: string) => {
-    const sel = selections[section];
-    const opts = SECTION_OPTIONS[section] || [];
-    return opts.find((o) => o.label === sel)?.color ?? "#ccc";
-  };
+  // The two user-configurable material colors + a read-only lining note.
+  const MATERIAL_SECTIONS: { section: string; color: string; setColor: (c: string) => void; material: string }[] = [
+    { section: "Body", color: bodyColor, setColor: setBodyColor, material: "Wool" },
+    { section: "Sleeves", color: sleeveColor, setColor: setSleeveColor, material: "Leather" },
+  ];
 
   return (
     <div className="fixed inset-0 bg-white flex flex-col z-50 font-['League_Spartan',sans-serif]">
@@ -198,7 +210,7 @@ export function JacketBuilderPage() {
 
         {/* Right controls */}
         <div className="flex items-center gap-3">
-            {/* Wishlist */}
+          {/* Wishlist */}
           <button onClick={() => setWishlisted((w) => !w)} className="text-gray-400 hover:text-black transition-colors">
             <Star className={`w-4 h-4 ${wishlisted ? "fill-black text-black" : ""}`} />
           </button>
@@ -221,10 +233,8 @@ export function JacketBuilderPage() {
         <div className="w-64 shrink-0 border-r border-gray-200 overflow-y-auto bg-white">
           {activeTab === "materials" ? (
             <div>
-              {Object.keys(SECTION_OPTIONS).map((section) => {
+              {MATERIAL_SECTIONS.map(({ section, color, setColor, material }) => {
                 const isOpen = expandedSection === section;
-                const swatchColor = getSwatchColor(section);
-                const currentLabel = selections[section] ?? "";
                 return (
                   <div key={section} className="border-b border-gray-100">
                     <button
@@ -234,11 +244,13 @@ export function JacketBuilderPage() {
                       <div className="flex items-center gap-3">
                         <div
                           className="w-7 h-7 rounded border border-gray-200 shrink-0"
-                          style={{ backgroundColor: swatchColor }}
+                          style={{ backgroundColor: color }}
                         />
                         <div className="text-left">
-                          <div className="text-[10px] tracking-widest uppercase text-gray-400">{section}</div>
-                          <div className="text-xs font-medium text-black leading-tight">{currentLabel}</div>
+                          <div className="text-[10px] tracking-widest uppercase text-gray-400">
+                            {section} · {material}
+                          </div>
+                          <div className="text-xs font-medium text-black leading-tight">{labelForColor(color)}</div>
                         </div>
                       </div>
                       <ChevronRight
@@ -246,23 +258,44 @@ export function JacketBuilderPage() {
                       />
                     </button>
                     {isOpen && (
-                      <div className="bg-gray-50 border-t border-gray-100">
-                        {SECTION_OPTIONS[section].map((opt) => {
-                          const active = selections[section] === opt.label;
+                      <div className="bg-gray-50 border-t border-gray-100 py-1">
+                        {COLOR_GROUPS.map(({ group, shades }) => {
+                          const groupOpen = openColorGroup[section] === group;
                           return (
-                            <button
-                              key={opt.label}
-                              onClick={() => setSelections((s) => ({ ...s, [section]: opt.label }))}
-                              className={`w-full flex items-center gap-3 px-5 py-2.5 text-left hover:bg-gray-100 transition-colors ${
-                                active ? "bg-gray-100" : ""
-                              }`}
-                            >
-                              <div
-                                className={`w-5 h-5 rounded border shrink-0 ${active ? "border-black ring-1 ring-black" : "border-gray-300"}`}
-                                style={{ backgroundColor: opt.color }}
-                              />
-                              <span className={`text-xs ${active ? "font-semibold" : "text-gray-600"}`}>{opt.label}</span>
-                            </button>
+                            <div key={group} className="border-b border-gray-100 last:border-b-0">
+                              <button
+                                onClick={() =>
+                                  setOpenColorGroup((prev) => ({
+                                    ...prev,
+                                    [section]: groupOpen ? null : group,
+                                  }))
+                                }
+                                className="w-full flex items-center justify-between px-5 py-2 hover:bg-gray-100 transition-colors"
+                              >
+                                <span className="text-[11px] tracking-widest uppercase text-gray-500">{group}</span>
+                                <ChevronRight
+                                  className={`w-3 h-3 text-gray-400 transition-transform ${groupOpen ? "rotate-90" : ""}`}
+                                />
+                              </button>
+                              {groupOpen && (
+                                <div className="px-5 pb-3 pt-1 flex flex-wrap gap-2">
+                                  {shades.map((shade) => {
+                                    const active = color.toLowerCase() === shade.color.toLowerCase();
+                                    return (
+                                      <button
+                                        key={shade.color}
+                                        title={shade.label}
+                                        onClick={() => setColor(shade.color)}
+                                        className={`w-8 h-8 rounded-full border shrink-0 transition-transform hover:scale-110 ${
+                                          active ? "border-black ring-2 ring-black ring-offset-1" : "border-gray-300"
+                                        }`}
+                                        style={{ backgroundColor: shade.color }}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
@@ -270,46 +303,50 @@ export function JacketBuilderPage() {
                   </div>
                 );
               })}
+
+              {/* Fixed brand details — not user-configurable */}
+              <div className="px-4 py-4 space-y-3">
+                <p className="text-[10px] tracking-widest uppercase text-gray-400">Signature details</p>
+                <ul className="space-y-2 text-xs text-gray-600">
+                  <li className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: "#141414" }} />
+                    Black quilted lining &amp; collar
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: "#c9a84c" }} />
+                    Gold chest badge, stars &amp; accents
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full shrink-0 border border-gray-300" style={{ backgroundColor: "#efe9dc" }} />
+                    Cream knit trim &amp; snaps
+                  </li>
+                </ul>
+                <p className="text-[10px] text-gray-400 leading-relaxed pt-1">
+                  Every jacket ships with the Manoir Kits “One of One · Legends Edition” neck tag.
+                </p>
+              </div>
             </div>
           ) : (
             <div className="p-4 space-y-6">
               <p className="text-[10px] tracking-widest uppercase text-gray-400">
-                Back Design · Drag the jacket to see the back
+                Back &amp; sleeve design · Drag the jacket to see the back
               </p>
-
-              {/* Name */}
-              <div>
-                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  value={backName}
-                  onChange={(e) => onNameChange(e.target.value)}
-                  maxLength={14}
-                  placeholder="YOUR NAME"
-                  className={`w-full border px-3 py-2 text-xs tracking-widest uppercase focus:outline-none ${
-                    nameError ? "border-red-400" : "border-gray-300 focus:border-black"
-                  }`}
-                />
-                {nameError && <p className="text-[10px] text-red-500 mt-1">{nameError}</p>}
-              </div>
 
               {/* Stars */}
               <div>
                 <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
-                  Stars ({backStars} of 5)
+                  Gold Stars ({backStars} of 5)
                 </label>
                 <div className="flex gap-1">
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
                       key={n}
-                      onClick={() => setBackStars(backStars === n ? n - 1 : n)}
+                      onClick={() => setBackStars(backStars === n ? Math.max(1, n - 1) : n)}
                       className="p-1"
                     >
                       <Star
                         className={`w-5 h-5 ${
-                          n <= backStars ? "fill-black text-black" : "text-gray-300"
+                          n <= backStars ? "fill-[#c9a84c] text-[#c9a84c]" : "text-gray-300"
                         }`}
                       />
                     </button>
@@ -317,19 +354,34 @@ export function JacketBuilderPage() {
                 </div>
               </div>
 
-              {/* Numbers */}
+              {/* Back number */}
               <div>
                 <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
-                  Numbers (2 digits each)
+                  Back Number (00–99)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={backNumber}
+                  onChange={(e) => onBackNumberChange(e.target.value)}
+                  placeholder="00"
+                  className="w-16 border border-gray-300 py-2 text-center text-base font-semibold tracking-widest focus:outline-none focus:border-black"
+                />
+              </div>
+
+              {/* Sleeve numbers */}
+              <div>
+                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
+                  Sleeve Numbers (up to 5, run down the arms)
                 </label>
                 <div className="flex gap-1.5">
-                  {backNumbers.map((value, i) => (
+                  {sleeveNumbers.map((value, i) => (
                     <input
                       key={i}
                       type="text"
                       inputMode="numeric"
                       value={value}
-                      onChange={(e) => onNumberChange(i, e.target.value)}
+                      onChange={(e) => onSleeveNumberChange(i, e.target.value)}
                       placeholder="00"
                       className="w-10 border border-gray-300 px-0 py-2 text-center text-xs tracking-widest focus:outline-none focus:border-black"
                     />
@@ -337,31 +389,9 @@ export function JacketBuilderPage() {
                 </div>
               </div>
 
-              {/* Print color */}
-              <div>
-                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
-                  Print Color
-                </label>
-                <div className="flex gap-2">
-                  {PRINT_COLORS.map((option) => (
-                    <button
-                      key={option.color}
-                      title={option.label}
-                      onClick={() => setPrintColor(option.color)}
-                      className={`w-7 h-7 rounded-full border ${
-                        printColor === option.color
-                          ? "border-black ring-1 ring-black"
-                          : "border-gray-300"
-                      }`}
-                      style={{ backgroundColor: option.color }}
-                    />
-                  ))}
-                </div>
-              </div>
-
               <p className="text-[10px] text-gray-400 leading-relaxed">
-                The Manoir Kits crest and “EST. 2026” always appear on the back. Pick your city
-                below the jacket.
+                Gold stars, the chest badge and “EST. 2026” are fixed brand details. Pick your city
+                from the dropdown below the jacket.
               </p>
             </div>
           )}
@@ -370,17 +400,13 @@ export function JacketBuilderPage() {
         {/* Jacket preview */}
         <div className="flex-1 relative bg-[#f0ede8] overflow-hidden">
           <JacketViewer3D
-            bodyColor={colorOf("Body", "#f0e9d8")}
-            sleeveColor={colorOf("Sleeves", "#f4f2ea")}
-            trimColor={colorOf("Knit Trim", "#f0efe9")}
-            snapColor={colorOf("Snaps", "#efe9dc")}
-            pocketColor={colorOf("Pockets", "#f4f2ea")}
-            liningColor={colorOf("Inside Lining", "#141414")}
-            insertColor={
-              selections["Shoulder Inserts"] === "No Shoulder Inserts"
-                ? colorOf("Body", "#f0e9d8")
-                : colorOf("Shoulder Inserts", "#f4f2ea")
-            }
+            bodyColor={bodyColor}
+            sleeveColor={sleeveColor}
+            trimColor="#e9e2d0"
+            snapColor="#efe9dc"
+            pocketColor={sleeveColor}
+            liningColor="#141414"
+            insertColor={bodyColor}
             backDesign={backDesign}
           />
 

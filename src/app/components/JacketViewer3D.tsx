@@ -1,15 +1,22 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import crestImage from "figma:asset/65260e3ff07725a684ad1d29eb3db00cb66a8976.png";
 
 export interface BackDesign {
+  /** Gold stars, 1–5, centered automatically. */
   stars: number;
-  numbers: string[];
-  name: string;
+  /** Main back number, "00"–"99". */
+  backNumber: string;
+  /** Up to 5 two-digit numbers that run down each sleeve. */
+  sleeveNumbers: string[];
   city: string;
-  color: string;
 }
+
+// Fixed brand colors — never user-configurable.
+const BRAND_GOLD = "#c9a24a";
+const PRINT_WHITE = "#efe9dc";
 
 interface JacketViewer3DProps {
   bodyColor: string;
@@ -177,6 +184,9 @@ const YOKE_RECTS = [
 // rotated 180° (see composeColorMap).
 const BACK_DESIGN_RECT = { u0: 0.55, v0: 0.06, u1: 0.87, v1: 0.44 };
 
+// The fixed gold chest badge, on the front-left chest (the old patch site).
+const FRONT_BADGE_RECT = { u0: 0.29, v0: 0.24, u1: 0.4, v1: 0.37 };
+
 export function JacketViewer3D({
   bodyColor,
   sleeveColor,
@@ -205,9 +215,9 @@ export function JacketViewer3D({
     const parts = sceneRef.current?.parts;
     if (!parts) return;
     let cancelled = false;
-    void loadCrest().then((crest) => {
+    void loadCrest().then(() => {
       if (cancelled) return;
-      drawBackDesign(parts.kit.design, designRef.current, crest);
+      drawBackDesign(parts.kit.design, designRef.current);
       composeColorMap(parts.kit, colorsRef.current);
     });
     return () => {
@@ -223,25 +233,35 @@ export function JacketViewer3D({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Filmic tone mapping + a soft studio environment give the leather and
+    // metal realistic highlights instead of a flat, cartoonish look.
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.9;
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
 
-    const camera = new THREE.PerspectiveCamera(28, mount.clientWidth / mount.clientHeight, 0.1, 100);
-    camera.position.set(0, -0.02, 6.4);
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = envTexture;
+    pmrem.dispose();
 
-    scene.add(new THREE.HemisphereLight("#ffffff", "#aab6c2", 1.5));
+    const camera = new THREE.PerspectiveCamera(26, mount.clientWidth / mount.clientHeight, 0.1, 100);
+    camera.position.set(0, -0.02, 6.6);
 
-    const key = new THREE.DirectionalLight("#ffffff", 2.2);
-    key.position.set(2.4, 4, 3.2);
+    scene.add(new THREE.HemisphereLight("#ffffff", "#9aa6b4", 0.3));
+
+    // Warm key from upper right, cool fill from left, crisp rim from behind.
+    const key = new THREE.DirectionalLight("#fff4e6", 2.1);
+    key.position.set(2.6, 4, 3.4);
     scene.add(key);
 
-    const fill = new THREE.DirectionalLight("#dceaff", 1.1);
-    fill.position.set(-3, 2, 2.5);
+    const fill = new THREE.DirectionalLight("#dceaff", 0.75);
+    fill.position.set(-3.2, 1.6, 2.4);
     scene.add(fill);
 
-    const rim = new THREE.DirectionalLight("#ffffff", 1.2);
-    rim.position.set(0, 2.6, -3.5);
+    const rim = new THREE.DirectionalLight("#ffffff", 1.35);
+    rim.position.set(-0.6, 2.8, -3.6);
     scene.add(rim);
 
     const modelRoot = new THREE.Group();
@@ -271,9 +291,9 @@ export function JacketViewer3D({
           modelRoot.remove(placeholder);
           disposeObject(placeholder);
           modelRoot.add(gltf.scene);
-          void loadCrest().then((crest) => {
+          void loadCrest().then(() => {
             if (disposed) return;
-            drawBackDesign(parts.kit.design, designRef.current, crest);
+            drawBackDesign(parts.kit.design, designRef.current);
             composeColorMap(parts.kit, colorsRef.current);
           });
 
@@ -357,6 +377,7 @@ export function JacketViewer3D({
       mount.removeEventListener("pointercancel", onPointerUp);
       mount.removeEventListener("wheel", onWheel);
       disposeObject(scene);
+      envTexture.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       sceneRef.current = null;
@@ -434,24 +455,46 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   };
 
   const materials: PartMaterials = {
-    body: new THREE.MeshStandardMaterial({ ...shared, roughness: 0.92 }),
+    // Wool body: matte with a faint fabric sheen. Env/sheen kept very low so
+    // dark wools stay genuinely dark instead of lifting to grey.
+    body: new THREE.MeshPhysicalMaterial({
+      ...shared,
+      roughness: 0.97,
+      sheen: 0.16,
+      sheenRoughness: 0.95,
+      sheenColor: new THREE.Color("#8a8a8a"),
+      envMapIntensity: 0.06,
+    }),
+    // Leather sleeves: clearcoat + tighter roughness for supple highlights.
     sleeve: new THREE.MeshPhysicalMaterial({
       ...shared,
-      roughness: 0.5,
-      clearcoat: 0.35,
-      clearcoatRoughness: 0.5,
+      roughness: 0.44,
+      clearcoat: 0.6,
+      clearcoatRoughness: 0.42,
+      envMapIntensity: 1.15,
     }),
-    trim: new THREE.MeshStandardMaterial({ ...shared, roughness: 0.88 }),
+    // Ribbed knit trim: matte, no shine.
+    trim: new THREE.MeshPhysicalMaterial({
+      ...shared,
+      roughness: 0.86,
+      sheen: 0.35,
+      sheenRoughness: 0.9,
+      envMapIntensity: 0.4,
+    }),
+    // Metal snaps: brushed metal look.
     snap: new THREE.MeshPhysicalMaterial({
       color: colors.snapColor,
       normalMap: cleanedNormal,
-      roughness: 0.35,
-      metalness: 0.3,
+      roughness: 0.28,
+      metalness: 0.85,
+      envMapIntensity: 1.4,
       side: THREE.DoubleSide,
     }),
+    // Quilted lining, seen through the neck opening.
     lining: new THREE.MeshStandardMaterial({
       color: colors.liningColor,
-      roughness: 0.78,
+      roughness: 0.82,
+      envMapIntensity: 0.35,
       side: THREE.BackSide,
     }),
   };
@@ -820,6 +863,16 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
   compositeCtx.drawImage(kit.design, -dw / 2, -dh / 2, dw, dh);
   compositeCtx.restore();
 
+  // Fixed gold chest badge on the front-left chest panel (where the removed
+  // letter patch used to sit). The crest artwork is already gold.
+  if (crestElement) {
+    const badgeW = (FRONT_BADGE_RECT.u1 - FRONT_BADGE_RECT.u0) * width;
+    const badgeH = badgeW * (crestElement.height / crestElement.width);
+    const bx = FRONT_BADGE_RECT.u0 * width;
+    const by = ((FRONT_BADGE_RECT.v0 + FRONT_BADGE_RECT.v1) / 2) * height - badgeH / 2;
+    compositeCtx.drawImage(crestElement, bx, by, badgeW, badgeH);
+  }
+
   kit.texture.needsUpdate = true;
 }
 
@@ -911,55 +964,67 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
   return crestLoading;
 }
 
-function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, crest: HTMLCanvasElement | null) {
+/**
+ * Draws the back print onto a 512×696 canvas, top to bottom:
+ * gold stars → city → large main number → fixed "EST. 2026".
+ */
+function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
   const ctx = canvas.getContext("2d")!;
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = design.color;
-  ctx.strokeStyle = design.color;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const name = design.name.trim().toUpperCase();
-  if (name) {
-    const fontSize = name.length > 10 ? 50 : 64;
-    ctx.font = `700 ${fontSize}px 'League Spartan', sans-serif`;
-    ctx.fillText(name, w / 2, 56, w * 0.92);
+  // Gold stars, centered at the top
+  const stars = Math.max(0, Math.min(5, design.stars));
+  const starGap = 72;
+  for (let i = 0; i < stars; i += 1) {
+    drawStar(ctx, w / 2 + (i - (stars - 1) / 2) * starGap, 82, 26, BRAND_GOLD);
   }
 
-  // Only the selected stars, centered as a row
-  const starGap = 82;
-  for (let i = 0; i < design.stars; i += 1) {
-    drawStar(ctx, w / 2 + (i - (design.stars - 1) / 2) * starGap, 148, 24, true);
-  }
-
-  // Brand crest stays as-is (gold artwork); city + EST line change under it
-  if (crest) {
-    const crestWidth = 200;
-    const crestHeight = crestWidth * (crest.height / crest.width);
-    ctx.drawImage(crest, w / 2 - crestWidth / 2, 330 - crestHeight / 2, crestWidth, crestHeight);
-  }
-
+  // City below the stars
+  ctx.fillStyle = PRINT_WHITE;
   const city = design.city.trim().toUpperCase();
   if (city) {
-    ctx.font = "700 46px 'League Spartan', sans-serif";
-    ctx.fillText(city, w / 2, 496, w * 0.92);
+    ctx.font = "700 54px 'League Spartan', sans-serif";
+    ctx.fillText(city, w / 2, 196, w * 0.92);
   }
-  ctx.font = "600 30px 'League Spartan', sans-serif";
-  ctx.fillText("EST. 2026", w / 2, 548);
 
-  const numbers = design.numbers.map((value) => value.trim()).filter(Boolean);
-  if (numbers.length) {
-    ctx.font = "700 56px 'League Spartan', sans-serif";
-    numbers.forEach((value, i) => {
-      const x = numbers.length === 1 ? w / 2 : w * 0.1 + ((w * 0.8) / (numbers.length - 1)) * i;
-      ctx.fillText(value, x, 640);
-    });
+  // Main number, large and centered
+  const number = design.backNumber.trim();
+  if (number) {
+    ctx.font = "800 230px 'League Spartan', sans-serif";
+    ctx.fillText(number, w / 2, 410, w * 0.86);
   }
+
+  // "EST. 2026" fixed at the bottom
+  ctx.font = "600 34px 'League Spartan', sans-serif";
+  ctx.fillText("EST. 2026", w / 2, 632);
 }
 
-function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, filled: boolean) {
+/** Draws a stack of gold sleeve numbers running down a canvas column. */
+function drawSleeveNumbers(canvas: HTMLCanvasElement, numbers: string[]) {
+  const ctx = canvas.getContext("2d")!;
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = PRINT_WHITE;
+
+  const values = numbers.map((n) => n.trim()).filter(Boolean).slice(0, 5);
+  if (!values.length) return;
+  ctx.font = "800 72px 'League Spartan', sans-serif";
+  const top = h * 0.1;
+  const span = h * 0.8;
+  values.forEach((value, i) => {
+    const y = values.length === 1 ? h * 0.5 : top + (span / (values.length - 1)) * i;
+    ctx.fillText(value, w / 2, y);
+  });
+}
+
+function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, color: string) {
   ctx.beginPath();
   for (let i = 0; i < 10; i += 1) {
     const r = i % 2 === 0 ? radius : radius * 0.45;
@@ -970,12 +1035,8 @@ function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius:
     else ctx.lineTo(x, y);
   }
   ctx.closePath();
-  if (filled) {
-    ctx.fill();
-  } else {
-    ctx.lineWidth = 3;
-    ctx.stroke();
-  }
+  ctx.fillStyle = color;
+  ctx.fill();
 }
 
 function frameModel(model: THREE.Object3D) {

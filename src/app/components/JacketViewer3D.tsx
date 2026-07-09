@@ -17,6 +17,14 @@ export interface BackDesign {
 // Fixed brand colors — never user-configurable.
 const BRAND_GOLD = "#c9a24a";
 const PRINT_WHITE = "#efe9dc";
+const PRINT_DARK = "#1a1a1a";
+
+/** Legible print color for text over a given material color. */
+function contrastText(hex: string) {
+  const c = new THREE.Color(hex);
+  const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+  return lum > 0.55 ? PRINT_DARK : PRINT_WHITE;
+}
 
 interface JacketViewer3DProps {
   bodyColor: string;
@@ -45,6 +53,8 @@ type RecolorKit = {
   tmp: HTMLCanvasElement;
   composite: HTMLCanvasElement;
   design: HTMLCanvasElement;
+  sleeveDesign: HTMLCanvasElement;
+  back: BackDesign | null;
   texture: THREE.CanvasTexture;
 };
 
@@ -187,6 +197,14 @@ const BACK_DESIGN_RECT = { u0: 0.55, v0: 0.06, u1: 0.87, v1: 0.44 };
 // The fixed gold chest badge, on the front-left chest (the old patch site).
 const FRONT_BADGE_RECT = { u0: 0.29, v0: 0.24, u1: 0.4, v1: 0.37 };
 
+// A narrow UV strip down the outer face of each sleeve where the sleeve
+// numbers print, running shoulder → cuff. `flip` corrects the v direction
+// for the mirrored sleeve island.
+const SLEEVE_NUMBER_RECTS = [
+  { u0: 0.185, v0: 0.46, u1: 0.285, v1: 0.84, flip: true }, // viewer-left sleeve
+  { u0: 0.7, v0: 0.46, u1: 0.8, v1: 0.84, flip: false }, // viewer-right sleeve
+];
+
 export function JacketViewer3D({
   bodyColor,
   sleeveColor,
@@ -217,7 +235,7 @@ export function JacketViewer3D({
     let cancelled = false;
     void loadCrest().then(() => {
       if (cancelled) return;
-      drawBackDesign(parts.kit.design, designRef.current);
+      parts.kit.back = designRef.current;
       composeColorMap(parts.kit, colorsRef.current);
     });
     return () => {
@@ -293,7 +311,7 @@ export function JacketViewer3D({
           modelRoot.add(gltf.scene);
           void loadCrest().then(() => {
             if (disposed) return;
-            drawBackDesign(parts.kit.design, designRef.current);
+            parts.kit.back = designRef.current;
             composeColorMap(parts.kit, colorsRef.current);
           });
 
@@ -814,6 +832,9 @@ function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): R
   const design = document.createElement("canvas");
   design.width = 512;
   design.height = 696;
+  const sleeveDesign = document.createElement("canvas");
+  sleeveDesign.width = 160;
+  sleeveDesign.height = 680;
 
   const texture = new THREE.CanvasTexture(composite);
   texture.flipY = false;
@@ -821,7 +842,16 @@ function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): R
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.anisotropy = 8;
 
-  return { detail: neutral.canvas, masks: { body, sleeve, pocket, insert, trim }, tmp, composite, design, texture };
+  return {
+    detail: neutral.canvas,
+    masks: { body, sleeve, pocket, insert, trim },
+    tmp,
+    composite,
+    design,
+    sleeveDesign,
+    back: null,
+    texture,
+  };
 }
 
 /** Re-tint the detail map region by region into the composite color map. */
@@ -851,6 +881,13 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
     compositeCtx.drawImage(kit.tmp, 0, 0);
   }
 
+  // Redraw the printed artwork so text contrasts with the current material
+  // (white on dark, dark on light); gold stars are unaffected.
+  if (kit.back) {
+    drawBackDesign(kit.design, kit.back, contrastText(colors.bodyColor));
+    drawSleeveNumbers(kit.sleeveDesign, kit.back.sleeveNumbers, contrastText(colors.sleeveColor));
+  }
+
   // Print the back design onto the back body panel. The panel is flipped
   // vertically in the texture, so the design is drawn flipped to match.
   const dx0 = BACK_DESIGN_RECT.u0 * width;
@@ -871,6 +908,19 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
     const bx = FRONT_BADGE_RECT.u0 * width;
     const by = ((FRONT_BADGE_RECT.v0 + FRONT_BADGE_RECT.v1) / 2) * height - badgeH / 2;
     compositeCtx.drawImage(crestElement, bx, by, badgeW, badgeH);
+  }
+
+  // Sleeve numbers down each arm
+  for (const r of SLEEVE_NUMBER_RECTS) {
+    const sx0 = r.u0 * width;
+    const sy0 = r.v0 * height;
+    const sw = (r.u1 - r.u0) * width;
+    const sh = (r.v1 - r.v0) * height;
+    compositeCtx.save();
+    compositeCtx.translate(sx0 + sw / 2, sy0 + sh / 2);
+    compositeCtx.scale(1, r.flip ? -1 : 1);
+    compositeCtx.drawImage(kit.sleeveDesign, -sw / 2, -sh / 2, sw, sh);
+    compositeCtx.restore();
   }
 
   kit.texture.needsUpdate = true;
@@ -968,7 +1018,7 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
  * Draws the back print onto a 512×696 canvas, top to bottom:
  * gold stars → city → large main number → fixed "EST. 2026".
  */
-function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
+function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, textColor: string) {
   const ctx = canvas.getContext("2d")!;
   const w = canvas.width;
   const h = canvas.height;
@@ -984,7 +1034,7 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
   }
 
   // City below the stars
-  ctx.fillStyle = PRINT_WHITE;
+  ctx.fillStyle = textColor;
   const city = design.city.trim().toUpperCase();
   if (city) {
     ctx.font = "700 54px 'League Spartan', sans-serif";
@@ -1003,15 +1053,15 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
   ctx.fillText("EST. 2026", w / 2, 632);
 }
 
-/** Draws a stack of gold sleeve numbers running down a canvas column. */
-function drawSleeveNumbers(canvas: HTMLCanvasElement, numbers: string[]) {
+/** Draws a stack of sleeve numbers running down a canvas column. */
+function drawSleeveNumbers(canvas: HTMLCanvasElement, numbers: string[], textColor: string) {
   const ctx = canvas.getContext("2d")!;
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = PRINT_WHITE;
+  ctx.fillStyle = textColor;
 
   const values = numbers.map((n) => n.trim()).filter(Boolean).slice(0, 5);
   if (!values.length) return;

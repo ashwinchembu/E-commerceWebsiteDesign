@@ -200,9 +200,11 @@ const CHEST_TEXT_FILL = "#f2ede2";
 // A narrow UV strip down the outer face of each sleeve where the sleeve
 // numbers print, running shoulder → cuff. `flip` corrects the v direction
 // for the mirrored sleeve island.
+// v-range kept inside the sleeve tube; going higher bleeds onto the back
+// yoke/shoulder, printing a stray number near the collar.
 const SLEEVE_NUMBER_RECTS = [
-  { u0: 0.185, v0: 0.44, u1: 0.285, v1: 0.86, flip: false }, // viewer-left sleeve
-  { u0: 0.7, v0: 0.44, u1: 0.8, v1: 0.86, flip: true }, // viewer-right sleeve
+  { u0: 0.185, v0: 0.52, u1: 0.285, v1: 0.82, flip: false }, // viewer-left sleeve
+  { u0: 0.7, v0: 0.52, u1: 0.8, v1: 0.82, flip: true }, // viewer-right sleeve
 ];
 
 export function JacketViewer3D({

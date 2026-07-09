@@ -309,6 +309,11 @@ export function JacketViewer3D({
           modelRoot.remove(placeholder);
           disposeObject(placeholder);
           modelRoot.add(gltf.scene);
+
+          // Compute the neck-tag placement against the axis-aligned model.
+          modelRoot.rotation.set(0, 0, 0);
+          modelRoot.updateMatrixWorld(true);
+          modelRoot.add(buildNeckTag(gltf.scene));
           void loadCrest().then(() => {
             if (disposed) return;
             parts.kit.back = designRef.current;
@@ -1099,6 +1104,72 @@ function frameModel(model: THREE.Object3D) {
   model.scale.setScalar(1.9 / maxDimension);
   model.position.multiplyScalar(1.9 / maxDimension);
   model.position.y -= 0.12;
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/**
+ * The fixed "One of One · Legends Edition" neck tag: a small gold-on-black
+ * label plane tucked inside the back of the collar, visible through the neck
+ * opening. Positioned in the (un-rotated) model's local space and parented to
+ * the rotating root so it follows the jacket.
+ */
+function buildNeckTag(model: THREE.Object3D): THREE.Mesh {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 320;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#0e0e0e";
+  roundRect(ctx, 6, 6, canvas.width - 12, canvas.height - 12, 26);
+  ctx.fill();
+  ctx.strokeStyle = BRAND_GOLD;
+  ctx.lineWidth = 6;
+  roundRect(ctx, 16, 16, canvas.width - 32, canvas.height - 32, 20);
+  ctx.stroke();
+
+  ctx.fillStyle = BRAND_GOLD;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "700 34px 'League Spartan', sans-serif";
+  ctx.fillText("MANOIR KITS", canvas.width / 2, 72);
+  ctx.font = "800 62px 'League Spartan', sans-serif";
+  ctx.fillText("ONE OF ONE", canvas.width / 2, 150);
+  ctx.font = "600 32px 'League Spartan', sans-serif";
+  ctx.fillText("· LEGENDS EDITION ·", canvas.width / 2, 212);
+  ctx.font = "500 26px 'League Spartan', sans-serif";
+  ctx.fillText("EST. 2026", canvas.width / 2, 262);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+
+  const w = size.x * 0.26;
+  const h = w * (canvas.height / canvas.width);
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
+  // Sit it against the inside back of the collar, just below the opening,
+  // tilted to face up/forward so it reads when the neck is in view.
+  mesh.position.set(center.x, box.max.y - h * 0.78, box.min.z + size.z * 0.3);
+  mesh.rotation.x = -0.7;
+  mesh.renderOrder = 2;
+  return mesh;
 }
 
 function buildLoadingSilhouette() {

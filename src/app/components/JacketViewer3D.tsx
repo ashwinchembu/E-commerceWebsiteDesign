@@ -5,30 +5,26 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import crestImage from "figma:asset/65260e3ff07725a684ad1d29eb3db00cb66a8976.png";
 
 export interface BackDesign {
-  /** Gold stars, 1–5, centered automatically. */
+  /** Gold stars, 1–5, arranged on a centered arc. */
   stars: number;
   /** Main back number, "00"–"99". */
   backNumber: string;
   /** Up to 5 two-digit numbers that run down each sleeve. */
   sleeveNumbers: string[];
   city: string;
+  /** Print color for text/numbers — black or white only. */
+  printColor: string;
 }
 
-// Fixed brand colors — never user-configurable.
+export type LeatherType = "Nappa" | "Cowhide";
+
+// Fixed brand color — never user-configurable.
 const BRAND_GOLD = "#c9a24a";
-const PRINT_WHITE = "#efe9dc";
-const PRINT_DARK = "#1a1a1a";
-
-/** Legible print color for text over a given material color. */
-function contrastText(hex: string) {
-  const c = new THREE.Color(hex);
-  const lum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
-  return lum > 0.55 ? PRINT_DARK : PRINT_WHITE;
-}
 
 interface JacketViewer3DProps {
   bodyColor: string;
   sleeveColor: string;
+  leatherType: LeatherType;
   trimColor: string;
   snapColor: string;
   pocketColor: string;
@@ -208,6 +204,7 @@ const SLEEVE_NUMBER_RECTS = [
 export function JacketViewer3D({
   bodyColor,
   sleeveColor,
+  leatherType,
   trimColor,
   snapColor,
   pocketColor,
@@ -220,6 +217,14 @@ export function JacketViewer3D({
   const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.05, rotX: -0.04 });
   const colorsRef = useRef({ bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor, insertColor });
   const designRef = useRef(backDesign);
+  const leatherTypeRef = useRef(leatherType);
+
+  useEffect(() => {
+    leatherTypeRef.current = leatherType;
+    const state = sceneRef.current;
+    if (!state?.parts) return;
+    applyLeatherType(state.parts.materials, leatherType);
+  }, [leatherType]);
 
   useEffect(() => {
     colorsRef.current = { bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor, insertColor };
@@ -305,6 +310,7 @@ export function JacketViewer3D({
         if (disposed) return;
         try {
           const parts = prepareJacket(gltf.scene, colorsRef.current);
+          applyLeatherType(parts.materials, leatherTypeRef.current);
           frameModel(gltf.scene);
           modelRoot.remove(placeholder);
           disposeObject(placeholder);
@@ -419,6 +425,23 @@ type JacketColors = {
   liningColor: string;
   insertColor: string;
 };
+
+/** Nappa is smooth and glossy; cowhide is grainier and more matte. */
+function applyLeatherType(materials: PartMaterials, type: LeatherType) {
+  const sleeve = materials.sleeve;
+  if (type === "Nappa") {
+    sleeve.roughness = 0.4;
+    sleeve.clearcoat = 0.7;
+    sleeve.clearcoatRoughness = 0.32;
+    sleeve.normalScale.set(0.6, 0.6);
+  } else {
+    sleeve.roughness = 0.62;
+    sleeve.clearcoat = 0.28;
+    sleeve.clearcoatRoughness = 0.6;
+    sleeve.normalScale.set(1.15, 1.15);
+  }
+  sleeve.needsUpdate = true;
+}
 
 function applyColors(parts: JacketParts, colors: JacketColors) {
   composeColorMap(parts.kit, colors);
@@ -886,11 +909,11 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
     compositeCtx.drawImage(kit.tmp, 0, 0);
   }
 
-  // Redraw the printed artwork so text contrasts with the current material
-  // (white on dark, dark on light); gold stars are unaffected.
+  // Redraw the printed artwork in the chosen print color (black or white);
+  // gold stars are unaffected.
   if (kit.back) {
-    drawBackDesign(kit.design, kit.back, contrastText(colors.bodyColor));
-    drawSleeveNumbers(kit.sleeveDesign, kit.back.sleeveNumbers, contrastText(colors.sleeveColor));
+    drawBackDesign(kit.design, kit.back, kit.back.printColor);
+    drawSleeveNumbers(kit.sleeveDesign, kit.back.sleeveNumbers, kit.back.printColor);
   }
 
   // Print the back design onto the back body panel. The panel is flipped
@@ -1031,11 +1054,16 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, textColor
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // Gold stars, centered at the top
+  // Gold stars on a centered upward arc, regardless of count
   const stars = Math.max(0, Math.min(5, design.stars));
-  const starGap = 72;
+  const arcRadius = 210;
+  const arcCenterY = 70 + arcRadius; // circle center below the row
+  const stepDeg = 12;
   for (let i = 0; i < stars; i += 1) {
-    drawStar(ctx, w / 2 + (i - (stars - 1) / 2) * starGap, 82, 26, BRAND_GOLD);
+    const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
+    const x = w / 2 + arcRadius * Math.sin(a);
+    const y = arcCenterY - arcRadius * Math.cos(a);
+    drawStar(ctx, x, y, 24, BRAND_GOLD);
   }
 
   // City below the stars

@@ -316,12 +316,13 @@ export function JacketViewer3D({
           disposeObject(placeholder);
           modelRoot.add(gltf.scene);
 
-          // Compute the neck-tag placement against the axis-aligned model.
-          modelRoot.rotation.set(0, 0, 0);
-          modelRoot.updateMatrixWorld(true);
-          modelRoot.add(buildNeckTag(gltf.scene));
-          void loadCrest().then(() => {
+          void loadCrest().then((crest) => {
             if (disposed) return;
+            // Build the inside badge against the axis-aligned model, then
+            // let the animation loop restore the current rotation.
+            modelRoot.rotation.set(0, 0, 0);
+            modelRoot.updateMatrixWorld(true);
+            modelRoot.add(buildNeckTag(gltf.scene, crest));
             parts.kit.back = designRef.current;
             composeColorMap(parts.kit, colorsRef.current);
           });
@@ -1043,8 +1044,44 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
 }
 
 /**
+ * Draws varsity chenille lettering: a colored fill with a gold outline,
+ * exactly like the embroidered patches on the real jacket.
+ */
+function outlinedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontSize: number, fill: string, maxWidth?: number) {
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.strokeStyle = BRAND_GOLD;
+  ctx.lineWidth = Math.max(3, fontSize * 0.13);
+  ctx.strokeText(text, x, y, maxWidth);
+  ctx.fillStyle = fill;
+  ctx.fillText(text, x, y, maxWidth);
+}
+
+/** Lays outlined characters along an upward arc centered on `cx`. */
+function arcedText(ctx: CanvasRenderingContext2D, text: string, cx: number, centerY: number, radius: number, fontSize: number, fill: string) {
+  ctx.font = `800 ${fontSize}px 'League Spartan', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const chars = [...text];
+  const widths = chars.map((ch) => ctx.measureText(ch).width * 1.02);
+  const totalAngle = widths.reduce((sum, wch) => sum + wch / radius, 0);
+  let angle = -totalAngle / 2;
+  for (let i = 0; i < chars.length; i += 1) {
+    const charAngle = angle + widths[i] / radius / 2;
+    const x = cx + radius * Math.sin(charAngle);
+    const y = centerY - radius * Math.cos(charAngle);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(charAngle);
+    outlinedText(ctx, chars[i], 0, 0, fontSize, fill);
+    ctx.restore();
+    angle += widths[i] / radius;
+  }
+}
+
+/**
  * Draws the back print onto a 512×696 canvas, top to bottom:
- * gold stars → city → large main number → fixed "EST. 2026".
+ * gold stars on an arc → arched city → large main number → "EST. 2026".
  */
 function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, textColor: string) {
   const ctx = canvas.getContext("2d")!;
@@ -1054,39 +1091,38 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, textColor
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // Gold stars on a centered upward arc, regardless of count
+  // Gold stars on a centered upward arc; each star tilts to follow the arc.
   const stars = Math.max(0, Math.min(5, design.stars));
-  const arcRadius = 210;
-  const arcCenterY = 70 + arcRadius; // circle center below the row
-  const stepDeg = 12;
+  const starArc = 235;
+  const starCenterY = 60 + starArc;
+  const stepDeg = 12.5;
   for (let i = 0; i < stars; i += 1) {
     const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
-    const x = w / 2 + arcRadius * Math.sin(a);
-    const y = arcCenterY - arcRadius * Math.cos(a);
-    drawStar(ctx, x, y, 24, BRAND_GOLD);
+    const x = w / 2 + starArc * Math.sin(a);
+    const y = starCenterY - starArc * Math.cos(a);
+    drawStar(ctx, x, y, 25, BRAND_GOLD, a);
   }
 
-  // City below the stars
-  ctx.fillStyle = textColor;
+  // City on an arch, matching the star curve
   const city = design.city.trim().toUpperCase();
   if (city) {
-    ctx.font = "700 54px 'League Spartan', sans-serif";
-    ctx.fillText(city, w / 2, 196, w * 0.92);
+    const fontSize = city.length > 9 ? 46 : 56;
+    arcedText(ctx, city, w / 2, 560, 360, fontSize, textColor);
   }
 
   // Main number, large and centered
   const number = design.backNumber.trim();
   if (number) {
     ctx.font = "800 230px 'League Spartan', sans-serif";
-    ctx.fillText(number, w / 2, 410, w * 0.86);
+    outlinedText(ctx, number, w / 2, 410, 230, textColor, w * 0.84);
   }
 
   // "EST. 2026" fixed at the bottom
-  ctx.font = "600 34px 'League Spartan', sans-serif";
-  ctx.fillText("EST. 2026", w / 2, 632);
+  ctx.font = "700 40px 'League Spartan', sans-serif";
+  outlinedText(ctx, "EST. 2026", w / 2, 634, 40, textColor);
 }
 
-/** Draws a stack of sleeve numbers running down a canvas column. */
+/** Draws a stack of gold-outlined sleeve numbers running down a column. */
 function drawSleeveNumbers(canvas: HTMLCanvasElement, numbers: string[], textColor: string) {
   const ctx = canvas.getContext("2d")!;
   const w = canvas.width;
@@ -1094,32 +1130,35 @@ function drawSleeveNumbers(canvas: HTMLCanvasElement, numbers: string[], textCol
   ctx.clearRect(0, 0, w, h);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = textColor;
 
   const values = numbers.map((n) => n.trim()).filter(Boolean).slice(0, 5);
   if (!values.length) return;
-  ctx.font = "800 72px 'League Spartan', sans-serif";
+  ctx.font = "800 76px 'League Spartan', sans-serif";
   const top = h * 0.1;
   const span = h * 0.8;
   values.forEach((value, i) => {
     const y = values.length === 1 ? h * 0.5 : top + (span / (values.length - 1)) * i;
-    ctx.fillText(value, w / 2, y);
+    outlinedText(ctx, value, w / 2, y, 76, textColor);
   });
 }
 
-function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, color: string) {
+function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, color: string, rotation = 0) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
   ctx.beginPath();
   for (let i = 0; i < 10; i += 1) {
     const r = i % 2 === 0 ? radius : radius * 0.45;
     const angle = -Math.PI / 2 + (i * Math.PI) / 5;
-    const x = cx + r * Math.cos(angle);
-    const y = cy + r * Math.sin(angle);
+    const x = r * Math.cos(angle);
+    const y = r * Math.sin(angle);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
   ctx.closePath();
   ctx.fillStyle = color;
   ctx.fill();
+  ctx.restore();
 }
 
 function frameModel(model: THREE.Object3D) {
@@ -1145,57 +1184,65 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 /**
- * The fixed "One of One · Legends Edition" neck tag: a small gold-on-black
- * label plane tucked inside the back of the collar, visible through the neck
- * opening. Positioned in the (un-rotated) model's local space and parented to
- * the rotating root so it follows the jacket.
+ * The fixed "One of One · Legend's Edition" inside badge (per the real
+ * jacket): a gold-bordered black patch carrying MANOIR KITS, the MK crest,
+ * and ONE OF ONE / LEGEND'S EDITION, tucked against the inside back of the
+ * collar and visible through the neck opening. Parented to the rotating root.
  */
-function buildNeckTag(model: THREE.Object3D): THREE.Mesh {
+function buildNeckTag(model: THREE.Object3D, crest: HTMLCanvasElement | null): THREE.Mesh {
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
 
   const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 320;
+  canvas.width = 360;
+  canvas.height = 480;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#0e0e0e";
-  roundRect(ctx, 6, 6, canvas.width - 12, canvas.height - 12, 26);
+  const cw = canvas.width;
+  const ch = canvas.height;
+
+  ctx.fillStyle = "#111111";
+  roundRect(ctx, 6, 6, cw - 12, ch - 12, 14);
   ctx.fill();
   ctx.strokeStyle = BRAND_GOLD;
-  ctx.lineWidth = 6;
-  roundRect(ctx, 16, 16, canvas.width - 32, canvas.height - 32, 20);
+  ctx.lineWidth = 7;
+  roundRect(ctx, 18, 18, cw - 36, ch - 36, 10);
   ctx.stroke();
 
   ctx.fillStyle = BRAND_GOLD;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = "700 34px 'League Spartan', sans-serif";
-  ctx.fillText("MANOIR KITS", canvas.width / 2, 72);
-  ctx.font = "800 62px 'League Spartan', sans-serif";
-  ctx.fillText("ONE OF ONE", canvas.width / 2, 150);
-  ctx.font = "600 32px 'League Spartan', sans-serif";
-  ctx.fillText("· LEGENDS EDITION ·", canvas.width / 2, 212);
-  ctx.font = "500 26px 'League Spartan', sans-serif";
-  ctx.fillText("EST. 2026", canvas.width / 2, 262);
+  ctx.font = "700 44px 'League Spartan', sans-serif";
+  ctx.fillText("MANOIR KITS", cw / 2, 74);
+
+  if (crest) {
+    const crestW = 150;
+    const crestH = crestW * (crest.height / crest.width);
+    ctx.drawImage(crest, cw / 2 - crestW / 2, ch / 2 - crestH / 2 - 6, crestW, crestH);
+  }
+
+  ctx.font = "800 46px 'League Spartan', sans-serif";
+  ctx.fillText("ONE OF ONE", cw / 2, ch - 96);
+  ctx.font = "700 30px 'League Spartan', sans-serif";
+  ctx.fillText("LEGEND'S EDITION", cw / 2, ch - 56);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
 
-  const w = size.x * 0.26;
-  const h = w * (canvas.height / canvas.width);
+  const w = size.x * 0.2;
+  const h = w * (ch / cw);
   const material = new THREE.MeshBasicMaterial({
     map: texture,
     transparent: true,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
     depthWrite: false,
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
-  // Sit it against the inside back of the collar, just below the opening,
-  // tilted to face up/forward so it reads when the neck is in view.
-  mesh.position.set(center.x, box.max.y - h * 0.78, box.min.z + size.z * 0.3);
-  mesh.rotation.x = -0.7;
+  // Tuck it low inside the neck, angled up toward a viewer looking in, and
+  // facing forward only so it never shows through the back of the collar.
+  mesh.position.set(center.x, box.max.y - h * 0.95, box.min.z + size.z * 0.46);
+  mesh.rotation.x = -0.5;
   mesh.renderOrder = 2;
   return mesh;
 }

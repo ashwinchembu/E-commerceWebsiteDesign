@@ -201,8 +201,8 @@ const CHEST_TEXT_FILL = "#f2ede2";
 // numbers print, running shoulder → cuff. `flip` corrects the v direction
 // for the mirrored sleeve island.
 const SLEEVE_NUMBER_RECTS = [
-  { u0: 0.185, v0: 0.46, u1: 0.285, v1: 0.84, flip: true }, // viewer-left sleeve
-  { u0: 0.7, v0: 0.46, u1: 0.8, v1: 0.84, flip: false }, // viewer-right sleeve
+  { u0: 0.185, v0: 0.44, u1: 0.285, v1: 0.86, flip: false }, // viewer-left sleeve
+  { u0: 0.7, v0: 0.44, u1: 0.8, v1: 0.86, flip: true }, // viewer-right sleeve
 ];
 
 export function JacketViewer3D({

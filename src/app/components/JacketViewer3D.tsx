@@ -190,11 +190,11 @@ const YOKE_RECTS = [
 // rotated 180° (see composeColorMap).
 const BACK_DESIGN_RECT = { u0: 0.55, v0: 0.06, u1: 0.87, v1: 0.44 };
 
-// The fixed gold chest badge, on the front-left chest (the old patch site).
-const FRONT_BADGE_RECT = { u0: 0.29, v0: 0.24, u1: 0.4, v1: 0.37 };
+// The fixed gold chest badge, on the front-left chest (upper chest).
+const FRONT_BADGE_RECT = { u0: 0.29, v0: 0.31, u1: 0.4, v1: 0.44 };
 
 // Fixed "MANOIR KITS" chest text on the opposite (front-right) chest panel.
-const FRONT_TEXT_RECT = { u0: 0.07, v0: 0.24, u1: 0.19, v1: 0.34 };
+const FRONT_TEXT_RECT = { u0: 0.07, v0: 0.34, u1: 0.19, v1: 0.44 };
 const CHEST_TEXT_FILL = "#f2ede2";
 
 // A narrow UV strip down the outer face of each sleeve where the sleeve
@@ -950,14 +950,18 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
   compositeCtx.drawImage(kit.design, -dw / 2, -dh / 2, dw, dh);
   compositeCtx.restore();
 
-  // Fixed gold chest badge on the front-left chest panel (where the removed
-  // letter patch used to sit). The crest artwork is already gold.
+  // Fixed gold chest badge on the front-left chest panel. The front panel is
+  // vertically mirrored in UV, so the badge is blitted flipped (upright).
   if (crestElement) {
     const badgeW = (FRONT_BADGE_RECT.u1 - FRONT_BADGE_RECT.u0) * width;
     const badgeH = badgeW * (crestElement.height / crestElement.width);
-    const bx = FRONT_BADGE_RECT.u0 * width;
-    const by = ((FRONT_BADGE_RECT.v0 + FRONT_BADGE_RECT.v1) / 2) * height - badgeH / 2;
-    compositeCtx.drawImage(crestElement, bx, by, badgeW, badgeH);
+    const bcx = ((FRONT_BADGE_RECT.u0 + FRONT_BADGE_RECT.u1) / 2) * width;
+    const bcy = ((FRONT_BADGE_RECT.v0 + FRONT_BADGE_RECT.v1) / 2) * height;
+    compositeCtx.save();
+    compositeCtx.translate(bcx, bcy);
+    compositeCtx.scale(1, -1);
+    compositeCtx.drawImage(crestElement, -badgeW / 2, -badgeH / 2, badgeW, badgeH);
+    compositeCtx.restore();
   }
 
   // Fixed "MANOIR KITS" wordmark on the opposite chest — MANOIR arched over
@@ -1128,35 +1132,35 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, textColor
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // Gold stars on a centered upward arc; each star tilts to follow the arc.
+  // Gold stars on a wide centered arc near the top; each tilts to follow it.
   const stars = Math.max(0, Math.min(5, design.stars));
-  const starArc = 235;
-  const starCenterY = 60 + starArc;
-  const stepDeg = 12.5;
+  const starArc = 320;
+  const starCenterY = 44 + starArc;
+  const stepDeg = 15;
   for (let i = 0; i < stars; i += 1) {
     const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
     const x = w / 2 + starArc * Math.sin(a);
     const y = starCenterY - starArc * Math.cos(a);
-    drawStar(ctx, x, y, 25, BRAND_GOLD, a);
+    drawStar(ctx, x, y, 27, BRAND_GOLD, a);
   }
 
-  // City on an arch, matching the star curve
+  // City on a wide arch that reaches out under the outer stars
   const city = design.city.trim().toUpperCase();
   if (city) {
-    const fontSize = city.length > 9 ? 46 : 56;
-    arcedText(ctx, city, w / 2, 560, 360, fontSize, textColor);
+    const fontSize = city.length > 9 ? 60 : 72;
+    arcedText(ctx, city, w / 2, 350, 200, fontSize, textColor);
   }
 
-  // Main number, large and centered
+  // Main number, very large and centered
   const number = design.backNumber.trim();
   if (number) {
-    ctx.font = "800 230px 'League Spartan', sans-serif";
-    outlinedText(ctx, number, w / 2, 410, 230, textColor, w * 0.84);
+    ctx.font = "800 280px 'League Spartan', sans-serif";
+    outlinedText(ctx, number, w / 2, 420, 280, textColor, w * 0.9);
   }
 
-  // "EST. 2026" fixed at the bottom
-  ctx.font = "700 40px 'League Spartan', sans-serif";
-  outlinedText(ctx, "EST. 2026", w / 2, 634, 40, textColor);
+  // "EST. 2026" larger, fixed at the bottom
+  ctx.font = "800 58px 'League Spartan', sans-serif";
+  outlinedText(ctx, "EST. 2026", w / 2, 638, 58, textColor);
 }
 
 /** Draws a stack of gold-outlined sleeve numbers running down a column. */

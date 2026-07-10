@@ -190,11 +190,12 @@ const YOKE_RECTS = [
 // rotated 180° (see composeColorMap).
 const BACK_DESIGN_RECT = { u0: 0.55, v0: 0.06, u1: 0.87, v1: 0.44 };
 
-// The fixed gold chest badge, on the front-left chest (upper chest).
-const FRONT_BADGE_RECT = { u0: 0.29, v0: 0.31, u1: 0.4, v1: 0.44 };
+// The fixed gold chest badge, on the front-left chest. Kept below v0.40 so it
+// doesn't bleed over the shoulder seam onto the back of the arm.
+const FRONT_BADGE_RECT = { u0: 0.29, v0: 0.27, u1: 0.4, v1: 0.39 };
 
 // Fixed "MANOIR KITS" chest text on the opposite (front-right) chest panel.
-const FRONT_TEXT_RECT = { u0: 0.07, v0: 0.34, u1: 0.19, v1: 0.44 };
+const FRONT_TEXT_RECT = { u0: 0.07, v0: 0.28, u1: 0.19, v1: 0.38 };
 const CHEST_TEXT_FILL = "#f2ede2";
 
 // A narrow UV strip down the outer face of each sleeve where the sleeve
@@ -433,19 +434,25 @@ type JacketColors = {
   insertColor: string;
 };
 
-/** Nappa is smooth and glossy; cowhide is grainier and more matte. */
+/**
+ * Nappa is a soft, lightly satin leather; cowhide is grainier and matte.
+ * Both kept low-gloss with a soft, wide highlight so they read as real
+ * leather rather than shiny plastic.
+ */
 function applyLeatherType(materials: PartMaterials, type: LeatherType) {
   const sleeve = materials.sleeve;
   if (type === "Nappa") {
-    sleeve.roughness = 0.4;
-    sleeve.clearcoat = 0.7;
-    sleeve.clearcoatRoughness = 0.32;
-    sleeve.normalScale.set(0.6, 0.6);
-  } else {
-    sleeve.roughness = 0.62;
+    sleeve.roughness = 0.52;
     sleeve.clearcoat = 0.28;
-    sleeve.clearcoatRoughness = 0.6;
-    sleeve.normalScale.set(1.15, 1.15);
+    sleeve.clearcoatRoughness = 0.55;
+    sleeve.envMapIntensity = 0.5;
+    sleeve.normalScale.set(0.7, 0.7);
+  } else {
+    sleeve.roughness = 0.72;
+    sleeve.clearcoat = 0.12;
+    sleeve.clearcoatRoughness = 0.72;
+    sleeve.envMapIntensity = 0.32;
+    sleeve.normalScale.set(1.25, 1.25);
   }
   sleeve.needsUpdate = true;
 }
@@ -518,13 +525,13 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
       sheenColor: new THREE.Color("#8a8a8a"),
       envMapIntensity: 0.06,
     }),
-    // Leather sleeves: clearcoat + tighter roughness for supple highlights.
+    // Leather sleeves: soft satin, not glossy plastic (see applyLeatherType).
     sleeve: new THREE.MeshPhysicalMaterial({
       ...shared,
-      roughness: 0.44,
-      clearcoat: 0.6,
-      clearcoatRoughness: 0.42,
-      envMapIntensity: 1.15,
+      roughness: 0.52,
+      clearcoat: 0.28,
+      clearcoatRoughness: 0.55,
+      envMapIntensity: 0.5,
     }),
     // Ribbed knit trim: matte, no shine.
     trim: new THREE.MeshPhysicalMaterial({
@@ -1146,11 +1153,12 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, textColor
     drawStar(ctx, x, y, 27, BRAND_GOLD, a);
   }
 
-  // City on a wide arch that reaches out under the outer stars
+  // City — flat, centered, wide, under the stars
   const city = design.city.trim().toUpperCase();
   if (city) {
-    const fontSize = city.length > 9 ? 60 : 72;
-    arcedText(ctx, city, w / 2, 350, 200, fontSize, textColor);
+    const fontSize = city.length > 9 ? 64 : 76;
+    ctx.font = `800 ${fontSize}px 'League Spartan', sans-serif`;
+    outlinedText(ctx, city, w / 2, 205, fontSize, textColor, w * 0.9);
   }
 
   // Main number, very large and centered
@@ -1176,12 +1184,13 @@ function drawSleeveNumbers(canvas: HTMLCanvasElement, numbers: string[], textCol
 
   const values = numbers.map((n) => n.trim()).filter(Boolean).slice(0, 5);
   if (!values.length) return;
-  ctx.font = "800 76px 'League Spartan', sans-serif";
-  const top = h * 0.1;
-  const span = h * 0.8;
+  const fontSize = 104;
+  ctx.font = `800 ${fontSize}px 'League Spartan', sans-serif`;
+  const top = h * 0.09;
+  const span = h * 0.82;
   values.forEach((value, i) => {
     const y = values.length === 1 ? h * 0.5 : top + (span / (values.length - 1)) * i;
-    outlinedText(ctx, value, w / 2, y, 76, textColor);
+    outlinedText(ctx, value, w / 2, y, fontSize, textColor);
   });
 }
 

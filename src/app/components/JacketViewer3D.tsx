@@ -266,7 +266,7 @@ export function JacketViewer3D({
     // Filmic tone mapping + a soft studio environment give the leather and
     // metal realistic highlights instead of a flat, cartoonish look.
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.9;
+    renderer.toneMappingExposure = 0.82;
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -281,16 +281,16 @@ export function JacketViewer3D({
 
     scene.add(new THREE.HemisphereLight("#ffffff", "#9aa6b4", 0.3));
 
-    // Warm key from upper right, cool fill from left, crisp rim from behind.
-    const key = new THREE.DirectionalLight("#fff4e6", 2.1);
+    // Warm key from upper right, cool fill from left, soft rim from behind.
+    const key = new THREE.DirectionalLight("#fff4e6", 1.5);
     key.position.set(2.6, 4, 3.4);
     scene.add(key);
 
-    const fill = new THREE.DirectionalLight("#dceaff", 0.75);
+    const fill = new THREE.DirectionalLight("#dceaff", 0.6);
     fill.position.set(-3.2, 1.6, 2.4);
     scene.add(fill);
 
-    const rim = new THREE.DirectionalLight("#ffffff", 1.35);
+    const rim = new THREE.DirectionalLight("#ffffff", 0.85);
     rim.position.set(-0.6, 2.8, -3.6);
     scene.add(rim);
 
@@ -442,17 +442,17 @@ type JacketColors = {
 function applyLeatherType(materials: PartMaterials, type: LeatherType) {
   const sleeve = materials.sleeve;
   if (type === "Nappa") {
-    sleeve.roughness = 0.52;
-    sleeve.clearcoat = 0.28;
-    sleeve.clearcoatRoughness = 0.55;
-    sleeve.envMapIntensity = 0.5;
-    sleeve.normalScale.set(0.7, 0.7);
+    sleeve.roughness = 0.66;
+    sleeve.clearcoat = 0.1;
+    sleeve.clearcoatRoughness = 0.75;
+    sleeve.envMapIntensity = 0.22;
+    sleeve.normalScale.set(0.8, 0.8);
   } else {
-    sleeve.roughness = 0.72;
-    sleeve.clearcoat = 0.12;
-    sleeve.clearcoatRoughness = 0.72;
-    sleeve.envMapIntensity = 0.32;
-    sleeve.normalScale.set(1.25, 1.25);
+    sleeve.roughness = 0.84;
+    sleeve.clearcoat = 0;
+    sleeve.clearcoatRoughness = 0.85;
+    sleeve.envMapIntensity = 0.14;
+    sleeve.normalScale.set(1.3, 1.3);
   }
   sleeve.needsUpdate = true;
 }
@@ -525,29 +525,29 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
       sheenColor: new THREE.Color("#8a8a8a"),
       envMapIntensity: 0.06,
     }),
-    // Leather sleeves: soft satin, not glossy plastic (see applyLeatherType).
+    // Leather sleeves: soft matte leather, not glossy plastic (see applyLeatherType).
     sleeve: new THREE.MeshPhysicalMaterial({
       ...shared,
-      roughness: 0.52,
-      clearcoat: 0.28,
-      clearcoatRoughness: 0.55,
-      envMapIntensity: 0.5,
+      roughness: 0.66,
+      clearcoat: 0.1,
+      clearcoatRoughness: 0.75,
+      envMapIntensity: 0.22,
     }),
-    // Ribbed knit trim: matte, no shine.
+    // Ribbed knit trim: fully matte.
     trim: new THREE.MeshPhysicalMaterial({
       ...shared,
-      roughness: 0.86,
-      sheen: 0.35,
-      sheenRoughness: 0.9,
-      envMapIntensity: 0.4,
+      roughness: 0.95,
+      sheen: 0.2,
+      sheenRoughness: 0.95,
+      envMapIntensity: 0.15,
     }),
-    // Metal snaps: brushed metal look.
+    // Metal snaps: soft brushed metal, not mirror.
     snap: new THREE.MeshPhysicalMaterial({
       color: colors.snapColor,
       normalMap: cleanedNormal,
-      roughness: 0.28,
-      metalness: 0.85,
-      envMapIntensity: 1.4,
+      roughness: 0.45,
+      metalness: 0.75,
+      envMapIntensity: 0.8,
       side: THREE.DoubleSide,
     }),
     // Quilted lining, seen through the neck opening.

@@ -559,6 +559,11 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
     }),
   };
 
+  // Sleeves render both sides so the open cuff shows leather inside instead
+  // of a black hole through to the lining.
+  materials.sleeve.side = THREE.DoubleSide;
+  materials.trim.side = THREE.DoubleSide;
+
   (jacketMesh as THREE.Mesh).material = [materials.body, materials.sleeve, materials.trim];
   if (buttonMesh) (buttonMesh as THREE.Mesh).material = materials.snap;
 
@@ -572,8 +577,53 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   liningShell.scale.setScalar(0.985);
   (jacketMesh as THREE.Mesh).add(liningShell);
 
+  // Bring the arms down out of the T-pose into a relaxed varsity stance.
+  poseArms((jacketMesh as THREE.Mesh).geometry, ARM_POSE_DEG);
+
   if (import.meta.env.DEV) (window as any).__kit = kit;
   return { materials, kit };
+}
+
+// How far to lower each arm from the model's default T-pose.
+const ARM_POSE_DEG = 34;
+
+/**
+ * Rotates the sleeve vertices down around each shoulder to relax the T-pose.
+ * The rotation angle ramps from 0 at the shoulder to full across a transition
+ * band so the shoulder bends smoothly instead of tearing. Operates on the
+ * shared geometry, so the lining shell follows.
+ */
+function poseArms(geometry: THREE.BufferGeometry, degrees: number) {
+  const pos = geometry.getAttribute("position");
+  if (!pos) return;
+  geometry.computeBoundingBox();
+  const bb = geometry.boundingBox!;
+  const cx = (bb.min.x + bb.max.x) / 2;
+  const width = bb.max.x - bb.min.x;
+  const halfBody = 0.19 * width; // torso half-width; sleeves lie beyond this
+  const shoulderY = bb.max.y - 0.16 * (bb.max.y - bb.min.y);
+  const transStart = halfBody * 0.85;
+  const transEnd = halfBody * 1.3;
+  const theta = (degrees * Math.PI) / 180;
+
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i);
+    const d = Math.abs(x - cx);
+    if (d < transStart) continue; // torso — unchanged
+    const t = Math.min(1, (d - transStart) / (transEnd - transStart));
+    const side = x > cx ? 1 : -1;
+    const px = cx + side * halfBody;
+    const py = shoulderY;
+    const a = (side > 0 ? -theta : theta) * t; // rotate each arm downward
+    const ca = Math.cos(a);
+    const sa = Math.sin(a);
+    const dx = x - px;
+    const dy = pos.getY(i) - py;
+    pos.setX(i, px + dx * ca - dy * sa);
+    pos.setY(i, py + dx * sa + dy * ca);
+  }
+  pos.needsUpdate = true;
+  geometry.computeVertexNormals();
 }
 
 /** 5x5 majority filter over a binary mask, using a summed-area table. */

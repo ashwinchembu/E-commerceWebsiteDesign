@@ -567,6 +567,9 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
     materials.lining,
     materials.lining,
   ]);
+  // Inset slightly so the black lining sits just inside the outer shell and
+  // doesn't z-fight into a jagged rim at the collar/neck opening.
+  liningShell.scale.setScalar(0.985);
   (jacketMesh as THREE.Mesh).add(liningShell);
 
   if (import.meta.env.DEV) (window as any).__kit = kit;

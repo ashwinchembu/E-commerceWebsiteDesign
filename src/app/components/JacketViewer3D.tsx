@@ -32,6 +32,8 @@ interface JacketViewer3DProps {
   /** Shoulder yoke pieces; pass the body color for "no inserts". */
   insertColor: string;
   backDesign: BackDesign;
+  /** Animates the jacket open toward the camera to show the inside patches. */
+  insideView?: boolean;
 }
 
 type PartMaterials = {
@@ -220,10 +222,18 @@ export function JacketViewer3D({
   liningColor,
   insertColor,
   backDesign,
+  insideView = false,
 }: JacketViewer3DProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<ViewerState | null>(null);
   const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.05, rotX: -0.04 });
+  const insideRef = useRef(insideView);
+  const returningRef = useRef(false);
+
+  useEffect(() => {
+    if (insideRef.current && !insideView) returningRef.current = true;
+    insideRef.current = insideView;
+  }, [insideView]);
   const colorsRef = useRef({ bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor, insertColor });
   const designRef = useRef(backDesign);
   const leatherTypeRef = useRef(leatherType);
@@ -349,6 +359,7 @@ export function JacketViewer3D({
     );
 
     const onPointerDown = (event: PointerEvent) => {
+      if (insideRef.current) return; // view locked while showing the inside
       dragRef.current.active = true;
       dragRef.current.x = event.clientX;
       dragRef.current.y = event.clientY;
@@ -357,7 +368,7 @@ export function JacketViewer3D({
 
     const onPointerMove = (event: PointerEvent) => {
       const drag = dragRef.current;
-      if (!drag.active) return;
+      if (!drag.active || insideRef.current) return;
       drag.rotY += (event.clientX - drag.x) * 0.006;
       drag.rotX += (event.clientY - drag.y) * 0.004;
       drag.rotX = THREE.MathUtils.clamp(drag.rotX, -0.34, 0.26);
@@ -370,6 +381,7 @@ export function JacketViewer3D({
     };
 
     const onWheel = (event: WheelEvent) => {
+      if (insideRef.current) return;
       camera.position.z = THREE.MathUtils.clamp(camera.position.z + event.deltaY * 0.003, 4.5, 9.5);
     };
 
@@ -390,6 +402,20 @@ export function JacketViewer3D({
 
     const animate = () => {
       const drag = dragRef.current;
+      if (insideRef.current) {
+        // Swing the jacket open toward the camera and move in on the collar
+        // so the inside badge and lining fill the view.
+        drag.rotX += (1.2 - drag.rotX) * 0.07;
+        drag.rotY += (0 - drag.rotY) * 0.07;
+        camera.position.z += (4.5 - camera.position.z) * 0.07;
+      } else if (returningRef.current) {
+        drag.rotX += (-0.04 - drag.rotX) * 0.09;
+        drag.rotY += (0.05 - drag.rotY) * 0.09;
+        camera.position.z += (6.6 - camera.position.z) * 0.09;
+        if (Math.abs(drag.rotX + 0.04) < 0.005 && Math.abs(drag.rotY - 0.05) < 0.005) {
+          returningRef.current = false;
+        }
+      }
       modelRoot.rotation.set(drag.rotX, drag.rotY, 0);
       renderer.render(scene, camera);
       const state = sceneRef.current;
@@ -627,7 +653,9 @@ function poseArms(geometry: THREE.BufferGeometry, degrees: number) {
     const sa = Math.sin(a);
     const dx = x - px;
     const dy = pos.getY(i) - py;
-    pos.setX(i, px + dx * ca - dy * sa);
+    // Pull the arm slightly toward the torso so no gap opens at the armpit
+    const pull = side * 0.035 * width * t;
+    pos.setX(i, px + dx * ca - dy * sa - pull);
     pos.setY(i, py + dx * sa + dy * ca);
   }
   pos.needsUpdate = true;
@@ -715,7 +743,7 @@ function segmentJacketGeometry(mesh: THREE.Mesh, isLightTexel: (u: number, v: nu
     const geometricTrim =
       (ny < 0.12 && nx < 0.55) || // waistband
       (ny > 0.88 && nx < 0.32) || // collar
-      nx > 0.82; // cuffs
+      nx > 0.9; // cuffs — tighter, so sleeve-end leather stays leather
 
     if (geometricTrim && inTrimRect(centroidU, centroidV)) {
       classes[t] = CLASS_TRIM;
@@ -925,6 +953,9 @@ function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): R
   }
   trimCtx.fill();
   trimCtx.globalCompositeOperation = "source-over";
+  // Soften the rasterized triangle edges so the knit boundary anti-aliases
+  // instead of stair-stepping (the jagged hem/cuff/collar edges).
+  const trimSoft = soften(trim);
 
   const tmp = document.createElement("canvas");
   tmp.width = width;
@@ -947,7 +978,7 @@ function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): R
 
   return {
     detail: neutral.canvas,
-    masks: { body, sleeve, pocket, insert, trim },
+    masks: { body, sleeve, pocket, insert, trim: trimSoft },
     tmp,
     composite,
     design,
@@ -1253,10 +1284,11 @@ function drawSleeveNumbers(canvas: HTMLCanvasElement, numbers: string[], textCol
 
   const values = numbers.map((n) => n.trim()).filter(Boolean).slice(0, 5);
   if (!values.length) return;
-  const fontSize = 104;
+  const fontSize = 86;
   ctx.font = `800 ${fontSize}px 'League Spartan', sans-serif`;
-  const top = h * 0.09;
-  const span = h * 0.82;
+  // Biased toward the shoulder end of the strip
+  const top = h * 0.05;
+  const span = h * 0.68;
   values.forEach((value, i) => {
     const y = values.length === 1 ? h * 0.5 : top + (span / (values.length - 1)) * i;
     outlinedText(ctx, value, w / 2, y, fontSize, textColor);

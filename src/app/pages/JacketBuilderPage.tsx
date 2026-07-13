@@ -199,6 +199,7 @@ export function JacketBuilderPage() {
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [wishlisted, setWishlisted] = useState(false);
+  const [insideView, setInsideView] = useState(false);
 
   const [backStars, setBackStars] = useState(5);
   const [backNumber, setBackNumber] = useState("10");
@@ -531,7 +532,20 @@ export function JacketBuilderPage() {
             liningColor="#141414"
             insertColor={bodyColor}
             backDesign={backDesign}
+            insideView={insideView}
           />
+
+          {/* Inside view toggle */}
+          <button
+            onClick={() => setInsideView((v) => !v)}
+            className={`absolute top-4 right-4 px-4 py-2 text-[10px] tracking-widest uppercase border transition-colors ${
+              insideView
+                ? "bg-black text-white border-black"
+                : "bg-white text-gray-700 border-gray-300 hover:border-black"
+            }`}
+          >
+            {insideView ? "Close Inside View" : "View Inside"}
+          </button>
 
           {/* City picker + drag hint */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">

@@ -195,7 +195,7 @@ const BACK_DESIGN_RECT = { u0: 0.55, v0: 0.06, u1: 0.87, v1: 0.44 };
 const FRONT_BADGE_RECT = { u0: 0.29, v0: 0.27, u1: 0.4, v1: 0.39 };
 
 // Fixed "MANOIR KITS" chest text on the opposite (front-right) chest panel.
-const FRONT_TEXT_RECT = { u0: 0.065, v0: 0.27, u1: 0.21, v1: 0.39 };
+const FRONT_TEXT_RECT = { u0: 0.1, v0: 0.27, u1: 0.235, v1: 0.39 };
 const CHEST_TEXT_FILL = "#f2ede2";
 
 // A narrow UV strip down the outer face of each sleeve where the sleeve

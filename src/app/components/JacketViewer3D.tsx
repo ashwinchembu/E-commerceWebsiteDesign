@@ -195,17 +195,19 @@ const BACK_DESIGN_RECT = { u0: 0.55, v0: 0.06, u1: 0.87, v1: 0.44 };
 const FRONT_BADGE_RECT = { u0: 0.29, v0: 0.27, u1: 0.4, v1: 0.39 };
 
 // Fixed "MANOIR KITS" chest text on the opposite (front-right) chest panel.
-const FRONT_TEXT_RECT = { u0: 0.07, v0: 0.28, u1: 0.19, v1: 0.38 };
+const FRONT_TEXT_RECT = { u0: 0.065, v0: 0.27, u1: 0.21, v1: 0.39 };
 const CHEST_TEXT_FILL = "#f2ede2";
 
 // A narrow UV strip down the outer face of each sleeve where the sleeve
 // numbers print, running shoulder → cuff. `flip` corrects the v direction
 // for the mirrored sleeve island.
+// Strips down the OUTER lateral face of each sleeve (probed per island).
 // v-range kept inside the sleeve tube; going higher bleeds onto the back
-// yoke/shoulder, printing a stray number near the collar.
+// yoke/shoulder, printing a stray number near the collar. `sx`/`sy` orient
+// the print per island so numbers read upright, shoulder → cuff.
 const SLEEVE_NUMBER_RECTS = [
-  { u0: 0.185, v0: 0.52, u1: 0.285, v1: 0.82, flip: false }, // viewer-left sleeve
-  { u0: 0.7, v0: 0.52, u1: 0.8, v1: 0.82, flip: true }, // viewer-right sleeve
+  { u0: 0.33, v0: 0.52, u1: 0.45, v1: 0.82, sx: 1, sy: -1 },
+  { u0: 0.8, v0: 0.52, u1: 0.92, v1: 0.82, sx: 1, sy: -1 },
 ];
 
 export function JacketViewer3D({
@@ -442,17 +444,17 @@ type JacketColors = {
 function applyLeatherType(materials: PartMaterials, type: LeatherType) {
   const sleeve = materials.sleeve;
   if (type === "Nappa") {
-    sleeve.roughness = 0.66;
-    sleeve.clearcoat = 0.1;
-    sleeve.clearcoatRoughness = 0.75;
-    sleeve.envMapIntensity = 0.22;
-    sleeve.normalScale.set(0.8, 0.8);
-  } else {
-    sleeve.roughness = 0.84;
-    sleeve.clearcoat = 0;
+    sleeve.roughness = 0.78;
+    sleeve.clearcoat = 0.04;
     sleeve.clearcoatRoughness = 0.85;
-    sleeve.envMapIntensity = 0.14;
-    sleeve.normalScale.set(1.3, 1.3);
+    sleeve.envMapIntensity = 0.12;
+    sleeve.normalScale.set(0.85, 0.85);
+  } else {
+    sleeve.roughness = 0.9;
+    sleeve.clearcoat = 0;
+    sleeve.clearcoatRoughness = 0.9;
+    sleeve.envMapIntensity = 0.08;
+    sleeve.normalScale.set(1.35, 1.35);
   }
   sleeve.needsUpdate = true;
 }
@@ -528,10 +530,10 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
     // Leather sleeves: soft matte leather, not glossy plastic (see applyLeatherType).
     sleeve: new THREE.MeshPhysicalMaterial({
       ...shared,
-      roughness: 0.66,
-      clearcoat: 0.1,
-      clearcoatRoughness: 0.75,
-      envMapIntensity: 0.22,
+      roughness: 0.78,
+      clearcoat: 0.04,
+      clearcoatRoughness: 0.85,
+      envMapIntensity: 0.12,
     }),
     // Ribbed knit trim: fully matte.
     trim: new THREE.MeshPhysicalMaterial({
@@ -567,18 +569,24 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   (jacketMesh as THREE.Mesh).material = [materials.body, materials.sleeve, materials.trim];
   if (buttonMesh) (buttonMesh as THREE.Mesh).material = materials.snap;
 
-  const liningShell = new THREE.Mesh((jacketMesh as THREE.Mesh).geometry, [
+  // Bring the arms down out of the T-pose into a relaxed varsity stance.
+  poseArms((jacketMesh as THREE.Mesh).geometry, ARM_POSE_DEG);
+
+  // Inset the black lining slightly INSIDE the outer shell, scaled about the
+  // geometry center — scaling about the mesh origin pushed it outside at the
+  // hem/cuffs, which showed as black rims around the edges.
+  const liningGeometry = (jacketMesh as THREE.Mesh).geometry;
+  liningGeometry.computeBoundingBox();
+  const liningCenter = liningGeometry.boundingBox!.getCenter(new THREE.Vector3());
+  const liningInset = 0.985;
+  const liningShell = new THREE.Mesh(liningGeometry, [
     materials.lining,
     materials.lining,
     materials.lining,
   ]);
-  // Inset slightly so the black lining sits just inside the outer shell and
-  // doesn't z-fight into a jagged rim at the collar/neck opening.
-  liningShell.scale.setScalar(0.985);
+  liningShell.scale.setScalar(liningInset);
+  liningShell.position.copy(liningCenter).multiplyScalar(1 - liningInset);
   (jacketMesh as THREE.Mesh).add(liningShell);
-
-  // Bring the arms down out of the T-pose into a relaxed varsity stance.
-  poseArms((jacketMesh as THREE.Mesh).geometry, ARM_POSE_DEG);
 
   if (import.meta.env.DEV) (window as any).__kit = kit;
   return { materials, kit };
@@ -951,7 +959,7 @@ function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): R
 
 let chestWordmarkCanvas: HTMLCanvasElement | null = null;
 
-/** Cached "MANOIR / KITS" chest wordmark, drawn upright (chenille style). */
+/** Cached "MANOIR / KITS" chest wordmark — flat lines, chenille style. */
 function chestWordmark(): HTMLCanvasElement {
   if (chestWordmarkCanvas) return chestWordmarkCanvas;
   const canvas = document.createElement("canvas");
@@ -960,8 +968,9 @@ function chestWordmark(): HTMLCanvasElement {
   const ctx = canvas.getContext("2d")!;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  arcedText(ctx, "MANOIR", canvas.width / 2, canvas.height / 2 + 230, 260, 46, CHEST_TEXT_FILL);
-  arcedText(ctx, "KITS", canvas.width / 2, canvas.height / 2 + 230 + 58, 260, 46, CHEST_TEXT_FILL);
+  ctx.font = "800 66px 'League Spartan', sans-serif";
+  outlinedText(ctx, "MANOIR", canvas.width / 2, 76, 66, CHEST_TEXT_FILL, 304);
+  outlinedText(ctx, "KITS", canvas.width / 2, 150, 66, CHEST_TEXT_FILL, 304);
   chestWordmarkCanvas = canvas;
   return canvas;
 }
@@ -1014,6 +1023,7 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
 
   // Fixed gold chest badge on the front-left chest panel. The front panel is
   // vertically mirrored in UV, so the badge is blitted flipped (upright).
+  // A soft drop shadow + underlay give it embroidered-patch depth.
   if (crestElement) {
     const badgeW = (FRONT_BADGE_RECT.u1 - FRONT_BADGE_RECT.u0) * width;
     const badgeH = badgeW * (crestElement.height / crestElement.width);
@@ -1022,6 +1032,12 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
     compositeCtx.save();
     compositeCtx.translate(bcx, bcy);
     compositeCtx.scale(1, -1);
+    // shadow pass — slightly larger dark copy behind
+    compositeCtx.globalAlpha = 0.45;
+    compositeCtx.filter = "brightness(0) blur(5px)";
+    compositeCtx.drawImage(crestElement, -badgeW / 2 - 3, -badgeH / 2 - 5, badgeW + 6, badgeH + 8);
+    compositeCtx.filter = "none";
+    compositeCtx.globalAlpha = 1;
     compositeCtx.drawImage(crestElement, -badgeW / 2, -badgeH / 2, badgeW, badgeH);
     compositeCtx.restore();
   }
@@ -1050,7 +1066,7 @@ function composeColorMap(kit: RecolorKit, colors: JacketColors) {
     const sh = (r.v1 - r.v0) * height;
     compositeCtx.save();
     compositeCtx.translate(sx0 + sw / 2, sy0 + sh / 2);
-    compositeCtx.scale(1, r.flip ? -1 : 1);
+    compositeCtx.scale(r.sx, r.sy);
     compositeCtx.drawImage(kit.sleeveDesign, -sw / 2, -sh / 2, sw, sh);
     compositeCtx.restore();
   }

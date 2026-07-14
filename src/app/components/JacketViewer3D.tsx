@@ -59,6 +59,8 @@ type RecolorKit = {
 type JacketParts = {
   materials: PartMaterials;
   kit: RecolorKit;
+  /** Meshes carrying the open-front morph (jacket shell, lining, buttons). */
+  morphables: THREE.Mesh[];
 };
 
 type ViewerState = {
@@ -342,6 +344,7 @@ export function JacketViewer3D({
             modelRoot.rotation.set(0, 0, 0);
             modelRoot.updateMatrixWorld(true);
             modelRoot.add(buildNeckTag(gltf.scene, crest));
+            modelRoot.add(buildPocketTag(gltf.scene));
             parts.kit.back = designRef.current;
             composeColorMap(parts.kit, colorsRef.current);
           });
@@ -414,6 +417,17 @@ export function JacketViewer3D({
         camera.position.z += (6.6 - camera.position.z) * 0.09;
         if (Math.abs(drag.rotX + 0.04) < 0.005 && Math.abs(drag.rotY - 0.05) < 0.005) {
           returningRef.current = false;
+        }
+      }
+      // Unbutton/open the front while the inside view is active
+      const parts = sceneRef.current?.parts;
+      if (parts) {
+        const openTarget = insideRef.current ? 1 : 0;
+        for (const m of parts.morphables) {
+          const influences = m.morphTargetInfluences;
+          if (influences && influences.length) {
+            influences[0] += (openTarget - influences[0]) * 0.07;
+          }
         }
       }
       modelRoot.rotation.set(drag.rotX, drag.rotY, 0);
@@ -598,13 +612,17 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   // Bring the arms down out of the T-pose into a relaxed varsity stance.
   poseArms((jacketMesh as THREE.Mesh).geometry, ARM_POSE_DEG);
 
+  // Split the front placket seam and add the unbuttoned open-front morph.
+  addOpenFrontMorph((jacketMesh as THREE.Mesh).geometry);
+  (jacketMesh as THREE.Mesh).updateMorphTargets();
+
   // Inset the black lining slightly INSIDE the outer shell, scaled about the
   // geometry center — scaling about the mesh origin pushed it outside at the
   // hem/cuffs, which showed as black rims around the edges.
   const liningGeometry = (jacketMesh as THREE.Mesh).geometry;
   liningGeometry.computeBoundingBox();
   const liningCenter = liningGeometry.boundingBox!.getCenter(new THREE.Vector3());
-  const liningInset = 0.985;
+  const liningInset = 0.991;
   const liningShell = new THREE.Mesh(liningGeometry, [
     materials.lining,
     materials.lining,
@@ -614,8 +632,149 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
   liningShell.position.copy(liningCenter).multiplyScalar(1 - liningInset);
   (jacketMesh as THREE.Mesh).add(liningShell);
 
+  const morphables: THREE.Mesh[] = [jacketMesh as THREE.Mesh, liningShell];
+
+  // Buttons ride the wearer-left flap as it swings open.
+  if (buttonMesh) {
+    addButtonOpenMorph((buttonMesh as THREE.Mesh).geometry, (jacketMesh as THREE.Mesh).geometry);
+    (buttonMesh as THREE.Mesh).updateMorphTargets();
+    morphables.push(buttonMesh as THREE.Mesh);
+  }
+
   if (import.meta.env.DEV) (window as any).__kit = kit;
-  return { materials, kit };
+  return { materials, kit, morphables };
+}
+
+// How far each front flap swings open when unbuttoned, and where its hinge
+// sits relative to the torso center.
+const OPEN_ANGLE_DEG = 30;
+const OPEN_HINGE_FRACTION = 0.17;
+
+function openFlapFrame(geometry: THREE.BufferGeometry) {
+  geometry.computeBoundingBox();
+  const bb = geometry.boundingBox!;
+  return {
+    cx: (bb.min.x + bb.max.x) / 2,
+    cz: (bb.min.z + bb.max.z) / 2,
+    width: bb.max.x - bb.min.x,
+    topY: bb.max.y - 0.2 * (bb.max.y - bb.min.y),
+    hemY: bb.min.y + 0.08 * (bb.max.y - bb.min.y),
+  };
+}
+
+/** Rotates (x, z) about a vertical hinge; returns the new [x, z]. */
+function swingAboutHinge(x: number, z: number, hingeX: number, hingeZ: number, angle: number): [number, number] {
+  const dx = x - hingeX;
+  const dz = z - hingeZ;
+  const ca = Math.cos(angle);
+  const sa = Math.sin(angle);
+  return [hingeX + dx * ca - dz * sa, hingeZ + dx * sa + dz * ca];
+}
+
+/**
+ * Splits the jacket's front panel along the placket seam (duplicating shared
+ * vertices so the two halves separate) and adds a morph target that swings
+ * each flap outward around a hinge near its side seam — the "unbuttoned"
+ * pose. The opening tapers toward the collar so the neckline stays joined.
+ * Operates on the shared geometry, so the lining shell follows.
+ */
+function addOpenFrontMorph(geometry: THREE.BufferGeometry) {
+  const posAttr = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const uvAttr = geometry.getAttribute("uv") as THREE.BufferAttribute;
+  const normalAttr = geometry.getAttribute("normal") as THREE.BufferAttribute | null;
+  const index = geometry.getIndex();
+  if (!index) return;
+  if (geometry.getAttribute("tangent")) geometry.deleteAttribute("tangent");
+
+  const frame = openFlapFrame(geometry);
+  const positions = Array.from(posAttr.array as Float32Array);
+  const uvs = Array.from(uvAttr.array as Float32Array);
+  const normals = normalAttr ? Array.from(normalAttr.array as Float32Array) : null;
+  const indices = Array.from(index.array as ArrayLike<number>);
+
+  // Front body panel (by UV) plus the front half of the hem band, which must
+  // swing with the flaps or the bottom tears where they meet.
+  const hemTopY = frame.hemY + 0.05 * (frame.topY - frame.hemY);
+  const isFrontVert = (vi: number) => {
+    if (positions[vi * 3 + 2] <= frame.cz) return false;
+    const u = uvs[vi * 2];
+    const v = uvs[vi * 2 + 1];
+    if (u >= 0 && u <= 0.47 && v >= 0 && v <= 0.44) return true;
+    return positions[vi * 3 + 1] <= hemTopY; // front hem band
+  };
+  const sideOf = (x: number) => (x >= frame.cx ? 1 : -1);
+
+  // Split triangles that straddle the seam: reassign their off-side vertices
+  // to duplicates owned by the triangle's centroid side.
+  const sideOverride = new Map<number, number>();
+  const dupIndex = new Map<string, number>();
+  const triCount = indices.length / 3;
+  for (let t = 0; t < triCount; t += 1) {
+    const tri = [indices[t * 3], indices[t * 3 + 1], indices[t * 3 + 2]];
+    if (!tri.every(isFrontVert)) continue;
+    const centroidSide = sideOf((positions[tri[0] * 3] + positions[tri[1] * 3] + positions[tri[2] * 3]) / 3);
+    for (let slot = 0; slot < 3; slot += 1) {
+      const vi = tri[slot];
+      if ((sideOverride.get(vi) ?? sideOf(positions[vi * 3])) === centroidSide) continue;
+      const key = `${vi}_${centroidSide}`;
+      let ni = dupIndex.get(key);
+      if (ni === undefined) {
+        ni = positions.length / 3;
+        positions.push(positions[vi * 3], positions[vi * 3 + 1], positions[vi * 3 + 2]);
+        uvs.push(uvs[vi * 2], uvs[vi * 2 + 1]);
+        normals?.push(normals[vi * 3], normals[vi * 3 + 1], normals[vi * 3 + 2]);
+        sideOverride.set(ni, centroidSide);
+        dupIndex.set(key, ni);
+      }
+      indices[t * 3 + slot] = ni;
+    }
+  }
+
+  // Open-front morph target: swing each flap's vertices around its hinge.
+  const open = positions.slice();
+  const theta = (OPEN_ANGLE_DEG * Math.PI) / 180;
+  const vertCount = positions.length / 3;
+  for (let vi = 0; vi < vertCount; vi += 1) {
+    if (!isFrontVert(vi)) continue;
+    const side = sideOverride.get(vi) ?? sideOf(positions[vi * 3]);
+    const hinge = frame.cx + side * OPEN_HINGE_FRACTION * frame.width;
+    const reach = Math.min(1, Math.max(0, (positions[vi * 3] - hinge) / (frame.cx - hinge)));
+    const y = positions[vi * 3 + 1];
+    const taper = Math.min(1, Math.max(0.12, (frame.topY - y) / (frame.topY - frame.hemY)));
+    const angle = -side * theta * reach * taper;
+    const [nx, nz] = swingAboutHinge(positions[vi * 3], positions[vi * 3 + 2], hinge, frame.cz, angle);
+    open[vi * 3] = nx;
+    open[vi * 3 + 2] = nz;
+  }
+
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  if (normals) geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setIndex(indices);
+  geometry.morphAttributes.position = [new THREE.Float32BufferAttribute(open, 3)];
+  geometry.morphTargetsRelative = false;
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+}
+
+/** The snap buttons ride the viewer-left flap's swing. */
+function addButtonOpenMorph(buttonGeometry: THREE.BufferGeometry, jacketGeometry: THREE.BufferGeometry) {
+  const posAttr = buttonGeometry.getAttribute("position") as THREE.BufferAttribute;
+  if (!posAttr) return;
+  if (buttonGeometry.getAttribute("tangent")) buttonGeometry.deleteAttribute("tangent");
+  const frame = openFlapFrame(jacketGeometry);
+  const theta = (OPEN_ANGLE_DEG * Math.PI) / 180;
+  const hinge = frame.cx - OPEN_HINGE_FRACTION * frame.width;
+  const open = new Float32Array(posAttr.array as Float32Array);
+  for (let vi = 0; vi < posAttr.count; vi += 1) {
+    const y = open[vi * 3 + 1];
+    const taper = Math.min(1, Math.max(0.12, (frame.topY - y) / (frame.topY - frame.hemY)));
+    const [nx, nz] = swingAboutHinge(open[vi * 3], open[vi * 3 + 2], hinge, frame.cz, theta * taper);
+    open[vi * 3] = nx;
+    open[vi * 3 + 2] = nz;
+  }
+  buttonGeometry.morphAttributes.position = [new THREE.Float32BufferAttribute(open, 3)];
+  buttonGeometry.morphTargetsRelative = false;
 }
 
 // How far to lower each arm from the model's default T-pose.
@@ -653,8 +812,10 @@ function poseArms(geometry: THREE.BufferGeometry, degrees: number) {
     const sa = Math.sin(a);
     const dx = x - px;
     const dy = pos.getY(i) - py;
-    // Pull the arm slightly toward the torso so no gap opens at the armpit
-    const pull = side * 0.035 * width * t;
+    // Pull the arm slightly toward the torso so no gap opens at the armpit.
+    // Quadratic falloff keeps the shoulder cap full and only draws the
+    // lower arm inward.
+    const pull = side * 0.022 * width * t * t;
     pos.setX(i, px + dx * ca - dy * sa - pull);
     pos.setY(i, py + dx * sa + dy * ca);
   }
@@ -1286,9 +1447,10 @@ function drawSleeveNumbers(canvas: HTMLCanvasElement, numbers: string[], textCol
   if (!values.length) return;
   const fontSize = 86;
   ctx.font = `800 ${fontSize}px 'League Spartan', sans-serif`;
-  // Biased toward the shoulder end of the strip
-  const top = h * 0.05;
-  const span = h * 0.68;
+  // Biased toward the shoulder end of the strip, with enough headroom that
+  // the first number doesn't clip at the shoulder seam.
+  const top = h * 0.11;
+  const span = h * 0.64;
   values.forEach((value, i) => {
     const y = values.length === 1 ? h * 0.5 : top + (span / (values.length - 1)) * i;
     outlinedText(ctx, value, w / 2, y, fontSize, textColor);
@@ -1396,6 +1558,58 @@ function buildNeckTag(model: THREE.Object3D, crest: HTMLCanvasElement | null): T
   // facing forward only so it never shows through the back of the collar.
   mesh.position.set(center.x, box.max.y - h * 0.95, box.min.z + size.z * 0.46);
   mesh.rotation.x = -0.5;
+  mesh.renderOrder = 2;
+  return mesh;
+}
+
+/**
+ * The black woven label above the inside right-hand pocket (per the real
+ * jacket): MANOIR KITS over www.manoirkits.com in white. Sits inside the
+ * front cavity on the wearer's right, revealed when the jacket unbuttons.
+ */
+function buildPocketTag(model: THREE.Object3D): THREE.Mesh {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 440;
+  canvas.height = 220;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#151515";
+  roundRect(ctx, 4, 4, canvas.width - 8, canvas.height - 8, 12);
+  ctx.fill();
+  ctx.strokeStyle = "#2c2c2c";
+  ctx.lineWidth = 3;
+  roundRect(ctx, 12, 12, canvas.width - 24, canvas.height - 24, 8);
+  ctx.stroke();
+
+  ctx.fillStyle = "#f2ede2";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "700 52px 'League Spartan', sans-serif";
+  ctx.fillText("MANOIR KITS", canvas.width / 2, 84);
+  ctx.font = "600 34px 'League Spartan', sans-serif";
+  ctx.fillText("www.manoirkits.com", canvas.width / 2, 148);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+
+  const w = size.x * 0.17;
+  const h = w * (canvas.height / canvas.width);
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    side: THREE.FrontSide,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
+  // Inside the cavity, low near the pocket where the unbuttoned opening is
+  // widest, tilted up toward the inside-view camera.
+  mesh.position.set(center.x - size.x * 0.015, center.y - size.y * 0.24, center.z + size.z * 0.02);
+  mesh.rotation.y = 0.05;
+  mesh.rotation.x = -0.35;
   mesh.renderOrder = 2;
   return mesh;
 }

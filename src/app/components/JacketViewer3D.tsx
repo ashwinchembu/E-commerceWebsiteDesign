@@ -406,11 +406,11 @@ export function JacketViewer3D({
     const animate = () => {
       const drag = dragRef.current;
       if (insideRef.current) {
-        // Tilt the unbuttoned jacket toward the camera so both inside
-        // patches (neck badge + waist label) read through the opening.
-        drag.rotX += (0.92 - drag.rotX) * 0.07;
-        drag.rotY += (0 - drag.rotY) * 0.07;
-        camera.position.z += (4.6 - camera.position.z) * 0.07;
+        // Keep the jacket front-facing and swing the flaps wide so the whole
+        // inside (both patches + lining) reads head-on.
+        drag.rotX += (-0.02 - drag.rotX) * 0.08;
+        drag.rotY += (0 - drag.rotY) * 0.08;
+        camera.position.z += (5.3 - camera.position.z) * 0.08;
       } else if (returningRef.current) {
         drag.rotX += (-0.04 - drag.rotX) * 0.09;
         drag.rotY += (0.05 - drag.rotY) * 0.09;
@@ -647,8 +647,11 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
 
 // How far each front flap swings open when unbuttoned, and where its hinge
 // sits relative to the torso center.
-const OPEN_ANGLE_DEG = 30;
-const OPEN_HINGE_FRACTION = 0.17;
+const OPEN_ANGLE_DEG = 92;
+const OPEN_HINGE_FRACTION = 0.2;
+// Floor on the vertical taper: near 1 opens the flaps almost uniformly
+// (edge-on) so the whole inside is exposed; the collar stays lightly joined.
+const OPEN_TAPER_FLOOR = 0.66;
 
 function openFlapFrame(geometry: THREE.BufferGeometry) {
   geometry.computeBoundingBox();
@@ -730,7 +733,10 @@ function addOpenFrontMorph(geometry: THREE.BufferGeometry) {
     }
   }
 
-  // Open-front morph target: swing each flap's vertices around its hinge.
+  // Open-front morph target: rotate each flap rigidly about a vertical hinge
+  // near its side seam (like a door). Only a Y taper is applied so the collar
+  // stays joined while the hem swings widest — no reach falloff, or the flap
+  // barely opens near the hinge.
   const open = positions.slice();
   const theta = (OPEN_ANGLE_DEG * Math.PI) / 180;
   const vertCount = positions.length / 3;
@@ -738,10 +744,9 @@ function addOpenFrontMorph(geometry: THREE.BufferGeometry) {
     if (!isFrontVert(vi)) continue;
     const side = sideOverride.get(vi) ?? sideOf(positions[vi * 3]);
     const hinge = frame.cx + side * OPEN_HINGE_FRACTION * frame.width;
-    const reach = Math.min(1, Math.max(0, (positions[vi * 3] - hinge) / (frame.cx - hinge)));
     const y = positions[vi * 3 + 1];
-    const taper = Math.min(1, Math.max(0.12, (frame.topY - y) / (frame.topY - frame.hemY)));
-    const angle = -side * theta * reach * taper;
+    const taper = Math.min(1, Math.max(OPEN_TAPER_FLOOR, (frame.topY - y) / (frame.topY - frame.hemY)));
+    const angle = -side * theta * taper;
     const [nx, nz] = swingAboutHinge(positions[vi * 3], positions[vi * 3 + 2], hinge, frame.cz, angle);
     open[vi * 3] = nx;
     open[vi * 3 + 2] = nz;
@@ -758,9 +763,11 @@ function addOpenFrontMorph(geometry: THREE.BufferGeometry) {
 }
 
 /**
- * The snap buttons ride the viewer-left flap's swing. Button geometry may
- * live in its own node space, so each vertex is mapped into the jacket's
- * space, swung with the same hinge math as the flap, and mapped back.
+ * The snap buttons ride the viewer-left flap's swing. Each button is treated
+ * as one rigid cluster (grouped by height down the placket) and rotated as a
+ * unit about the flap hinge by the swing angle at its own centroid, so every
+ * button stays planted on the flap edge instead of shearing/floating.
+ * Button geometry may live in its own node space, hence the space mapping.
  */
 function addButtonOpenMorph(buttonMesh: THREE.Mesh, jacketMesh: THREE.Mesh) {
   const buttonGeometry = buttonMesh.geometry;
@@ -773,20 +780,56 @@ function addButtonOpenMorph(buttonMesh: THREE.Mesh, jacketMesh: THREE.Mesh) {
   const toJacket = new THREE.Matrix4().copy(jacketMesh.matrixWorld).invert().multiply(buttonMesh.matrixWorld);
   const toButton = toJacket.clone().invert();
 
+  jacketMesh.geometry.computeBoundingBox();
+  const jbb = jacketMesh.geometry.boundingBox!;
   const frame = openFlapFrame(jacketMesh.geometry);
   const theta = (OPEN_ANGLE_DEG * Math.PI) / 180;
   const hinge = frame.cx - OPEN_HINGE_FRACTION * frame.width;
-  const open = new Float32Array(posAttr.array as Float32Array);
+
+  // Map every button vertex into jacket space up front.
+  const jpos = new Float32Array(posAttr.count * 3);
   const v = new THREE.Vector3();
-  for (let vi = 0; vi < posAttr.count; vi += 1) {
-    v.set(open[vi * 3], open[vi * 3 + 1], open[vi * 3 + 2]).applyMatrix4(toJacket);
-    const taper = Math.min(1, Math.max(0.12, (frame.topY - v.y) / (frame.topY - frame.hemY)));
-    const [nx, nz] = swingAboutHinge(v.x, v.z, hinge, frame.cz, theta * taper);
-    v.set(nx, v.y, nz).applyMatrix4(toButton);
-    open[vi * 3] = v.x;
-    open[vi * 3 + 1] = v.y;
-    open[vi * 3 + 2] = v.z;
+  for (let i = 0; i < posAttr.count; i += 1) {
+    v.set(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)).applyMatrix4(toJacket);
+    jpos[i * 3] = v.x;
+    jpos[i * 3 + 1] = v.y;
+    jpos[i * 3 + 2] = v.z;
   }
+
+  // Cluster vertices into individual buttons by gaps in their Y coordinate.
+  const order = Array.from({ length: posAttr.count }, (_, i) => i).sort((a, b) => jpos[a * 3 + 1] - jpos[b * 3 + 1]);
+  const gapThresh = 0.03 * (jbb.max.y - jbb.min.y);
+  const clusters: number[][] = [];
+  let current: number[] = [];
+  let prevY = -Infinity;
+  for (const i of order) {
+    const y = jpos[i * 3 + 1];
+    if (current.length && y - prevY > gapThresh) {
+      clusters.push(current);
+      current = [];
+    }
+    current.push(i);
+    prevY = y;
+  }
+  if (current.length) clusters.push(current);
+
+  const open = new Float32Array(posAttr.array as Float32Array);
+  for (const cluster of clusters) {
+    // Swing angle from the cluster's centroid height (taper down the placket).
+    let cy = 0;
+    for (const i of cluster) cy += jpos[i * 3 + 1];
+    cy /= cluster.length;
+    const taper = Math.min(1, Math.max(OPEN_TAPER_FLOOR, (frame.topY - cy) / (frame.topY - frame.hemY)));
+    const angle = theta * taper;
+    for (const i of cluster) {
+      const [nx, nz] = swingAboutHinge(jpos[i * 3], jpos[i * 3 + 2], hinge, frame.cz, angle);
+      v.set(nx, jpos[i * 3 + 1], nz).applyMatrix4(toButton);
+      open[i * 3] = v.x;
+      open[i * 3 + 1] = v.y;
+      open[i * 3 + 2] = v.z;
+    }
+  }
+
   buttonGeometry.morphAttributes.position = [new THREE.Float32BufferAttribute(open, 3)];
   buttonGeometry.morphTargetsRelative = false;
 }
@@ -832,6 +875,33 @@ function poseArms(geometry: THREE.BufferGeometry, degrees: number) {
     const pull = side * 0.022 * width * t * t;
     pos.setX(i, px + dx * ca - dy * sa - pull);
     pos.setY(i, py + dx * sa + dy * ca);
+  }
+  pos.needsUpdate = true;
+  geometry.computeVertexNormals();
+
+  // Deltoid puff: rotating the arm caves the shoulder cap in, so inflate the
+  // upper cap along its surface normal. A bell weight over the early
+  // transition band peaks on the deltoid and fades to zero at the torso and
+  // down the arm.
+  const heightY = bb.max.y - bb.min.y;
+  // Band centered on the deltoid, below the shoulder seam, so the top of the
+  // shoulder is left alone (no square shoulder-pad shelf).
+  const capCenter = shoulderY - 0.11 * heightY;
+  const capSpan = 0.11 * heightY;
+  const normal = geometry.getAttribute("normal") as THREE.BufferAttribute;
+  const puff = 0.024 * width;
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i);
+    const d = Math.abs(x - cx);
+    if (d < transStart) continue;
+    const t = Math.min(1, (d - transStart) / (transEnd - transStart));
+    const y = pos.getY(i);
+    const vertical = Math.max(0, 1 - Math.abs(y - capCenter) / capSpan); // bell over Y
+    const w = Math.sin(Math.PI * Math.min(1, t / 0.75)) * vertical;
+    if (w <= 0.01) continue;
+    pos.setX(i, x + normal.getX(i) * puff * w);
+    pos.setY(i, pos.getY(i) + normal.getY(i) * puff * w);
+    pos.setZ(i, pos.getZ(i) + normal.getZ(i) * puff * w);
   }
   pos.needsUpdate = true;
   geometry.computeVertexNormals();
@@ -1567,7 +1637,7 @@ function buildNeckTag(model: THREE.Object3D, crest: HTMLCanvasElement | null): T
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 8;
 
-  const w = size.x * 0.2;
+  const w = size.x * 0.18;
   const h = w * (ch / cw);
   const material = new THREE.MeshBasicMaterial({
     map: texture,
@@ -1576,10 +1646,10 @@ function buildNeckTag(model: THREE.Object3D, crest: HTMLCanvasElement | null): T
     depthWrite: false,
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
-  // Tuck it low inside the neck, angled up toward a viewer looking in, and
-  // facing forward only so it never shows through the back of the collar.
-  mesh.position.set(center.x, box.max.y - h * 0.95, box.min.z + size.z * 0.46);
-  mesh.rotation.x = -0.5;
+  // Flat on the inside back panel, upper-center, facing straight forward so
+  // it reads head-on through the wide-open front.
+  mesh.position.set(center.x, center.y + size.y * 0.08, box.min.z + size.z * 0.2);
+  mesh.rotation.set(0, 0, 0);
   mesh.renderOrder = 2;
   return mesh;
 }
@@ -1627,12 +1697,10 @@ function buildPocketTag(model: THREE.Object3D): THREE.Mesh {
     depthWrite: false,
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
-  // Inside the cavity on the right-hand side near the waist (per the real
-  // jacket), tilted up toward the inside-view camera so it reads through
-  // the unbuttoned opening.
-  mesh.position.set(center.x + size.x * 0.09, center.y - size.y * 0.22, center.z + size.z * 0.04);
-  mesh.rotation.y = -0.12;
-  mesh.rotation.x = -0.55;
+  // Flat on the inside back panel, just below the crest badge in the central
+  // opening, facing straight forward through the wide-open front.
+  mesh.position.set(center.x - size.x * 0.05, center.y - size.y * 0.16, box.min.z + size.z * 0.2);
+  mesh.rotation.set(0, 0, 0);
   mesh.renderOrder = 2;
   return mesh;
 }

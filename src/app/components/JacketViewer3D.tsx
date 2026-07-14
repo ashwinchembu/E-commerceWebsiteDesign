@@ -592,12 +592,17 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
       envMapIntensity: 0.8,
       side: THREE.DoubleSide,
     }),
-    // Quilted lining, seen through the neck opening.
+    // Quilted lining, seen through the neck opening. Polygon offset pushes it
+    // behind the outer shell so the two coincident layers never z-fight into
+    // merged/flickering texture when the front is open.
     lining: new THREE.MeshStandardMaterial({
       color: colors.liningColor,
       roughness: 0.82,
       envMapIntensity: 0.35,
       side: THREE.BackSide,
+      polygonOffset: true,
+      polygonOffsetFactor: 1,
+      polygonOffsetUnits: 1,
     }),
   };
 
@@ -647,11 +652,11 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
 
 // How far each front flap swings open when unbuttoned, and where its hinge
 // sits relative to the torso center.
-const OPEN_ANGLE_DEG = 92;
+const OPEN_ANGLE_DEG = 74;
 const OPEN_HINGE_FRACTION = 0.2;
 // Floor on the vertical taper: near 1 opens the flaps almost uniformly
 // (edge-on) so the whole inside is exposed; the collar stays lightly joined.
-const OPEN_TAPER_FLOOR = 0.66;
+const OPEN_TAPER_FLOOR = 0.7;
 
 function openFlapFrame(geometry: THREE.BufferGeometry) {
   geometry.computeBoundingBox();
@@ -884,20 +889,23 @@ function poseArms(geometry: THREE.BufferGeometry, degrees: number) {
   // transition band peaks on the deltoid and fades to zero at the torso and
   // down the arm.
   const heightY = bb.max.y - bb.min.y;
-  // Band centered on the deltoid, below the shoulder seam, so the top of the
-  // shoulder is left alone (no square shoulder-pad shelf).
-  const capCenter = shoulderY - 0.11 * heightY;
-  const capSpan = 0.11 * heightY;
+  // Band over the deltoid, below the shoulder seam (no square shoulder-pad
+  // shelf). Asymmetric: fuller reach down onto the lower deltoid/upper arm.
+  const capCenter = shoulderY - 0.13 * heightY;
+  const spanUp = 0.1 * heightY;
+  const spanDown = 0.2 * heightY;
   const normal = geometry.getAttribute("normal") as THREE.BufferAttribute;
-  const puff = 0.024 * width;
+  const puff = 0.026 * width;
   for (let i = 0; i < pos.count; i += 1) {
     const x = pos.getX(i);
     const d = Math.abs(x - cx);
     if (d < transStart) continue;
     const t = Math.min(1, (d - transStart) / (transEnd - transStart));
     const y = pos.getY(i);
-    const vertical = Math.max(0, 1 - Math.abs(y - capCenter) / capSpan); // bell over Y
-    const w = Math.sin(Math.PI * Math.min(1, t / 0.75)) * vertical;
+    const dyC = y - capCenter;
+    const span = dyC >= 0 ? spanUp : spanDown;
+    const vertical = Math.max(0, 1 - Math.abs(dyC) / span); // bell over Y
+    const w = Math.sin(Math.PI * Math.min(1, t / 0.78)) * vertical;
     if (w <= 0.01) continue;
     pos.setX(i, x + normal.getX(i) * puff * w);
     pos.setY(i, pos.getY(i) + normal.getY(i) * puff * w);

@@ -406,11 +406,11 @@ export function JacketViewer3D({
     const animate = () => {
       const drag = dragRef.current;
       if (insideRef.current) {
-        // Swing the jacket open toward the camera and move in on the collar
-        // so the inside badge and lining fill the view.
-        drag.rotX += (1.2 - drag.rotX) * 0.07;
+        // Tilt the unbuttoned jacket toward the camera so both inside
+        // patches (neck badge + waist label) read through the opening.
+        drag.rotX += (0.92 - drag.rotX) * 0.07;
         drag.rotY += (0 - drag.rotY) * 0.07;
-        camera.position.z += (4.5 - camera.position.z) * 0.07;
+        camera.position.z += (4.6 - camera.position.z) * 0.07;
       } else if (returningRef.current) {
         drag.rotX += (-0.04 - drag.rotX) * 0.09;
         drag.rotY += (0.05 - drag.rotY) * 0.09;
@@ -636,7 +636,7 @@ function prepareJacket(root: THREE.Group, colors: JacketColors): JacketParts {
 
   // Buttons ride the wearer-left flap as it swings open.
   if (buttonMesh) {
-    addButtonOpenMorph((buttonMesh as THREE.Mesh).geometry, (jacketMesh as THREE.Mesh).geometry);
+    addButtonOpenMorph(buttonMesh as THREE.Mesh, jacketMesh as THREE.Mesh);
     (buttonMesh as THREE.Mesh).updateMorphTargets();
     morphables.push(buttonMesh as THREE.Mesh);
   }
@@ -757,21 +757,35 @@ function addOpenFrontMorph(geometry: THREE.BufferGeometry) {
   geometry.computeBoundingSphere();
 }
 
-/** The snap buttons ride the viewer-left flap's swing. */
-function addButtonOpenMorph(buttonGeometry: THREE.BufferGeometry, jacketGeometry: THREE.BufferGeometry) {
+/**
+ * The snap buttons ride the viewer-left flap's swing. Button geometry may
+ * live in its own node space, so each vertex is mapped into the jacket's
+ * space, swung with the same hinge math as the flap, and mapped back.
+ */
+function addButtonOpenMorph(buttonMesh: THREE.Mesh, jacketMesh: THREE.Mesh) {
+  const buttonGeometry = buttonMesh.geometry;
   const posAttr = buttonGeometry.getAttribute("position") as THREE.BufferAttribute;
   if (!posAttr) return;
   if (buttonGeometry.getAttribute("tangent")) buttonGeometry.deleteAttribute("tangent");
-  const frame = openFlapFrame(jacketGeometry);
+
+  buttonMesh.updateWorldMatrix(true, false);
+  jacketMesh.updateWorldMatrix(true, false);
+  const toJacket = new THREE.Matrix4().copy(jacketMesh.matrixWorld).invert().multiply(buttonMesh.matrixWorld);
+  const toButton = toJacket.clone().invert();
+
+  const frame = openFlapFrame(jacketMesh.geometry);
   const theta = (OPEN_ANGLE_DEG * Math.PI) / 180;
   const hinge = frame.cx - OPEN_HINGE_FRACTION * frame.width;
   const open = new Float32Array(posAttr.array as Float32Array);
+  const v = new THREE.Vector3();
   for (let vi = 0; vi < posAttr.count; vi += 1) {
-    const y = open[vi * 3 + 1];
-    const taper = Math.min(1, Math.max(0.12, (frame.topY - y) / (frame.topY - frame.hemY)));
-    const [nx, nz] = swingAboutHinge(open[vi * 3], open[vi * 3 + 2], hinge, frame.cz, theta * taper);
-    open[vi * 3] = nx;
-    open[vi * 3 + 2] = nz;
+    v.set(open[vi * 3], open[vi * 3 + 1], open[vi * 3 + 2]).applyMatrix4(toJacket);
+    const taper = Math.min(1, Math.max(0.12, (frame.topY - v.y) / (frame.topY - frame.hemY)));
+    const [nx, nz] = swingAboutHinge(v.x, v.z, hinge, frame.cz, theta * taper);
+    v.set(nx, v.y, nz).applyMatrix4(toButton);
+    open[vi * 3] = v.x;
+    open[vi * 3 + 1] = v.y;
+    open[vi * 3 + 2] = v.z;
   }
   buttonGeometry.morphAttributes.position = [new THREE.Float32BufferAttribute(open, 3)];
   buttonGeometry.morphTargetsRelative = false;
@@ -1055,17 +1069,25 @@ function buildRecolorKit(neutral: NeutralizedBase, trimTriangleUVs: number[]): R
     return canvas;
   };
 
-  // Blur the binary classification slightly so region boundaries composite
-  // with anti-aliased edges instead of hard texel staircases. The body layer
-  // is fully opaque underneath, so blended seam texels mix body and sleeve
-  // color exactly.
+  // Dilate then blur the binary classification: dilation pushes each color
+  // region ~1px outward so the dark base never peeks through at region
+  // borders (fringing), and the blur anti-aliases the boundary.
   const soften = (mask: HTMLCanvasElement) => {
+    const dilated = document.createElement("canvas");
+    dilated.width = width;
+    dilated.height = height;
+    const dctx = dilated.getContext("2d")!;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        dctx.drawImage(mask, dx, dy);
+      }
+    }
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d")!;
-    ctx.filter = "blur(1.5px)";
-    ctx.drawImage(mask, 0, 0);
+    ctx.filter = "blur(1.2px)";
+    ctx.drawImage(dilated, 0, 0);
     ctx.filter = "none";
     return canvas;
   };
@@ -1605,11 +1627,12 @@ function buildPocketTag(model: THREE.Object3D): THREE.Mesh {
     depthWrite: false,
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
-  // Inside the cavity, low near the pocket where the unbuttoned opening is
-  // widest, tilted up toward the inside-view camera.
-  mesh.position.set(center.x - size.x * 0.015, center.y - size.y * 0.24, center.z + size.z * 0.02);
-  mesh.rotation.y = 0.05;
-  mesh.rotation.x = -0.35;
+  // Inside the cavity on the right-hand side near the waist (per the real
+  // jacket), tilted up toward the inside-view camera so it reads through
+  // the unbuttoned opening.
+  mesh.position.set(center.x + size.x * 0.09, center.y - size.y * 0.22, center.z + size.z * 0.04);
+  mesh.rotation.y = -0.12;
+  mesh.rotation.x = -0.55;
   mesh.renderOrder = 2;
   return mesh;
 }

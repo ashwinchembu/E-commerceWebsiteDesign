@@ -184,6 +184,7 @@ type Loaded = {
   rightFlap: THREE.Group | null; // viewer-right front panel pivot
   back: Decal;
   sleeves: Decal;
+  insidePatches: THREE.Mesh[]; // neck tag + inside-pocket badge, shown when open
 };
 
 /** A part's bounding box expressed in the model root's local space. */
@@ -256,13 +257,57 @@ function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
       clearcoatRoughness: 0.6,
       envMapIntensity: 0.5,
     }),
-    lining: new THREE.MeshStandardMaterial({
+    lining: new THREE.MeshPhysicalMaterial({
       color: colors.liningColor,
-      roughness: 0.85,
-      envMapIntensity: 0.3,
+      roughness: 0.42, // satiny sheen so the interior reads as lining, not wool
+      metalness: 0,
+      sheen: 0.6,
+      sheenRoughness: 0.5,
+      sheenColor: new THREE.Color("#3a3a3a"),
+      envMapIntensity: 0.7,
+      normalMap: makeQuiltNormalMap(),
+      normalScale: new THREE.Vector2(0.16, 0.16),
       side: THREE.DoubleSide,
     }),
   };
+}
+
+/** Procedural diamond-quilt normal map for the satin lining. */
+let quiltNormalCache: THREE.CanvasTexture | null = null;
+function makeQuiltNormalMap(): THREE.CanvasTexture {
+  if (quiltNormalCache) return quiltNormalCache;
+  const s = 256;
+  const c = document.createElement("canvas");
+  c.width = s;
+  c.height = s;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#8080ff"; // flat normal
+  ctx.fillRect(0, 0, s, s);
+  // Draw diagonal quilt channels as soft embossed grooves.
+  const draw = (angle: number) => {
+    ctx.save();
+    ctx.translate(s / 2, s / 2);
+    ctx.rotate(angle);
+    ctx.translate(-s / 2, -s / 2);
+    const gap = s / 4;
+    for (let i = -s; i < s * 2; i += gap) {
+      const g = ctx.createLinearGradient(i - 3, 0, i + 3, 0);
+      g.addColorStop(0, "#8080ff");
+      g.addColorStop(0.5, angle > 0 ? "#7373ff" : "#8d8dff");
+      g.addColorStop(1, "#8080ff");
+      ctx.fillStyle = g;
+      ctx.fillRect(i - 3, -s, 6, s * 3);
+    }
+    ctx.restore();
+  };
+  draw(Math.PI / 4);
+  draw(-Math.PI / 4);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(14, 18);
+  quiltNormalCache = tex;
+  return tex;
 }
 
 function applyLeatherType(m: PartMaterials, type: LeatherType) {
@@ -409,17 +454,24 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const ws = worldBox.getSize(new THREE.Vector3());
       const frontZ = worldBox.max.z; // panels face +z after framing
 
-      const makeFlap = (panel?: THREE.Mesh, pocket?: THREE.Mesh) => {
+      // Hinge each front panel at its OUTER side seam (not the center placket),
+      // so the panels swing apart like double doors to reveal the lining.
+      const makeFlap = (panel?: THREE.Mesh, pocket?: THREE.Mesh, outer: "maxx" | "minx" = "maxx") => {
         if (!panel) return null;
+        const pb = new THREE.Box3().setFromObject(panel);
+        const hingeX = outer === "maxx" ? pb.max.x : pb.min.x;
+        const hingeZ = (pb.min.z + pb.max.z) / 2;
         const pivot = new THREE.Group();
-        pivot.position.set(wc.x, wc.y, frontZ - ws.z * 0.12);
+        pivot.position.set(hingeX, wc.y, hingeZ);
         modelRoot.add(pivot);
         pivot.attach(panel);
         if (pocket) pivot.attach(pocket);
         return pivot;
       };
-      const leftFlap = makeFlap(byName["front_body_R"], byName["Pockets_R"]);
-      const rightFlap = makeFlap(byName["front_body_L"], byName["Pockets_L"]);
+      // front_body_L sits on +x (viewer right); hinge at its max-x side seam.
+      // front_body_R sits on -x (viewer left); hinge at its min-x side seam.
+      const rightFlap = makeFlap(byName["front_body_L"], byName["Pockets_L"], "maxx");
+      const leftFlap = makeFlap(byName["front_body_R"], byName["Pockets_R"], "minx");
 
       // Back design: a flat artwork plane just off the back panel surface.
       const backCanvas = document.createElement("canvas");
@@ -473,14 +525,17 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         plane.renderOrder = 3;
         plane.position.set(pc.x + ps.x * xFrac, pc.y + ps.y * yFrac, pb.max.z + ps.z * 0.06);
         root.add(plane);
-        return texture;
+        return { plane, texture };
       };
 
       // Gold MK crest on the wearer-left chest (front_body_L, viewer-right).
       const badgeCanvas = document.createElement("canvas");
       badgeCanvas.width = 320;
       badgeCanvas.height = 360;
-      const badgeTex = addFrontPlane("front_body_L", badgeCanvas, 0.32, 0.12, 0.04);
+      const badgeArt = addFrontPlane("front_body_L", badgeCanvas, 0.32, 0.12, 0.04);
+      const badgeTex = badgeArt?.texture ?? null;
+      // Swing the crest away with the wool panel when the jacket opens.
+      if (badgeArt && rightFlap) rightFlap.attach(badgeArt.plane);
       void loadCrest().then((crest) => {
         if (!crest) return;
         const bctx = badgeCanvas.getContext("2d")!;
@@ -506,7 +561,73 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       wctx.font = "800 62px 'League Spartan', sans-serif";
       outlinedText(wctx, "MANOIR", wordCanvas.width / 2, 78, 62, CHEST_FILL, 320);
       outlinedText(wctx, "KITS", wordCanvas.width / 2, 150, 62, CHEST_FILL, 320);
-      addFrontPlane("front_body_R", wordCanvas, 0.42, -0.12, 0.16);
+      const wordArt = addFrontPlane("front_body_R", wordCanvas, 0.42, -0.12, 0.16);
+      if (wordArt && leftFlap) leftFlap.attach(wordArt.plane);
+
+      // Inside patches on the lining, revealed only when the jacket is open.
+      const insidePatches: THREE.Mesh[] = [];
+      const insideBox = partBoxInRoot(byName["inside_body_button"], root);
+      const inC = insideBox.getCenter(new THREE.Vector3());
+      const inS = insideBox.getSize(new THREE.Vector3());
+      const addInsidePlane = (canvas: HTMLCanvasElement, wFrac: number, xFrac: number, yFrac: number) => {
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 8;
+        const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
+        const w = inS.x * wFrac;
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, w * (canvas.height / canvas.width)), mat);
+        plane.renderOrder = 6;
+        plane.visible = false;
+        plane.position.set(inC.x + inS.x * xFrac, inC.y + inS.y * yFrac, insideBox.max.z + inS.z * 0.02);
+        root.add(plane);
+        insidePatches.push(plane);
+        return texture;
+      };
+
+      // Neck tag centered just under the collar.
+      const tagCanvas = document.createElement("canvas");
+      tagCanvas.width = 420;
+      tagCanvas.height = 200;
+      const tg = tagCanvas.getContext("2d")!;
+      tg.fillStyle = "#0d0d0d";
+      tg.beginPath();
+      tg.roundRect(6, 6, tagCanvas.width - 12, tagCanvas.height - 12, 14);
+      tg.fill();
+      tg.strokeStyle = BRAND_GOLD;
+      tg.lineWidth = 3;
+      tg.stroke();
+      tg.textAlign = "center";
+      tg.textBaseline = "middle";
+      tg.fillStyle = BRAND_GOLD;
+      tg.font = "800 46px 'League Spartan', sans-serif";
+      tg.fillText("MANOIR KITS", tagCanvas.width / 2, 66);
+      tg.fillStyle = "#e9e2d2";
+      tg.font = "600 26px 'League Spartan', sans-serif";
+      tg.fillText("ONE OF ONE · LEGENDS EDITION", tagCanvas.width / 2, 118);
+      tg.fillStyle = BRAND_GOLD;
+      tg.font = "600 22px 'League Spartan', sans-serif";
+      tg.fillText("MANOIRKITS.COM", tagCanvas.width / 2, 158);
+      addInsidePlane(tagCanvas, 0.2, 0, 0.34);
+
+      // Gold/black inside-pocket badge on the wearer-left interior (viewer-right, +x).
+      const ipCanvas = document.createElement("canvas");
+      ipCanvas.width = 300;
+      ipCanvas.height = 360;
+      const ipTex = addInsidePlane(ipCanvas, 0.13, 0.15, -0.05);
+      void loadCrest().then((crest) => {
+        if (!crest) return;
+        const ic = ipCanvas.getContext("2d")!;
+        ic.clearRect(0, 0, ipCanvas.width, ipCanvas.height);
+        const cw = ipCanvas.width * 0.86;
+        const chh = cw * (crest.height / crest.width);
+        ic.drawImage(crest, (ipCanvas.width - cw) / 2, 8, cw, chh);
+        ic.textAlign = "center";
+        ic.textBaseline = "middle";
+        ic.fillStyle = BRAND_GOLD;
+        ic.font = "800 30px 'League Spartan', sans-serif";
+        ic.fillText("ONE OF ONE", ipCanvas.width / 2, chh + 40);
+        if (ipTex) ipTex.needsUpdate = true;
+      });
 
       loadedRef.current = {
         materials,
@@ -514,6 +635,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         rightFlap,
         back: { canvas: backCanvas, texture: backArt.texture },
         sleeves: sleeveArt,
+        insidePatches,
       };
       redrawDesign();
     });
@@ -565,9 +687,14 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       }
       const loaded = loadedRef.current;
       if (loaded) {
-        const a = (openRef.current * 68 * Math.PI) / 180;
+        const a = (openRef.current * 52 * Math.PI) / 180;
         if (loaded.leftFlap) loaded.leftFlap.rotation.y = -a;
         if (loaded.rightFlap) loaded.rightFlap.rotation.y = a;
+        // Inside patches only show once the jacket has opened enough.
+        if (loaded.insidePatches) {
+          const show = openRef.current > 0.5;
+          for (const p of loaded.insidePatches) p.visible = show;
+        }
       }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
       renderer.render(scene, camera);

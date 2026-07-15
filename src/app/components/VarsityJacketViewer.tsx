@@ -538,21 +538,48 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         root.add(plane);
       }
 
-      // Front chest artwork, offset just off the front panels (facing +z).
+      // Front chest artwork sitting ON the panel surface (facing +z). The
+      // panel curves, so sample the surface depth at the exact target spot
+      // instead of using the panel's frontmost bulge (which made art float).
       const addFrontPlane = (panelName: string, canvas: HTMLCanvasElement, wFrac: number, xFrac: number, yFrac: number) => {
         const panel = byName[panelName];
         if (!panel) return null;
         const pb = partBoxInRoot(panel, root);
         const ps = pb.getSize(new THREE.Vector3());
         const pc = pb.getCenter(new THREE.Vector3());
+        const tx = pc.x + ps.x * xFrac;
+        const ty = pc.y + ps.y * yFrac;
+        const toRoot = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(panel.matrixWorld);
+        const posA = panel.geometry.attributes.position;
+        const v = new THREE.Vector3();
+        // Frontmost surface z among vertices near a given (x, y) spot.
+        const surfZ = (x: number, y: number, rad: number) => {
+          let maxZ = -Infinity;
+          for (let i = 0; i < posA.count; i++) {
+            v.fromBufferAttribute(posA, i).applyMatrix4(toRoot);
+            if (Math.abs(v.x - x) > rad || Math.abs(v.y - y) > rad) continue;
+            if (v.z > maxZ) maxZ = v.z;
+          }
+          return maxZ;
+        };
+        const w = ps.x * wFrac;
+        const rad = w * 0.35;
+        const zC = surfZ(tx, ty, rad);
+        const zL = surfZ(tx - rad, ty, rad * 0.8);
+        const zR = surfZ(tx + rad, ty, rad * 0.8);
+        const z = zC > -Infinity ? zC : pb.max.z;
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = 8;
         const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-        const w = ps.x * wFrac;
         const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, w * (canvas.height / canvas.width)), mat);
         plane.renderOrder = 3;
-        plane.position.set(pc.x + ps.x * xFrac, pc.y + ps.y * yFrac, pb.max.z + ps.z * 0.06);
+        plane.position.set(tx, ty, z + ps.z * 0.015);
+        // Yaw the plane to follow the chest's curve at this spot.
+        if (zL > -Infinity && zR > -Infinity) {
+          const dzdx = (zR - zL) / (rad * 2);
+          plane.rotation.y = Math.atan2(-dzdx, 1);
+        }
         root.add(plane);
         return { plane, texture };
       };
@@ -561,7 +588,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const badgeCanvas = document.createElement("canvas");
       badgeCanvas.width = 320;
       badgeCanvas.height = 360;
-      const badgeArt = addFrontPlane("front_body_L", badgeCanvas, 0.32, 0.12, 0.04);
+      const badgeArt = addFrontPlane("front_body_L", badgeCanvas, 0.24, -0.02, 0.13);
       const badgeTex = badgeArt?.texture ?? null;
       // Swing the crest away with the wool panel when the jacket opens.
       if (badgeArt && rightFlap) rightFlap.attach(badgeArt.plane);
@@ -590,7 +617,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       wctx.font = "800 62px 'League Spartan', sans-serif";
       outlinedText(wctx, "MANOIR", wordCanvas.width / 2, 78, 62, CHEST_FILL, 320);
       outlinedText(wctx, "KITS", wordCanvas.width / 2, 150, 62, CHEST_FILL, 320);
-      const wordArt = addFrontPlane("front_body_R", wordCanvas, 0.42, -0.12, 0.16);
+      const wordArt = addFrontPlane("front_body_R", wordCanvas, 0.38, -0.05, 0.16);
       if (wordArt && leftFlap) leftFlap.attach(wordArt.plane);
 
       // Inside patches on the lining, revealed only when the jacket is open.

@@ -496,16 +496,45 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       for (const [name, dir] of [["sleeves_L", 1] as const, ["sleeves_R", -1] as const]) {
         const s = byName[name];
         if (!s) continue;
-        const sb = partBoxInRoot(s, root);
-        const ss = sb.getSize(new THREE.Vector3());
-        const sc = sb.getCenter(new THREE.Vector3());
+        const wb = new THREE.Box3().setFromObject(s);
+        const wc = wb.getCenter(new THREE.Vector3());
+        const wsz = wb.getSize(new THREE.Vector3());
         const mat = new THREE.MeshBasicMaterial({ map: sleeveArt.texture, transparent: true, depthWrite: false });
-        const pw = ss.z * 0.5;
+        // The plane lives under the scaled root, so size it in root-local units.
+        const wscale = root.getWorldScale(new THREE.Vector3()).x || 1;
+        const pw = (wsz.x * 0.62) / wscale;
         const plane = new THREE.Mesh(new THREE.PlaneGeometry(pw, pw * (sleeveCanvas.height / sleeveCanvas.width)), mat);
         plane.renderOrder = 3;
-        // Outer face of the sleeve, facing outward (±x)
-        plane.position.set(sc.x + dir * ss.x * 0.52, sc.y, sc.z);
-        plane.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+        // Like the physical jacket: numbers run down the OUTER side face of the
+        // arm. Find the outermost surface point at mid-height by scanning the
+        // sleeve's vertices directly (deterministic, no raycast edge cases).
+        const sampleY = wc.y + wsz.y * 0.02;
+        const sampleZ = wc.z + wsz.z * 0.18; // front-outer quadrant, not the arm's mid-depth
+        const pos = s.geometry.attributes.position;
+        const v = new THREE.Vector3();
+        const best = new THREE.Vector3(wc.x + dir * wsz.x * 0.4, sampleY, sampleZ);
+        let bestScore = -Infinity;
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(s.matrixWorld);
+          if (Math.abs(v.y - sampleY) > wsz.y * 0.06) continue;
+          if (Math.abs(v.z - sampleZ) > wsz.z * 0.12) continue;
+          const score = v.x * dir;
+          if (score > bestScore) {
+            bestScore = score;
+            best.copy(v);
+          }
+        }
+        // Face outward with a forward bias so the strip reads at a front
+        // three-quarter view; "up" follows the hanging arm's lean.
+        const facing = new THREE.Vector3(dir, 0, 0.55).normalize();
+        const armUp = new THREE.Vector3(-dir * 0.3, 0.95, 0).normalize();
+        const lookM = new THREE.Matrix4().lookAt(new THREE.Vector3(), facing, armUp);
+        const worldQuat = new THREE.Quaternion().setFromRotationMatrix(lookM);
+        const worldPos = best.clone().addScaledVector(facing, wsz.x * 0.02);
+        plane.position.copy(root.worldToLocal(worldPos));
+        const rootQuat = new THREE.Quaternion();
+        root.getWorldQuaternion(rootQuat);
+        plane.quaternion.copy(rootQuat.invert().multiply(worldQuat));
         root.add(plane);
       }
 
@@ -584,48 +613,79 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         return texture;
       };
 
-      // Neck tag centered just under the collar.
+      // All-black leather neck label right under the collar (white print),
+      // matching the physical jacket's "MANOIR KITS / www.manoirkits.com" tag.
       const tagCanvas = document.createElement("canvas");
-      tagCanvas.width = 420;
-      tagCanvas.height = 200;
+      tagCanvas.width = 460;
+      tagCanvas.height = 250;
       const tg = tagCanvas.getContext("2d")!;
-      tg.fillStyle = "#0d0d0d";
+      tg.fillStyle = "#131313";
       tg.beginPath();
-      tg.roundRect(6, 6, tagCanvas.width - 12, tagCanvas.height - 12, 14);
+      tg.roundRect(8, 8, tagCanvas.width - 16, tagCanvas.height - 16, 18);
       tg.fill();
-      tg.strokeStyle = BRAND_GOLD;
-      tg.lineWidth = 3;
+      // Subtle leather sheen + stitch line, no gold — the label is all black.
+      const sheen = tg.createLinearGradient(0, 0, tagCanvas.width, tagCanvas.height);
+      sheen.addColorStop(0, "rgba(255,255,255,0.06)");
+      sheen.addColorStop(0.5, "rgba(255,255,255,0)");
+      sheen.addColorStop(1, "rgba(255,255,255,0.04)");
+      tg.fillStyle = sheen;
+      tg.beginPath();
+      tg.roundRect(8, 8, tagCanvas.width - 16, tagCanvas.height - 16, 18);
+      tg.fill();
+      tg.strokeStyle = "#2c2c2c";
+      tg.lineWidth = 2;
+      tg.setLineDash([7, 5]);
+      tg.beginPath();
+      tg.roundRect(20, 20, tagCanvas.width - 40, tagCanvas.height - 40, 12);
       tg.stroke();
+      tg.setLineDash([]);
       tg.textAlign = "center";
       tg.textBaseline = "middle";
-      tg.fillStyle = BRAND_GOLD;
-      tg.font = "800 46px 'League Spartan', sans-serif";
-      tg.fillText("MANOIR KITS", tagCanvas.width / 2, 66);
-      tg.fillStyle = "#e9e2d2";
-      tg.font = "600 26px 'League Spartan', sans-serif";
-      tg.fillText("ONE OF ONE · LEGENDS EDITION", tagCanvas.width / 2, 118);
-      tg.fillStyle = BRAND_GOLD;
-      tg.font = "600 22px 'League Spartan', sans-serif";
-      tg.fillText("MANOIRKITS.COM", tagCanvas.width / 2, 158);
-      addInsidePlane(tagCanvas, 0.2, 0, 0.34);
+      tg.fillStyle = "#f4f2ec";
+      tg.font = "800 52px 'League Spartan', sans-serif";
+      tg.fillText("MANOIR KITS", tagCanvas.width / 2, 104);
+      tg.font = "600 33px 'League Spartan', sans-serif";
+      tg.fillText("www.manoirkits.com", tagCanvas.width / 2, 162);
+      addInsidePlane(tagCanvas, 0.15, 0, 0.36);
 
-      // Gold/black inside-pocket badge on the wearer-left interior (viewer-right, +x).
+      // Rectangular gold-bordered woven patch low on the wearer-left lining
+      // (behind the pocket): MANOIR KITS / MK crest / ONE OF ONE / LEGEND'S EDITION.
       const ipCanvas = document.createElement("canvas");
-      ipCanvas.width = 300;
-      ipCanvas.height = 360;
-      const ipTex = addInsidePlane(ipCanvas, 0.13, 0.15, -0.05);
-      void loadCrest().then((crest) => {
-        if (!crest) return;
+      ipCanvas.width = 460;
+      ipCanvas.height = 610;
+      const drawPocketPatch = (crest: HTMLCanvasElement | null) => {
         const ic = ipCanvas.getContext("2d")!;
         ic.clearRect(0, 0, ipCanvas.width, ipCanvas.height);
-        const cw = ipCanvas.width * 0.86;
-        const chh = cw * (crest.height / crest.width);
-        ic.drawImage(crest, (ipCanvas.width - cw) / 2, 8, cw, chh);
+        // Black twill base with a thin dark edge and the gold frame inset.
+        ic.fillStyle = "#101010";
+        ic.beginPath();
+        ic.roundRect(4, 4, ipCanvas.width - 8, ipCanvas.height - 8, 14);
+        ic.fill();
+        ic.strokeStyle = BRAND_GOLD;
+        ic.lineWidth = 7;
+        ic.strokeRect(30, 30, ipCanvas.width - 60, ipCanvas.height - 60);
         ic.textAlign = "center";
         ic.textBaseline = "middle";
         ic.fillStyle = BRAND_GOLD;
-        ic.font = "800 30px 'League Spartan', sans-serif";
-        ic.fillText("ONE OF ONE", ipCanvas.width / 2, chh + 40);
+        ic.font = "800 54px 'League Spartan', sans-serif";
+        ic.fillText("MANOIR KITS", ipCanvas.width / 2, 98);
+        if (crest) {
+          const cw = ipCanvas.width * 0.5;
+          const chh = cw * (crest.height / crest.width);
+          ic.drawImage(crest, (ipCanvas.width - cw) / 2, 300 - chh / 2, cw, chh);
+        }
+        ic.fillStyle = "#ece6d8";
+        ic.font = "800 52px 'League Spartan', sans-serif";
+        ic.fillText("ONE OF ONE", ipCanvas.width / 2, 478);
+        ic.fillStyle = BRAND_GOLD;
+        ic.font = "800 38px 'League Spartan', sans-serif";
+        ic.fillText("LEGEND'S EDITION", ipCanvas.width / 2, 538);
+      };
+      drawPocketPatch(null);
+      const ipTex = addInsidePlane(ipCanvas, 0.16, 0.11, -0.18);
+      void loadCrest().then((crest) => {
+        if (!crest) return;
+        drawPocketPatch(crest);
         if (ipTex) ipTex.needsUpdate = true;
       });
 

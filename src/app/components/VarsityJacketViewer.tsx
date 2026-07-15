@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { DecalGeometry } from "three/examples/jsm/geometries/DecalGeometry.js";
 import crestImage from "figma:asset/65260e3ff07725a684ad1d29eb3db00cb66a8976.png";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
@@ -61,11 +62,11 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
 export type LeatherType = "Nappa" | "Cowhide";
 
 /** Varsity chenille lettering: colored fill with a gold outline. */
-function outlinedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontSize: number, fill: string, maxWidth?: number) {
+function outlinedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontSize: number, fill: string, maxWidth?: number, outlineScale = 0.055) {
   ctx.lineJoin = "round";
   ctx.miterLimit = 2;
   ctx.strokeStyle = BRAND_GOLD;
-  ctx.lineWidth = Math.max(3, fontSize * 0.13);
+  ctx.lineWidth = Math.max(2, fontSize * outlineScale);
   ctx.strokeText(text, x, y, maxWidth);
   ctx.fillStyle = fill;
   ctx.fillText(text, x, y, maxWidth);
@@ -99,52 +100,136 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
+  // Stars ride high across the traps in a wide, shallow arc: the center star
+  // crowns the collar and the outer ones reach toward the shoulder seams.
   const stars = Math.max(0, Math.min(5, design.stars));
-  const starArc = 320;
-  const starCenterY = 60 + starArc;
-  const stepDeg = 15;
+  const starArc = 560;
+  const starCenterY = 52 + starArc;
+  const stepDeg = 11;
   for (let i = 0; i < stars; i += 1) {
     const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
     const x = w / 2 + starArc * Math.sin(a);
     const y = starCenterY - starArc * Math.cos(a);
-    drawStar(ctx, x, y, 27, BRAND_GOLD, a);
+    drawStar(ctx, x, y, 29, BRAND_GOLD, a);
   }
 
+  // City rides high, stretched to span the shoulders like the reference.
   const city = design.city.trim().toUpperCase();
   if (city) {
-    const fontSize = city.length > 9 ? 64 : 76;
-    ctx.font = `800 ${fontSize}px 'League Spartan', sans-serif`;
-    outlinedText(ctx, city, w / 2, 220, fontSize, design.printColor, w * 0.9);
+    const fontSize = city.length > 9 ? 82 : 100;
+    ctx.font = `400 ${fontSize}px 'League Spartan', sans-serif`;
+    const natural = ctx.measureText(city).width || 1;
+    const sx = Math.min(Math.max((w * 0.86) / natural, 1), 1.35);
+    ctx.save();
+    ctx.translate(w / 2, 0);
+    ctx.scale(sx, 1);
+    outlinedText(ctx, city, 0, 200, fontSize, design.printColor, (w * 0.86) / sx);
+    ctx.restore();
   }
 
   const number = design.backNumber.trim();
   if (number) {
-    ctx.font = "800 280px 'League Spartan', sans-serif";
-    outlinedText(ctx, number, w / 2, 440, 280, design.printColor, w * 0.9);
+    ctx.font = "400 390px 'League Spartan', sans-serif";
+    outlinedText(ctx, number, w / 2, 452, 390, design.printColor, w * 0.92);
   }
 
-  ctx.font = "800 62px 'League Spartan', sans-serif";
-  outlinedText(ctx, "EST. 2026", w / 2, 662, 62, design.printColor);
+  ctx.font = "400 104px 'League Spartan', sans-serif";
+  outlinedText(ctx, "EST. 2026", w / 2, 652, 104, design.printColor, w * 0.96);
 }
 
-/** Draws a vertical stack of sleeve numbers. */
-function drawSleeveNumbers(canvas: HTMLCanvasElement, numbers: string[], color: string) {
-  const ctx = canvas.getContext("2d")!;
-  const w = canvas.width;
-  const h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  const values = numbers.map((n) => n.trim()).filter(Boolean).slice(0, 5);
-  if (!values.length) return;
-  const fontSize = 92;
-  ctx.font = `800 ${fontSize}px 'League Spartan', sans-serif`;
-  const top = h * 0.09;
-  const span = h * 0.82;
-  values.forEach((value, i) => {
-    const y = values.length === 1 ? h * 0.5 : top + (span / (values.length - 1)) * i;
-    outlinedText(ctx, value, w / 2, y, fontSize, color);
+/**
+ * Draws the sleeve numbers, one canvas per slot. Each slot becomes its own
+ * small decal sewn at a fixed spot down the arm, so filled values compact
+ * top-down like patches applied from the shoulder.
+ */
+function drawSleeveNumbers(canvases: HTMLCanvasElement[], numbers: string[], color: string) {
+  const values = numbers.map((n) => n.trim()).filter(Boolean).slice(0, canvases.length);
+  canvases.forEach((canvas, i) => {
+    const ctx = canvas.getContext("2d")!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const value = values[i];
+    if (!value) return;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "400 120px 'League Spartan', sans-serif";
+    outlinedText(ctx, value, canvas.width / 2, canvas.height / 2, 120, color, canvas.width * 0.9);
   });
+}
+
+/**
+ * All-black leather neck label (white print), matching the physical jacket's
+ * "MANOIR KITS / www.manoirkits.com" tag. Used by the Interior Details card.
+ */
+export function renderNeckLabel(): HTMLCanvasElement {
+  const tagCanvas = document.createElement("canvas");
+  tagCanvas.width = 460;
+  tagCanvas.height = 250;
+  const tg = tagCanvas.getContext("2d")!;
+  tg.fillStyle = "#131313";
+  tg.beginPath();
+  tg.roundRect(8, 8, tagCanvas.width - 16, tagCanvas.height - 16, 18);
+  tg.fill();
+  // Subtle leather sheen + stitch line, no gold — the label is all black.
+  const sheen = tg.createLinearGradient(0, 0, tagCanvas.width, tagCanvas.height);
+  sheen.addColorStop(0, "rgba(255,255,255,0.06)");
+  sheen.addColorStop(0.5, "rgba(255,255,255,0)");
+  sheen.addColorStop(1, "rgba(255,255,255,0.04)");
+  tg.fillStyle = sheen;
+  tg.beginPath();
+  tg.roundRect(8, 8, tagCanvas.width - 16, tagCanvas.height - 16, 18);
+  tg.fill();
+  tg.strokeStyle = "#2c2c2c";
+  tg.lineWidth = 2;
+  tg.setLineDash([7, 5]);
+  tg.beginPath();
+  tg.roundRect(20, 20, tagCanvas.width - 40, tagCanvas.height - 40, 12);
+  tg.stroke();
+  tg.setLineDash([]);
+  tg.textAlign = "center";
+  tg.textBaseline = "middle";
+  tg.fillStyle = "#f4f2ec";
+  tg.font = "800 52px 'League Spartan', sans-serif";
+  tg.fillText("MANOIR KITS", tagCanvas.width / 2, 104);
+  tg.font = "600 33px 'League Spartan', sans-serif";
+  tg.fillText("www.manoirkits.com", tagCanvas.width / 2, 162);
+  return tagCanvas;
+}
+
+/**
+ * Rectangular gold-bordered woven patch sewn on the lining: MANOIR KITS /
+ * MK crest / ONE OF ONE / LEGEND'S EDITION. Used by the Interior Details card.
+ */
+export async function renderInteriorPatch(): Promise<HTMLCanvasElement> {
+  const crest = await loadCrest();
+  const ipCanvas = document.createElement("canvas");
+  ipCanvas.width = 460;
+  ipCanvas.height = 610;
+  const ic = ipCanvas.getContext("2d")!;
+  // Black twill base with a thin dark edge and the gold frame inset.
+  ic.fillStyle = "#101010";
+  ic.beginPath();
+  ic.roundRect(4, 4, ipCanvas.width - 8, ipCanvas.height - 8, 14);
+  ic.fill();
+  ic.strokeStyle = BRAND_GOLD;
+  ic.lineWidth = 7;
+  ic.strokeRect(30, 30, ipCanvas.width - 60, ipCanvas.height - 60);
+  ic.textAlign = "center";
+  ic.textBaseline = "middle";
+  ic.fillStyle = BRAND_GOLD;
+  ic.font = "800 54px 'League Spartan', sans-serif";
+  ic.fillText("MANOIR KITS", ipCanvas.width / 2, 98);
+  if (crest) {
+    const cw = ipCanvas.width * 0.5;
+    const chh = cw * (crest.height / crest.width);
+    ic.drawImage(crest, (ipCanvas.width - cw) / 2, 300 - chh / 2, cw, chh);
+  }
+  ic.fillStyle = "#ece6d8";
+  ic.font = "800 52px 'League Spartan', sans-serif";
+  ic.fillText("ONE OF ONE", ipCanvas.width / 2, 478);
+  ic.fillStyle = BRAND_GOLD;
+  ic.font = "800 38px 'League Spartan', sans-serif";
+  ic.fillText("LEGEND'S EDITION", ipCanvas.width / 2, 538);
+  return ipCanvas;
 }
 
 export interface BackDesign {
@@ -164,7 +249,6 @@ interface VarsityJacketViewerProps {
   pocketColor: string;
   liningColor: string;
   backDesign: BackDesign;
-  insideView?: boolean;
 }
 
 type PartMaterials = {
@@ -180,33 +264,9 @@ type Decal = { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture };
 
 type Loaded = {
   materials: PartMaterials;
-  leftFlap: THREE.Group | null; // viewer-left front panel pivot
-  rightFlap: THREE.Group | null; // viewer-right front panel pivot
   back: Decal;
-  sleeves: Decal;
-  insidePatches: THREE.Mesh[]; // neck tag + inside-pocket badge, shown when open
-  chestArt: THREE.Mesh[]; // exterior crest + wordmark, hidden while open
+  sleeves: { canvases: HTMLCanvasElement[]; textures: THREE.CanvasTexture[] };
 };
-
-/** A part's bounding box expressed in the model root's local space. */
-function partBoxInRoot(mesh: THREE.Mesh, root: THREE.Object3D): THREE.Box3 {
-  mesh.geometry.computeBoundingBox();
-  const box = mesh.geometry.boundingBox!.clone();
-  const toRoot = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(mesh.matrixWorld);
-  box.applyMatrix4(toRoot);
-  return box;
-}
-
-/** A flat artwork plane sized to a fraction of a box, offset off one face. */
-function makeArtworkPlane(canvas: HTMLCanvasElement, wUnits: number, hUnits: number): { mesh: THREE.Mesh; texture: THREE.CanvasTexture } {
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
-  const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(wUnits, hUnits), material);
-  mesh.renderOrder = 3;
-  return { mesh, texture };
-}
 
 /** Classify a part by its node name into a material group. */
 function groupFor(name: string): keyof PartMaterials | "logo" {
@@ -230,7 +290,6 @@ function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
       sheenRoughness: 0.95,
       sheenColor: new THREE.Color("#555555"),
       envMapIntensity: 0.05,
-      side: THREE.DoubleSide, // panel backs show when the jacket opens
     }),
     sleeve: new THREE.MeshPhysicalMaterial({
       color: colors.sleeveColor,
@@ -262,55 +321,15 @@ function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
     }),
     lining: new THREE.MeshPhysicalMaterial({
       color: colors.liningColor,
-      roughness: 0.58, // soft satin: sheen without the liquid-metal highlights
+      roughness: 0.58,
       metalness: 0,
       sheen: 0.35,
       sheenRoughness: 0.6,
       sheenColor: new THREE.Color("#3a3a3a"),
       envMapIntensity: 0.35,
-      normalMap: makeQuiltNormalMap(),
-      normalScale: new THREE.Vector2(0.16, 0.16),
       side: THREE.DoubleSide,
     }),
   };
-}
-
-/** Procedural diamond-quilt normal map for the satin lining. */
-let quiltNormalCache: THREE.CanvasTexture | null = null;
-function makeQuiltNormalMap(): THREE.CanvasTexture {
-  if (quiltNormalCache) return quiltNormalCache;
-  const s = 256;
-  const c = document.createElement("canvas");
-  c.width = s;
-  c.height = s;
-  const ctx = c.getContext("2d")!;
-  ctx.fillStyle = "#8080ff"; // flat normal
-  ctx.fillRect(0, 0, s, s);
-  // Draw diagonal quilt channels as soft embossed grooves.
-  const draw = (angle: number) => {
-    ctx.save();
-    ctx.translate(s / 2, s / 2);
-    ctx.rotate(angle);
-    ctx.translate(-s / 2, -s / 2);
-    const gap = s / 4;
-    for (let i = -s; i < s * 2; i += gap) {
-      const g = ctx.createLinearGradient(i - 3, 0, i + 3, 0);
-      g.addColorStop(0, "#8080ff");
-      g.addColorStop(0.5, angle > 0 ? "#7373ff" : "#8d8dff");
-      g.addColorStop(1, "#8080ff");
-      ctx.fillStyle = g;
-      ctx.fillRect(i - 3, -s, 6, s * 3);
-    }
-    ctx.restore();
-  };
-  draw(Math.PI / 4);
-  draw(-Math.PI / 4);
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(14, 18);
-  quiltNormalCache = tex;
-  return tex;
 }
 
 function applyLeatherType(m: PartMaterials, type: LeatherType) {
@@ -330,15 +349,31 @@ function applyLeatherType(m: PartMaterials, type: LeatherType) {
   }
 }
 
+/**
+ * Fabric-lit decal material: the artwork shades with the scene lights like a
+ * sewn-on patch instead of glowing like a sticker. polygonOffset pulls it in
+ * front of the coincident jacket surface without any visible air gap.
+ */
+function makeDecalMaterial(texture: THREE.CanvasTexture): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+    roughness: 0.88,
+    metalness: 0,
+    envMapIntensity: 0.35,
+  });
+}
+
 export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
-  const { bodyColor, sleeveColor, leatherType, trimColor, snapColor, pocketColor, liningColor, insideView = false } = props;
+  const { bodyColor, sleeveColor, leatherType, trimColor, snapColor, pocketColor, liningColor } = props;
 
   const mountRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.0, rotX: -0.05 });
   const loadedRef = useRef<Loaded | null>(null);
-  const insideRef = useRef(insideView);
-  const alignRef = useRef(insideView);
-  const openRef = useRef(0);
   const frameRef = useRef(0);
   const propsRef = useRef(props);
   propsRef.current = props;
@@ -360,21 +395,14 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     if (m) applyLeatherType(m, leatherType);
   }, [leatherType]);
 
-  useEffect(() => {
-    insideRef.current = insideView;
-    // Auto-face the camera when entering the inside view; the user can then
-    // drag to rotate freely, which cancels the auto-align.
-    if (insideView) alignRef.current = true;
-  }, [insideView]);
-
   const redrawDesign = () => {
     const loaded = loadedRef.current;
     if (!loaded) return;
     const design = propsRef.current.backDesign;
     drawBackDesign(loaded.back.canvas, design);
     loaded.back.texture.needsUpdate = true;
-    drawSleeveNumbers(loaded.sleeves.canvas, design.sleeveNumbers, design.printColor);
-    loaded.sleeves.texture.needsUpdate = true;
+    drawSleeveNumbers(loaded.sleeves.canvases, design.sleeveNumbers, design.printColor);
+    for (const t of loaded.sleeves.textures) t.needsUpdate = true;
   };
 
   useEffect(() => {
@@ -392,7 +420,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
-    renderer.localClippingEnabled = true;
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -401,7 +428,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     scene.environment = envTexture;
     pmrem.dispose();
 
-    const camera = new THREE.PerspectiveCamera(28, mount.clientWidth / mount.clientHeight, 0.01, 100);
+    // Near plane matters: zoom never gets closer than z=3.2, and a tiny near
+    // value starves the depth buffer, making decals z-fight (black flecks)
+    // at some rotation angles.
+    const camera = new THREE.PerspectiveCamera(28, mount.clientWidth / mount.clientHeight, 0.5, 50);
     camera.position.set(0, 0, 5.6);
 
     scene.add(new THREE.HemisphereLight("#ffffff", "#9aa6b4", 0.3));
@@ -420,13 +450,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     const materials = makeMaterials(propsRef.current);
     applyLeatherType(materials, propsRef.current.leatherType);
-
-    // When the jacket opens, this plane peels the lining's front away so the
-    // camera sees into the quilted interior instead of a closed black shell.
-    // Keeps points with z <= constant; constant animates 0.6 (no clip) -> 0.
-    const liningClip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.6);
-    materials.lining.clippingPlanes = [liningClip];
-
 
     let disposed = false;
     const dracoLoader = new DRACOLoader();
@@ -460,6 +483,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       root.position.multiplyScalar(scale);
       root.scale.setScalar(scale);
       modelRoot.add(root);
+      // Decal geometry below is generated in world space and parented to
+      // modelRoot, so the root must sit at identity while we build it (the
+      // animation loop may already have applied a drag tilt).
+      modelRoot.rotation.set(0, 0, 0);
       modelRoot.updateWorldMatrix(true, true);
 
       // The model's placket tongue (plus its snaps) hangs down over the ribbed
@@ -484,10 +511,18 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         }
         g.setIndex(keep);
       };
-      // Clamp any panel vertex below the hem line up to it: the placket
-      // tongue collapses flat, the mesh stays continuous (no holes or ragged
-      // cut edges), and the flap bottoms end flush with the hem when open.
-      const clampHem = (mesh: THREE.Mesh | undefined, tongueOnly: boolean) => {
+      // Tuck the body into the ribbed hem band. The knit band tops out at
+      // y=-0.855 with a slimmer footprint (z -0.536..0.303) than the body
+      // shells (z -0.645..0.403), so untreated panels drape past and below
+      // it like a detached skirt. Below a blend line, ease each vertex's
+      // depth to just inside the band's faces and stop it at the band top —
+      // the wool gathers into the rib the way the real jacket does. This
+      // also collapses the model's below-hem placket tongue flat.
+      const HEM_TOP = -0.86;
+      const TUCK_START = -0.7;
+      const TUCK_FRONT_Z = 0.29;
+      const TUCK_BACK_Z = -0.52;
+      const tuckHem = (mesh: THREE.Mesh | undefined) => {
         if (!mesh) return;
         const posA = mesh.geometry.attributes.position as THREE.BufferAttribute;
         mesh.updateWorldMatrix(true, true);
@@ -495,180 +530,201 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const vv = new THREE.Vector3();
         for (let i = 0; i < posA.count; i++) {
           vv.fromBufferAttribute(posA, i).applyMatrix4(mesh.matrixWorld);
-          if (vv.y >= -0.86) continue;
-          if (tongueOnly && !(Math.abs(vv.x) < 0.3 && vv.z > 0.05)) continue;
-          vv.y = -0.86;
+          if (vv.y >= TUCK_START) continue;
+          if (vv.y < HEM_TOP) vv.y = HEM_TOP;
+          const t = (TUCK_START - vv.y) / (TUCK_START - HEM_TOP);
+          const s = t * t * (3 - 2 * t);
+          if (vv.z > TUCK_FRONT_Z) vv.z += (TUCK_FRONT_Z - vv.z) * s;
+          if (vv.z < TUCK_BACK_Z) vv.z += (TUCK_BACK_Z - vv.z) * s;
           vv.applyMatrix4(toLocal);
           posA.setXYZ(i, vv.x, vv.y, vv.z);
         }
         posA.needsUpdate = true;
+        mesh.geometry.computeBoundingBox();
+        mesh.geometry.computeBoundingSphere();
       };
-      clampHem(byName["front_body_L"], false);
-      clampHem(byName["front_body_R"], false);
-      clampHem(byName["inside_body_button"], true);
+      tuckHem(byName["front_body_L"]);
+      tuckHem(byName["front_body_R"]);
+      tuckHem(byName["front_body_button_back"]);
+      tuckHem(byName["inside_body_button"]);
       // The tongue's snaps are whole blobs below the line — remove them.
       removeHemTongue(byName["button"], false);
 
-      // Set up open-front pivots: reparent each front panel (and its pocket)
-      // under a hinge group at the placket so it can swing open like a door.
-      const worldBox = new THREE.Box3().setFromObject(root);
-      const wc = worldBox.getCenter(new THREE.Vector3());
-      const ws = worldBox.getSize(new THREE.Vector3());
-      const frontZ = worldBox.max.z; // panels face +z after framing
-
-      // Hinge each front panel at its OUTER side seam (not the center placket),
-      // so the panels swing apart like double doors to reveal the lining.
-      const makeFlap = (panel?: THREE.Mesh, pocket?: THREE.Mesh, outer: "maxx" | "minx" = "maxx") => {
-        if (!panel) return null;
-        const pb = new THREE.Box3().setFromObject(panel);
-        const hingeX = outer === "maxx" ? pb.max.x : pb.min.x;
-        const hingeZ = (pb.min.z + pb.max.z) / 2;
-        const pivot = new THREE.Group();
-        pivot.position.set(hingeX, wc.y, hingeZ);
-        modelRoot.add(pivot);
-        pivot.attach(panel);
-        if (pocket) pivot.attach(pocket);
-        return pivot;
+      // Every piece of artwork is a DecalGeometry projection onto the actual
+      // jacket mesh, so it hugs the fabric's curvature exactly — like a patch
+      // sewn flush onto the wool/leather — instead of floating on a flat
+      // plane in front of it. Triangles whose surface faces away from the
+      // projection are dropped: on a closed shape like an arm, the far side
+      // would otherwise catch a mirrored copy of the art.
+      const cullAwayFacing = (g: THREE.BufferGeometry, outward: THREE.Vector3) => {
+        const pos = g.attributes.position;
+        const nor = g.attributes.normal;
+        const uv = g.attributes.uv;
+        const p: number[] = [];
+        const n: number[] = [];
+        const u: number[] = [];
+        const pa = new THREE.Vector3();
+        const pb = new THREE.Vector3();
+        const pc = new THREE.Vector3();
+        const e1 = new THREE.Vector3();
+        const e2 = new THREE.Vector3();
+        const fn = new THREE.Vector3();
+        for (let t = 0; t < pos.count; t += 3) {
+          // Judge facing by the triangle's winding, not its stored vertex
+          // normals — the GLB's normals are unreliable in spots and culling
+          // on them punched pinholes through the art. Keep everything up to
+          // a bit past the tangent (art may wrap around a curve); the
+          // mirrored far-side copy sits near 180° and still goes.
+          pa.fromBufferAttribute(pos, t);
+          pb.fromBufferAttribute(pos, t + 1);
+          pc.fromBufferAttribute(pos, t + 2);
+          fn.crossVectors(e1.subVectors(pb, pa), e2.subVectors(pc, pa)).normalize();
+          if (fn.dot(outward) <= -0.3) continue;
+          for (let k = 0; k < 3; k++) {
+            p.push(pos.getX(t + k), pos.getY(t + k), pos.getZ(t + k));
+            n.push(nor.getX(t + k), nor.getY(t + k), nor.getZ(t + k));
+            u.push(uv.getX(t + k), uv.getY(t + k));
+          }
+        }
+        const out = new THREE.BufferGeometry();
+        out.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
+        out.setAttribute("normal", new THREE.Float32BufferAttribute(n, 3));
+        out.setAttribute("uv", new THREE.Float32BufferAttribute(u, 2));
+        return out;
       };
-      // front_body_L sits on +x (viewer right); hinge at its max-x side seam.
-      // front_body_R sits on -x (viewer left); hinge at its min-x side seam.
-      const rightFlap = makeFlap(byName["front_body_L"], byName["Pockets_L"], "maxx");
-      const leftFlap = makeFlap(byName["front_body_R"], byName["Pockets_R"], "minx");
-      // The snap strip runs down the placket; it belongs to the wearer-left
-      // panel, so it swings open with that flap instead of floating mid-air.
-      if (byName["button"] && rightFlap) rightFlap.attach(byName["button"]);
+      const addDecal = (
+        mesh: THREE.Mesh,
+        texture: THREE.CanvasTexture,
+        position: THREE.Vector3,
+        orientation: THREE.Euler,
+        size: THREE.Vector3,
+        outward: THREE.Vector3,
+      ) => {
+        const geometry = cullAwayFacing(new DecalGeometry(mesh, position, orientation, size), outward);
+        const decal = new THREE.Mesh(geometry, makeDecalMaterial(texture));
+        decal.renderOrder = 3;
+        // Lift the decal a hair off the surface (~1.5mm at jacket scale):
+        // polygonOffset alone loses the depth fight in spots on these large
+        // curved projections, which read as dark pinholes through the art.
+        decal.position.copy(outward).multiplyScalar(0.006);
+        modelRoot.add(decal);
+        return decal;
+      };
 
-      // Split the collar's FRONT halves onto the flaps: a real collar attaches
-      // to the panels' top edges and spreads apart with them. The back of the
-      // collar stays put. Sub-meshes share the vertex buffers; only indices
-      // are partitioned.
-      const collar = byName["classic_collar"];
-      if (collar && collar.geometry.index && leftFlap && rightFlap) {
-        const cg = collar.geometry;
-        const posA = cg.attributes.position;
-        collar.updateWorldMatrix(true, true);
-        const vv = new THREE.Vector3();
-        const wxs = new Float32Array(posA.count);
-        const wzs = new Float32Array(posA.count);
-        for (let i = 0; i < posA.count; i++) {
-          vv.fromBufferAttribute(posA, i).applyMatrix4(collar.matrixWorld);
-          wxs[i] = vv.x;
-          wzs[i] = vv.z;
-        }
-        const idx = cg.index.array;
-        const backIdx: number[] = [];
-        const leftIdx: number[] = [];
-        const rightIdx: number[] = [];
-        for (let t = 0; t < idx.length; t += 3) {
-          const a = idx[t], b = idx[t + 1], c = idx[t + 2];
-          const cz = (wzs[a] + wzs[b] + wzs[c]) / 3;
-          const cx = (wxs[a] + wxs[b] + wxs[c]) / 3;
-          if (cz > 0.1) (cx >= 0 ? rightIdx : leftIdx).push(a, b, c);
-          else backIdx.push(a, b, c);
-        }
-        cg.setIndex(backIdx);
-        const collarPiece = (indices: number[], flap: THREE.Group) => {
-          if (!indices.length) return;
-          const ng = new THREE.BufferGeometry();
-          for (const key of Object.keys(cg.attributes)) ng.setAttribute(key, cg.attributes[key]);
-          ng.setIndex(indices);
-          const piece = new THREE.Mesh(ng, collar.material);
-          piece.castShadow = true;
-          piece.receiveShadow = true;
-          piece.position.copy(collar.position);
-          piece.quaternion.copy(collar.quaternion);
-          piece.scale.copy(collar.scale);
-          collar.parent!.add(piece);
-          flap.attach(piece);
-        };
-        collarPiece(rightIdx, rightFlap);
-        collarPiece(leftIdx, leftFlap);
-      }
-
-      // Back design: a flat artwork plane just off the back panel surface.
+      // Back design: projected straight onto the back panel.
       const backCanvas = document.createElement("canvas");
       backCanvas.width = 512;
       backCanvas.height = 720;
-      const backBox = partBoxInRoot(byName["front_body_button_back"], root);
-      const backSize = backBox.getSize(new THREE.Vector3());
-      const backCenter = backBox.getCenter(new THREE.Vector3());
-      const backW = backSize.x * 0.62;
-      const backArt = makeArtworkPlane(backCanvas, backW, backW * (backCanvas.height / backCanvas.width));
-      backArt.mesh.rotation.y = Math.PI; // face -z (the back)
-      backArt.mesh.position.set(backCenter.x, backCenter.y + backSize.y * 0.04, backBox.min.z - backSize.z * 0.06);
-      root.add(backArt.mesh);
+      const backTexture = new THREE.CanvasTexture(backCanvas);
+      backTexture.colorSpace = THREE.SRGBColorSpace;
+      backTexture.anisotropy = 8;
+      const backMesh = byName["front_body_button_back"];
+      if (backMesh) {
+        const wb = new THREE.Box3().setFromObject(backMesh);
+        const ws = wb.getSize(new THREE.Vector3());
+        const wcB = wb.getCenter(new THREE.Vector3());
+        const bw = ws.x * 0.74;
+        const bh = bw * (backCanvas.height / backCanvas.width);
+        addDecal(
+          backMesh,
+          backTexture,
+          new THREE.Vector3(wcB.x, wcB.y + ws.y * 0.04, wb.min.z),
+          new THREE.Euler(0, Math.PI, 0),
+          // Deep enough to span the whole back shell: the surface curves
+          // forward over the traps and at the side seams, and a shallow box
+          // clipped the star tops and letter edges there. The away-facing
+          // cull keeps the extra depth from catching anything else.
+          new THREE.Vector3(bw, bh, ws.z * 2),
+          new THREE.Vector3(0, 0, -1),
+        );
+      }
 
-      // Sleeve numbers: a plane down the outer face of each sleeve.
-      const sleeveCanvas = document.createElement("canvas");
-      sleeveCanvas.width = 200;
-      sleeveCanvas.height = 820;
-      const sleeveArt: Decal = { canvas: sleeveCanvas, texture: new THREE.CanvasTexture(sleeveCanvas) };
-      sleeveArt.texture.colorSpace = THREE.SRGBColorSpace;
-      sleeveArt.texture.anisotropy = 8;
+      // Sleeve numbers: five small patches down the OUTER face of each arm,
+      // like the physical jacket. Each number is its own decal projected at
+      // its own height, so it lies flat on the local surface instead of one
+      // tall strip smearing around the arm's curve.
+      const SLEEVE_SLOTS = 5;
+      const sleeveCanvases: HTMLCanvasElement[] = [];
+      const sleeveTextures: THREE.CanvasTexture[] = [];
+      for (let i = 0; i < SLEEVE_SLOTS; i++) {
+        const c = document.createElement("canvas");
+        c.width = 200;
+        c.height = 170;
+        const t = new THREE.CanvasTexture(c);
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = 8;
+        sleeveCanvases.push(c);
+        sleeveTextures.push(t);
+      }
       for (const [name, dir] of [["sleeves_L", 1] as const, ["sleeves_R", -1] as const]) {
         const s = byName[name];
         if (!s) continue;
         const wb = new THREE.Box3().setFromObject(s);
         const wc = wb.getCenter(new THREE.Vector3());
         const wsz = wb.getSize(new THREE.Vector3());
-        const mat = new THREE.MeshBasicMaterial({ map: sleeveArt.texture, transparent: true, depthWrite: false });
-        // The plane lives under the scaled root, so size it in root-local units.
-        const wscale = root.getWorldScale(new THREE.Vector3()).x || 1;
-        const pw = (wsz.x * 0.62) / wscale;
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(pw, pw * (sleeveCanvas.height / sleeveCanvas.width)), mat);
-        plane.renderOrder = 3;
-        // Like the physical jacket: numbers run down the OUTER side face of the
-        // arm. Find the outermost surface point at mid-height by scanning the
-        // sleeve's vertices directly (deterministic, no raycast edge cases).
-        const sampleY = wc.y + wsz.y * 0.02;
-        const sampleZ = wc.z + wsz.z * 0.18; // front-outer quadrant, not the arm's mid-depth
         const pos = s.geometry.attributes.position;
         const v = new THREE.Vector3();
-        const best = new THREE.Vector3(wc.x + dir * wsz.x * 0.4, sampleY, sampleZ);
-        let bestScore = -Infinity;
-        for (let i = 0; i < pos.count; i++) {
-          v.fromBufferAttribute(pos, i).applyMatrix4(s.matrixWorld);
-          if (Math.abs(v.y - sampleY) > wsz.y * 0.06) continue;
-          if (Math.abs(v.z - sampleZ) > wsz.z * 0.12) continue;
-          const score = v.x * dir;
-          if (score > bestScore) {
-            bestScore = score;
-            best.copy(v);
+        // Face mostly sideways with a slight forward bias; "up" follows the
+        // hanging arm's lean.
+        const facing = new THREE.Vector3(dir, 0, 0.35).normalize();
+        const armUp = new THREE.Vector3(-dir * 0.28, 0.95, 0).normalize();
+        // Matrix4.lookAt points +z from target toward eye, and DecalGeometry's
+        // readable face is the projector's +z — so the eye sits outward.
+        const lookM = new THREE.Matrix4().lookAt(facing, new THREE.Vector3(), armUp);
+        const orientation = new THREE.Euler().setFromRotationMatrix(lookM);
+        const pw = wsz.x * 0.5;
+        for (let slot = 0; slot < SLEEVE_SLOTS; slot++) {
+          // Evenly spaced from just below the shoulder seam to above the cuff.
+          const yi = wc.y + wsz.y * (0.28 - 0.13 * slot);
+          const yTol = wsz.y * 0.06;
+          // The arm leans, so find its depth range at this height first...
+          let zMin = Infinity;
+          let zMax = -Infinity;
+          for (let i = 0; i < pos.count; i++) {
+            v.fromBufferAttribute(pos, i).applyMatrix4(s.matrixWorld);
+            if (Math.abs(v.y - yi) > yTol) continue;
+            if (v.z < zMin) zMin = v.z;
+            if (v.z > zMax) zMax = v.z;
           }
+          if (!Number.isFinite(zMin)) continue;
+          const zc = (zMin + zMax) / 2;
+          const zTol = (zMax - zMin) * 0.45;
+          // ...then take the outermost surface point near the arm's centerline.
+          const best = new THREE.Vector3(wc.x + dir * wsz.x * 0.4, yi, zc);
+          let bestScore = -Infinity;
+          for (let i = 0; i < pos.count; i++) {
+            v.fromBufferAttribute(pos, i).applyMatrix4(s.matrixWorld);
+            if (Math.abs(v.y - yi) > yTol || Math.abs(v.z - zc) > zTol) continue;
+            const score = v.x * dir;
+            if (score > bestScore) {
+              bestScore = score;
+              best.copy(v);
+            }
+          }
+          // The scanned vertex fixes the outward x/z only; pin the height to
+          // the slot's exact y so the numbers space evenly down the arm.
+          best.y = yi;
+          addDecal(s, sleeveTextures[slot], best, orientation, new THREE.Vector3(pw, pw * 0.85, pw * 1.2), facing);
         }
-        // Face outward with a forward bias so the strip reads at a front
-        // three-quarter view; "up" follows the hanging arm's lean.
-        const facing = new THREE.Vector3(dir, 0, 0.55).normalize();
-        const armUp = new THREE.Vector3(-dir * 0.3, 0.95, 0).normalize();
-        const lookM = new THREE.Matrix4().lookAt(new THREE.Vector3(), facing, armUp);
-        const worldQuat = new THREE.Quaternion().setFromRotationMatrix(lookM);
-        const worldPos = best.clone().addScaledVector(facing, wsz.x * 0.02);
-        plane.position.copy(root.worldToLocal(worldPos));
-        const rootQuat = new THREE.Quaternion();
-        root.getWorldQuaternion(rootQuat);
-        plane.quaternion.copy(rootQuat.invert().multiply(worldQuat));
-        root.add(plane);
       }
 
-      // Front chest artwork sitting ON the panel surface (facing +z). The
-      // panel curves, so sample the surface depth at the exact target spot
-      // instead of using the panel's frontmost bulge (which made art float).
-      const addFrontPlane = (panelName: string, canvas: HTMLCanvasElement, wFrac: number, xFrac: number, yFrac: number) => {
+      // Front chest artwork projected onto the panel surface (facing +z). The
+      // panel curves, so sample the surface depth at the exact target spot.
+      const addFrontDecal = (panelName: string, canvas: HTMLCanvasElement, wFrac: number, xFrac: number, yFrac: number) => {
         const panel = byName[panelName];
         if (!panel) return null;
-        const pb = partBoxInRoot(panel, root);
+        const pb = new THREE.Box3().setFromObject(panel);
         const ps = pb.getSize(new THREE.Vector3());
         const pc = pb.getCenter(new THREE.Vector3());
         const tx = pc.x + ps.x * xFrac;
         const ty = pc.y + ps.y * yFrac;
-        const toRoot = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(panel.matrixWorld);
         const posA = panel.geometry.attributes.position;
         const v = new THREE.Vector3();
         // Frontmost surface z among vertices near a given (x, y) spot.
         const surfZ = (x: number, y: number, rad: number) => {
           let maxZ = -Infinity;
           for (let i = 0; i < posA.count; i++) {
-            v.fromBufferAttribute(posA, i).applyMatrix4(toRoot);
+            v.fromBufferAttribute(posA, i).applyMatrix4(panel.matrixWorld);
             if (Math.abs(v.x - x) > rad || Math.abs(v.y - y) > rad) continue;
             if (v.z > maxZ) maxZ = v.z;
           }
@@ -683,27 +739,28 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = 8;
-        const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, w * (canvas.height / canvas.width)), mat);
-        plane.renderOrder = 3;
-        plane.position.set(tx, ty, z + ps.z * 0.008);
-        // Yaw the plane to follow the chest's curve at this spot.
+        // Yaw the projection to follow the chest's curve at this spot.
+        let yaw = 0;
         if (zL > -Infinity && zR > -Infinity) {
           const dzdx = (zR - zL) / (rad * 2);
-          plane.rotation.y = Math.atan2(-dzdx, 1);
+          yaw = Math.atan2(-dzdx, 1);
         }
-        root.add(plane);
-        return { plane, texture };
+        const decal = addDecal(
+          panel,
+          texture,
+          new THREE.Vector3(tx, ty, z),
+          new THREE.Euler(0, yaw, 0),
+          new THREE.Vector3(w, w * (canvas.height / canvas.width), Math.max(w * 0.8, ps.z * 0.3)),
+          new THREE.Vector3(0, 0, 1),
+        );
+        return { decal, texture };
       };
 
       // Gold MK crest on the wearer-left chest (front_body_L, viewer-right).
       const badgeCanvas = document.createElement("canvas");
       badgeCanvas.width = 320;
       badgeCanvas.height = 360;
-      const badgeArt = addFrontPlane("front_body_L", badgeCanvas, 0.32, -0.02, 0.11);
-      const badgeTex = badgeArt?.texture ?? null;
-      // Swing the crest away with the wool panel when the jacket opens.
-      if (badgeArt && rightFlap) rightFlap.attach(badgeArt.plane);
+      const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.42, -0.02, 0.2);
       void loadCrest().then((crest) => {
         if (!crest) return;
         const bctx = badgeCanvas.getContext("2d")!;
@@ -716,7 +773,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         bctx.filter = "none";
         bctx.globalAlpha = 1;
         bctx.drawImage(crest, (badgeCanvas.width - cw) / 2, (badgeCanvas.height - chh) / 2, cw, chh);
-        if (badgeTex) badgeTex.needsUpdate = true;
+        if (badgeArt) badgeArt.texture.needsUpdate = true;
       });
 
       // MANOIR / KITS wordmark on the wearer-right chest (front_body_R).
@@ -726,163 +783,21 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const wctx = wordCanvas.getContext("2d")!;
       wctx.textAlign = "center";
       wctx.textBaseline = "middle";
-      wctx.font = "800 62px 'League Spartan', sans-serif";
-      outlinedText(wctx, "MANOIR", wordCanvas.width / 2, 78, 62, CHEST_FILL, 320);
-      outlinedText(wctx, "KITS", wordCanvas.width / 2, 150, 62, CHEST_FILL, 320);
-      const wordArt = addFrontPlane("front_body_R", wordCanvas, 0.5, -0.05, 0.16);
-      if (wordArt && leftFlap) leftFlap.attach(wordArt.plane);
-      // Exterior art is hidden while the jacket is open: it lives on the
-      // outside of the swung-back panels, and the flat planes would peek
-      // past the flap edges as floating slivers.
-      const chestArt: THREE.Mesh[] = [];
-      if (badgeArt) chestArt.push(badgeArt.plane);
-      if (wordArt) chestArt.push(wordArt.plane);
-
-      // Inside patches, revealed only when the jacket is open. Each one sits on
-      // a real interior surface (found by scanning mesh vertices) instead of
-      // floating at the lining's bounding box.
-      const insidePatches: THREE.Mesh[] = [];
-      const insideBox = partBoxInRoot(byName["inside_body_button"], root);
-      const inC = insideBox.getCenter(new THREE.Vector3());
-      const inS = insideBox.getSize(new THREE.Vector3());
-      const makePatchPlane = (canvas: HTMLCanvasElement, w: number) => {
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.anisotropy = 8;
-        const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, w * (canvas.height / canvas.width)), mat);
-        plane.renderOrder = 6;
-        plane.visible = false;
-        root.add(plane);
-        insidePatches.push(plane);
-        return { plane, texture };
-      };
-      // Extreme surface z of a mesh near (x, y) in root-local space. An
-      // optional zCap restricts the scan (e.g. to the back half of a shell).
-      const surfaceZAt = (mesh: THREE.Mesh, x: number, y: number, radX: number, radY: number, mode: "min" | "max", zCap?: number) => {
-        const toRootM = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(mesh.matrixWorld);
-        const pA = mesh.geometry.attributes.position;
-        const vv = new THREE.Vector3();
-        let zBest = mode === "min" ? Infinity : -Infinity;
-        for (let i = 0; i < pA.count; i++) {
-          vv.fromBufferAttribute(pA, i).applyMatrix4(toRootM);
-          if (Math.abs(vv.x - x) > radX || Math.abs(vv.y - y) > radY) continue;
-          if (zCap !== undefined && vv.z > zCap) continue;
-          if (mode === "min" ? vv.z < zBest : vv.z > zBest) zBest = vv.z;
-        }
-        return Number.isFinite(zBest) ? zBest : null;
-      };
-
-      // All-black leather neck label right under the collar (white print),
-      // matching the physical jacket's "MANOIR KITS / www.manoirkits.com" tag.
-      const tagCanvas = document.createElement("canvas");
-      tagCanvas.width = 460;
-      tagCanvas.height = 250;
-      const tg = tagCanvas.getContext("2d")!;
-      tg.fillStyle = "#131313";
-      tg.beginPath();
-      tg.roundRect(8, 8, tagCanvas.width - 16, tagCanvas.height - 16, 18);
-      tg.fill();
-      // Subtle leather sheen + stitch line, no gold — the label is all black.
-      const sheen = tg.createLinearGradient(0, 0, tagCanvas.width, tagCanvas.height);
-      sheen.addColorStop(0, "rgba(255,255,255,0.06)");
-      sheen.addColorStop(0.5, "rgba(255,255,255,0)");
-      sheen.addColorStop(1, "rgba(255,255,255,0.04)");
-      tg.fillStyle = sheen;
-      tg.beginPath();
-      tg.roundRect(8, 8, tagCanvas.width - 16, tagCanvas.height - 16, 18);
-      tg.fill();
-      tg.strokeStyle = "#2c2c2c";
-      tg.lineWidth = 2;
-      tg.setLineDash([7, 5]);
-      tg.beginPath();
-      tg.roundRect(20, 20, tagCanvas.width - 40, tagCanvas.height - 40, 12);
-      tg.stroke();
-      tg.setLineDash([]);
-      tg.textAlign = "center";
-      tg.textBaseline = "middle";
-      tg.fillStyle = "#f4f2ec";
-      tg.font = "800 52px 'League Spartan', sans-serif";
-      tg.fillText("MANOIR KITS", tagCanvas.width / 2, 104);
-      tg.font = "600 33px 'League Spartan', sans-serif";
-      tg.fillText("www.manoirkits.com", tagCanvas.width / 2, 162);
-      // Sewn on the interior back wall, centered just under the collar. Scan
-      // only the back half of the lining shell (zCap) and take its innermost
-      // surface, so the tag sits inside the jacket, not inside the wall.
-      {
-        const tagY = inC.y + inS.y * 0.32;
-        const zBack = surfaceZAt(byName["inside_body_button"], inC.x, tagY, inS.x * 0.14, inS.y * 0.1, "max", inC.z);
-        const tag = makePatchPlane(tagCanvas, inS.x * 0.15);
-        tag.plane.position.set(inC.x, tagY, (zBack ?? insideBox.min.z) + inS.z * 0.02);
-      }
-
-      // Rectangular gold-bordered woven patch low on the wearer-left lining
-      // (behind the pocket): MANOIR KITS / MK crest / ONE OF ONE / LEGEND'S EDITION.
-      const ipCanvas = document.createElement("canvas");
-      ipCanvas.width = 460;
-      ipCanvas.height = 610;
-      const drawPocketPatch = (crest: HTMLCanvasElement | null) => {
-        const ic = ipCanvas.getContext("2d")!;
-        ic.clearRect(0, 0, ipCanvas.width, ipCanvas.height);
-        // Black twill base with a thin dark edge and the gold frame inset.
-        ic.fillStyle = "#101010";
-        ic.beginPath();
-        ic.roundRect(4, 4, ipCanvas.width - 8, ipCanvas.height - 8, 14);
-        ic.fill();
-        ic.strokeStyle = BRAND_GOLD;
-        ic.lineWidth = 7;
-        ic.strokeRect(30, 30, ipCanvas.width - 60, ipCanvas.height - 60);
-        ic.textAlign = "center";
-        ic.textBaseline = "middle";
-        ic.fillStyle = BRAND_GOLD;
-        ic.font = "800 54px 'League Spartan', sans-serif";
-        ic.fillText("MANOIR KITS", ipCanvas.width / 2, 98);
-        if (crest) {
-          const cw = ipCanvas.width * 0.5;
-          const chh = cw * (crest.height / crest.width);
-          ic.drawImage(crest, (ipCanvas.width - cw) / 2, 300 - chh / 2, cw, chh);
-        }
-        ic.fillStyle = "#ece6d8";
-        ic.font = "800 52px 'League Spartan', sans-serif";
-        ic.fillText("ONE OF ONE", ipCanvas.width / 2, 478);
-        ic.fillStyle = BRAND_GOLD;
-        ic.font = "800 38px 'League Spartan', sans-serif";
-        ic.fillText("LEGEND'S EDITION", ipCanvas.width / 2, 538);
-      };
-      drawPocketPatch(null);
-      // Sewn on the quilted interior, wearer-left side at pocket height —
-      // squarely visible through the opened front, like the reference photo.
-      let ipTex: THREE.CanvasTexture | null = null;
-      {
-        const px = inC.x + inS.x * 0.09;
-        const py = inC.y - inS.y * 0.3; // just above the hem, like the photo
-        const zBack = surfaceZAt(byName["inside_body_button"], px, py, inS.x * 0.12, inS.y * 0.12, "max", inC.z);
-        const ip = makePatchPlane(ipCanvas, inS.x * 0.16);
-        ipTex = ip.texture;
-        ip.plane.position.set(px, py, (zBack ?? insideBox.min.z) + inS.z * 0.02);
-        // Slight yaw so it follows the interior's curve toward the side.
-        ip.plane.rotation.y = -0.18;
-      }
-      void loadCrest().then((crest) => {
-        if (!crest) return;
-        drawPocketPatch(crest);
-        if (ipTex) ipTex.needsUpdate = true;
-      });
+      wctx.font = "400 62px 'League Spartan', sans-serif";
+      outlinedText(wctx, "MANOIR", wordCanvas.width / 2, 78, 62, CHEST_FILL, 320, 0.1);
+      outlinedText(wctx, "KITS", wordCanvas.width / 2, 150, 62, CHEST_FILL, 320, 0.1);
+      // Same height as the chest badge on the opposite panel.
+      addFrontDecal("front_body_R", wordCanvas, 0.62, -0.05, 0.2);
 
       loadedRef.current = {
         materials,
-        leftFlap,
-        rightFlap,
-        back: { canvas: backCanvas, texture: backArt.texture },
-        sleeves: sleeveArt,
-        insidePatches,
-        chestArt,
+        back: { canvas: backCanvas, texture: backTexture },
+        sleeves: { canvases: sleeveCanvases, textures: sleeveTextures },
       };
       redrawDesign();
     });
 
     const onPointerDown = (e: PointerEvent) => {
-      alignRef.current = false; // user takes over the camera
       dragRef.current.active = true;
       dragRef.current.x = e.clientX;
       dragRef.current.y = e.clientY;
@@ -899,7 +814,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
     const onPointerUp = () => (dragRef.current.active = false);
     const onWheel = (e: WheelEvent) => {
-      alignRef.current = false;
       camera.position.z = THREE.MathUtils.clamp(camera.position.z + e.deltaY * 0.003, 3.2, 9);
     };
     mount.addEventListener("pointerdown", onPointerDown);
@@ -916,35 +830,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
     window.addEventListener("resize", onResize);
 
-    const clock = new THREE.Clock();
     const animate = () => {
       const d = dragRef.current;
-      // Time-based easing so the animation runs at the same speed regardless
-      // of frame rate (throttled tabs, high-refresh displays, ...).
-      const dt = Math.min(clock.getDelta(), 0.25);
-      const k = 1 - Math.exp(-5 * dt); // ≈0.08/frame at 60fps
-      // Inside view: face front and open the flaps; else return to rest.
-      const openTarget = insideRef.current ? 1 : 0;
-      openRef.current += (openTarget - openRef.current) * k;
-      if (insideRef.current && alignRef.current) {
-        d.rotX += (-0.03 - d.rotX) * k;
-        d.rotY += (0 - d.rotY) * k;
-        camera.position.z += (6.3 - camera.position.z) * k;
-      }
-      const loaded = loadedRef.current;
-      if (loaded) {
-        const a = (openRef.current * 55 * Math.PI) / 180;
-        if (loaded.leftFlap) loaded.leftFlap.rotation.y = -a;
-        if (loaded.rightFlap) loaded.rightFlap.rotation.y = a;
-        // Peel the lining's front away in sync with the flaps so the open
-        // jacket shows its quilted interior, not a closed black shell.
-        liningClip.constant = THREE.MathUtils.lerp(0.6, -0.02, openRef.current);
-        // Inside patches only show once the jacket has opened enough, and the
-        // exterior chest art hides so it can't peek past the swung panels.
-        const open = openRef.current > 0.5;
-        for (const p of loaded.insidePatches) p.visible = open;
-        for (const p of loaded.chestArt) p.visible = !open;
-      }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
       renderer.render(scene, camera);
       frameRef.current = requestAnimationFrame(animate);

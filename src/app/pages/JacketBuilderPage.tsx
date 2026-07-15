@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronRight, X, Star } from "lucide-react";
-import { VarsityJacketViewer, type BackDesign } from "../components/VarsityJacketViewer";
+import { VarsityJacketViewer, renderNeckLabel, renderInteriorPatch, type BackDesign } from "../components/VarsityJacketViewer";
 import { useNavigate } from "react-router-dom";
 
 const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
@@ -199,7 +199,22 @@ export function JacketBuilderPage() {
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [wishlisted, setWishlisted] = useState(false);
-  const [insideView, setInsideView] = useState(false);
+  const [showInterior, setShowInterior] = useState(false);
+  const [interiorImages, setInteriorImages] = useState<{ label: string; patch: string } | null>(null);
+
+  // Render the interior patch artwork (shared with the 3D viewer's canvas
+  // painters) into images the first time the Interior Details card opens.
+  useEffect(() => {
+    if (!showInterior || interiorImages) return;
+    let active = true;
+    void renderInteriorPatch().then((patch) => {
+      if (!active) return;
+      setInteriorImages({ label: renderNeckLabel().toDataURL(), patch: patch.toDataURL() });
+    });
+    return () => {
+      active = false;
+    };
+  }, [showInterior, interiorImages]);
 
   const [backStars, setBackStars] = useState(5);
   const [backNumber, setBackNumber] = useState("10");
@@ -531,20 +546,44 @@ export function JacketBuilderPage() {
             pocketColor={pocketColor}
             liningColor="#141414"
             backDesign={backDesign}
-            insideView={insideView}
           />
 
-          {/* Inside view toggle */}
+          {/* Interior details card */}
           <button
-            onClick={() => setInsideView((v) => !v)}
+            onClick={() => setShowInterior((v) => !v)}
             className={`absolute top-4 right-4 px-4 py-2 text-[10px] tracking-widest uppercase border transition-colors ${
-              insideView
+              showInterior
                 ? "bg-black text-white border-black"
                 : "bg-white text-gray-700 border-gray-300 hover:border-black"
             }`}
           >
-            {insideView ? "Close Inside View" : "View Inside"}
+            {showInterior ? "Close Details" : "Interior Details"}
           </button>
+          {showInterior && (
+            <div className="absolute top-14 right-4 w-60 bg-white border border-gray-200 shadow-xl p-4 space-y-4 z-10">
+              <p className="text-[10px] tracking-widest uppercase text-gray-400">Sewn inside every jacket</p>
+              <div>
+                <div className="bg-[#1a1a1a] p-3 flex items-center justify-center rounded-sm">
+                  {interiorImages ? (
+                    <img src={interiorImages.label} alt="Neck label" className="w-40" />
+                  ) : (
+                    <div className="w-40 h-20" />
+                  )}
+                </div>
+                <p className="mt-1.5 text-[10px] tracking-widest uppercase text-gray-500">Leather neck label</p>
+              </div>
+              <div>
+                <div className="bg-[#1a1a1a] p-3 flex items-center justify-center rounded-sm">
+                  {interiorImages ? (
+                    <img src={interiorImages.patch} alt="One-of-one interior patch" className="w-32" />
+                  ) : (
+                    <div className="w-32 h-40" />
+                  )}
+                </div>
+                <p className="mt-1.5 text-[10px] tracking-widest uppercase text-gray-500">One-of-one lining patch</p>
+              </div>
+            </div>
+          )}
 
           {/* City picker + drag hint */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">

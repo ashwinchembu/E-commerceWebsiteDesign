@@ -423,14 +423,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const liningClip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.6);
     materials.lining.clippingPlanes = [liningClip];
 
-    // Trim the wool panels and snap strip dead-straight at the hem line (the
-    // model's placket tongue hangs over the ribbed hem otherwise). The plane
-    // is re-derived from the model's rotation every frame so the cut stays
-    // glued to the hem as the jacket turns.
-    const hemClipLocal = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.86);
-    const hemClip = hemClipLocal.clone();
-    materials.body.clippingPlanes = [hemClip];
-    materials.snap.clippingPlanes = [hemClip];
 
     let disposed = false;
     const dracoLoader = new DRACOLoader();
@@ -488,10 +480,30 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         }
         g.setIndex(keep);
       };
-      // The wool panels and snap strip are trimmed by the hem clipping plane
-      // instead (clean straight edge). The lining keeps its geometry except
-      // for its own placket tongue.
-      removeHemTongue(byName["inside_body_button"], false);
+      // Clamp any panel vertex below the hem line up to it: the placket
+      // tongue collapses flat, the mesh stays continuous (no holes or ragged
+      // cut edges), and the flap bottoms end flush with the hem when open.
+      const clampHem = (mesh: THREE.Mesh | undefined, tongueOnly: boolean) => {
+        if (!mesh) return;
+        const posA = mesh.geometry.attributes.position as THREE.BufferAttribute;
+        mesh.updateWorldMatrix(true, true);
+        const toLocal = mesh.matrixWorld.clone().invert();
+        const vv = new THREE.Vector3();
+        for (let i = 0; i < posA.count; i++) {
+          vv.fromBufferAttribute(posA, i).applyMatrix4(mesh.matrixWorld);
+          if (vv.y >= -0.86) continue;
+          if (tongueOnly && !(Math.abs(vv.x) < 0.3 && vv.z > 0.05)) continue;
+          vv.y = -0.86;
+          vv.applyMatrix4(toLocal);
+          posA.setXYZ(i, vv.x, vv.y, vv.z);
+        }
+        posA.needsUpdate = true;
+      };
+      clampHem(byName["front_body_L"], false);
+      clampHem(byName["front_body_R"], false);
+      clampHem(byName["inside_body_button"], true);
+      // The tongue's snaps are whole blobs below the line — remove them.
+      removeHemTongue(byName["button"], false);
 
       // Set up open-front pivots: reparent each front panel (and its pocket)
       // under a hinge group at the placket so it can swing open like a door.
@@ -883,8 +895,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         for (const p of loaded.chestArt) p.visible = !open;
       }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
-      modelRoot.updateMatrixWorld();
-      hemClip.copy(hemClipLocal).applyMatrix4(modelRoot.matrixWorld);
       renderer.render(scene, camera);
       frameRef.current = requestAnimationFrame(animate);
     };

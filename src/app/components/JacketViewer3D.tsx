@@ -1599,6 +1599,51 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 /**
+ * Draws a rounded patch base with a drop shadow and a top→bottom bevel so it
+ * reads as a raised, embroidered patch rather than a flat sticker.
+ */
+function patchBase(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+  fill: string,
+  stroke?: string,
+  strokeWidth = 6,
+) {
+  ctx.save();
+  ctx.shadowColor = "rgba(0,0,0,0.55)";
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 15;
+  ctx.fillStyle = fill;
+  roundRect(ctx, x, y, w, h, r);
+  ctx.fill();
+  ctx.restore();
+
+  // Bevel: light along the top edge, shade along the bottom.
+  ctx.save();
+  roundRect(ctx, x, y, w, h, r);
+  ctx.clip();
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, "rgba(255,255,255,0.16)");
+  g.addColorStop(0.14, "rgba(255,255,255,0)");
+  g.addColorStop(0.86, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.3)");
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+  ctx.restore();
+
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = strokeWidth;
+    roundRect(ctx, x, y, w, h, r);
+    ctx.stroke();
+  }
+}
+
+/**
  * The fixed "One of One · Legend's Edition" inside badge (per the real
  * jacket): a gold-bordered black patch carrying MANOIR KITS, the MK crest,
  * and ONE OF ONE / LEGEND'S EDITION, tucked against the inside back of the

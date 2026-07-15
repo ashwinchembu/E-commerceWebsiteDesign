@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChevronRight, X, Star } from "lucide-react";
-import { JacketViewer3D, type BackDesign } from "../components/JacketViewer3D";
+import { VarsityJacketViewer, type BackDesign } from "../components/VarsityJacketViewer";
 import { useNavigate } from "react-router-dom";
 
 const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
@@ -522,7 +522,7 @@ export function JacketBuilderPage() {
 
         {/* Jacket preview */}
         <div className="flex-1 relative bg-[#f0ede8] overflow-hidden">
-          <JacketViewer3D
+          <VarsityJacketViewer
             bodyColor={bodyColor}
             sleeveColor={sleeveColor}
             leatherType={leatherType}
@@ -530,7 +530,6 @@ export function JacketBuilderPage() {
             snapColor={snapColor}
             pocketColor={pocketColor}
             liningColor="#141414"
-            insertColor={bodyColor}
             backDesign={backDesign}
             insideView={insideView}
           />

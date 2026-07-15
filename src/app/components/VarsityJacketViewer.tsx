@@ -185,6 +185,7 @@ type Loaded = {
   back: Decal;
   sleeves: Decal;
   insidePatches: THREE.Mesh[]; // neck tag + inside-pocket badge, shown when open
+  chestArt: THREE.Mesh[]; // exterior crest + wordmark, hidden while open
 };
 
 /** A part's bounding box expressed in the model root's local space. */
@@ -261,12 +262,12 @@ function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
     }),
     lining: new THREE.MeshPhysicalMaterial({
       color: colors.liningColor,
-      roughness: 0.42, // satiny sheen so the interior reads as lining, not wool
+      roughness: 0.58, // soft satin: sheen without the liquid-metal highlights
       metalness: 0,
-      sheen: 0.6,
-      sheenRoughness: 0.5,
+      sheen: 0.35,
+      sheenRoughness: 0.6,
       sheenColor: new THREE.Color("#3a3a3a"),
-      envMapIntensity: 0.7,
+      envMapIntensity: 0.35,
       normalMap: makeQuiltNormalMap(),
       normalScale: new THREE.Vector2(0.16, 0.16),
       side: THREE.DoubleSide,
@@ -667,6 +668,12 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       outlinedText(wctx, "KITS", wordCanvas.width / 2, 150, 62, CHEST_FILL, 320);
       const wordArt = addFrontPlane("front_body_R", wordCanvas, 0.38, -0.05, 0.16);
       if (wordArt && leftFlap) leftFlap.attach(wordArt.plane);
+      // Exterior art is hidden while the jacket is open: it lives on the
+      // outside of the swung-back panels, and the flat planes would peek
+      // past the flap edges as floating slivers.
+      const chestArt: THREE.Mesh[] = [];
+      if (badgeArt) chestArt.push(badgeArt.plane);
+      if (wordArt) chestArt.push(wordArt.plane);
 
       // Inside patches, revealed only when the jacket is open. Each one sits on
       // a real interior surface (found by scanning mesh vertices) instead of
@@ -780,24 +787,18 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         ic.fillText("LEGEND'S EDITION", ipCanvas.width / 2, 538);
       };
       drawPocketPatch(null);
-      // Sewn on the inner face of the wearer-left front panel, at pocket
-      // height, facing inward — it rides the flap as the jacket swings open.
+      // Sewn on the quilted interior, wearer-left side at pocket height —
+      // squarely visible through the opened front, like the reference photo.
       let ipTex: THREE.CanvasTexture | null = null;
       {
-        const panel = byName["front_body_L"];
-        if (panel) {
-          const pb = partBoxInRoot(panel, root);
-          const ps = pb.getSize(new THREE.Vector3());
-          const pc = pb.getCenter(new THREE.Vector3());
-          const px = pc.x + ps.x * 0.02;
-          const py = pc.y - ps.y * 0.14;
-          const zInner = surfaceZAt(panel, px, py, ps.x * 0.2, ps.y * 0.12, "min");
-          const ip = makePatchPlane(ipCanvas, ps.x * 0.34);
-          ipTex = ip.texture;
-          ip.plane.position.set(px, py, (zInner ?? pb.min.z) - ps.z * 0.02);
-          ip.plane.rotation.y = Math.PI;
-          if (rightFlap) rightFlap.attach(ip.plane);
-        }
+        const px = inC.x + inS.x * 0.09;
+        const py = inC.y - inS.y * 0.2;
+        const zBack = surfaceZAt(byName["inside_body_button"], px, py, inS.x * 0.12, inS.y * 0.12, "max", inC.z);
+        const ip = makePatchPlane(ipCanvas, inS.x * 0.16);
+        ipTex = ip.texture;
+        ip.plane.position.set(px, py, (zBack ?? insideBox.min.z) + inS.z * 0.02);
+        // Slight yaw so it follows the interior's curve toward the side.
+        ip.plane.rotation.y = -0.18;
       }
       void loadCrest().then((crest) => {
         if (!crest) return;
@@ -812,6 +813,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         back: { canvas: backCanvas, texture: backArt.texture },
         sleeves: sleeveArt,
         insidePatches,
+        chestArt,
       };
       redrawDesign();
     });
@@ -864,21 +866,21 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       if (insideRef.current) {
         d.rotX += (-0.03 - d.rotX) * k;
         d.rotY += (0 - d.rotY) * k;
-        camera.position.z += (6.9 - camera.position.z) * k;
+        camera.position.z += (6.3 - camera.position.z) * k;
       }
       const loaded = loadedRef.current;
       if (loaded) {
-        const a = (openRef.current * 128 * Math.PI) / 180;
+        const a = (openRef.current * 55 * Math.PI) / 180;
         if (loaded.leftFlap) loaded.leftFlap.rotation.y = -a;
         if (loaded.rightFlap) loaded.rightFlap.rotation.y = a;
         // Peel the lining's front away in sync with the flaps so the open
         // jacket shows its quilted interior, not a closed black shell.
         liningClip.constant = THREE.MathUtils.lerp(0.6, -0.02, openRef.current);
-        // Inside patches only show once the jacket has opened enough.
-        if (loaded.insidePatches) {
-          const show = openRef.current > 0.5;
-          for (const p of loaded.insidePatches) p.visible = show;
-        }
+        // Inside patches only show once the jacket has opened enough, and the
+        // exterior chest art hides so it can't peek past the swung panels.
+        const open = openRef.current > 0.5;
+        for (const p of loaded.insidePatches) p.visible = open;
+        for (const p of loaded.chestArt) p.visible = !open;
       }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
       modelRoot.updateMatrixWorld();

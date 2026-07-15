@@ -229,6 +229,7 @@ function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
       sheenRoughness: 0.95,
       sheenColor: new THREE.Color("#555555"),
       envMapIntensity: 0.05,
+      side: THREE.DoubleSide, // panel backs show when the jacket opens
     }),
     sleeve: new THREE.MeshPhysicalMaterial({
       color: colors.sleeveColor,
@@ -256,6 +257,7 @@ function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
       clearcoat: 0.25,
       clearcoatRoughness: 0.6,
       envMapIntensity: 0.5,
+      side: THREE.DoubleSide,
     }),
     lining: new THREE.MeshPhysicalMaterial({
       color: colors.liningColor,
@@ -385,6 +387,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
+    renderer.localClippingEnabled = true;
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -412,6 +415,21 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     const materials = makeMaterials(propsRef.current);
     applyLeatherType(materials, propsRef.current.leatherType);
+
+    // When the jacket opens, this plane peels the lining's front away so the
+    // camera sees into the quilted interior instead of a closed black shell.
+    // Keeps points with z <= constant; constant animates 0.6 (no clip) -> 0.
+    const liningClip = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.6);
+    materials.lining.clippingPlanes = [liningClip];
+
+    // Trim the wool panels and snap strip dead-straight at the hem line (the
+    // model's placket tongue hangs over the ribbed hem otherwise). The plane
+    // is re-derived from the model's rotation every frame so the cut stays
+    // glued to the hem as the jacket turns.
+    const hemClipLocal = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.86);
+    const hemClip = hemClipLocal.clone();
+    materials.body.clippingPlanes = [hemClip];
+    materials.snap.clippingPlanes = [hemClip];
 
     let disposed = false;
     const dracoLoader = new DRACOLoader();
@@ -447,6 +465,33 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       modelRoot.add(root);
       modelRoot.updateWorldMatrix(true, true);
 
+      // The model's placket tongue (plus its snaps) hangs down over the ribbed
+      // hem. The physical jacket has a clean hem, so drop those triangles:
+      // anything on the front placket strip below the hem line.
+      const removeHemTongue = (mesh: THREE.Mesh | undefined, fullWidth: boolean) => {
+        if (!mesh || !mesh.geometry.index) return;
+        const g = mesh.geometry;
+        const posA = g.attributes.position;
+        mesh.updateWorldMatrix(true, true);
+        const vv = new THREE.Vector3();
+        const bad = new Uint8Array(posA.count);
+        for (let i = 0; i < posA.count; i++) {
+          vv.fromBufferAttribute(posA, i).applyMatrix4(mesh.matrixWorld);
+          if (vv.y < -0.8 && vv.z > 0.05 && (fullWidth || Math.abs(vv.x) < 0.25)) bad[i] = 1;
+        }
+        const idx = g.index.array;
+        const keep: number[] = [];
+        for (let t = 0; t < idx.length; t += 3) {
+          if (bad[idx[t]] || bad[idx[t + 1]] || bad[idx[t + 2]]) continue;
+          keep.push(idx[t], idx[t + 1], idx[t + 2]);
+        }
+        g.setIndex(keep);
+      };
+      // The wool panels and snap strip are trimmed by the hem clipping plane
+      // instead (clean straight edge). The lining keeps its geometry except
+      // for its own placket tongue.
+      removeHemTongue(byName["inside_body_button"], false);
+
       // Set up open-front pivots: reparent each front panel (and its pocket)
       // under a hinge group at the placket so it can swing open like a door.
       const worldBox = new THREE.Box3().setFromObject(root);
@@ -472,6 +517,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       // front_body_R sits on -x (viewer left); hinge at its min-x side seam.
       const rightFlap = makeFlap(byName["front_body_L"], byName["Pockets_L"], "maxx");
       const leftFlap = makeFlap(byName["front_body_R"], byName["Pockets_R"], "minx");
+      // The snap strip runs down the placket; it belongs to the wearer-left
+      // panel, so it swings open with that flap instead of floating mid-air.
+      if (byName["button"] && rightFlap) rightFlap.attach(byName["button"]);
 
       // Back design: a flat artwork plane just off the back panel surface.
       const backCanvas = document.createElement("canvas");
@@ -620,24 +668,39 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const wordArt = addFrontPlane("front_body_R", wordCanvas, 0.38, -0.05, 0.16);
       if (wordArt && leftFlap) leftFlap.attach(wordArt.plane);
 
-      // Inside patches on the lining, revealed only when the jacket is open.
+      // Inside patches, revealed only when the jacket is open. Each one sits on
+      // a real interior surface (found by scanning mesh vertices) instead of
+      // floating at the lining's bounding box.
       const insidePatches: THREE.Mesh[] = [];
       const insideBox = partBoxInRoot(byName["inside_body_button"], root);
       const inC = insideBox.getCenter(new THREE.Vector3());
       const inS = insideBox.getSize(new THREE.Vector3());
-      const addInsidePlane = (canvas: HTMLCanvasElement, wFrac: number, xFrac: number, yFrac: number) => {
+      const makePatchPlane = (canvas: HTMLCanvasElement, w: number) => {
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.anisotropy = 8;
         const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-        const w = inS.x * wFrac;
         const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, w * (canvas.height / canvas.width)), mat);
         plane.renderOrder = 6;
         plane.visible = false;
-        plane.position.set(inC.x + inS.x * xFrac, inC.y + inS.y * yFrac, insideBox.max.z + inS.z * 0.02);
         root.add(plane);
         insidePatches.push(plane);
-        return texture;
+        return { plane, texture };
+      };
+      // Extreme surface z of a mesh near (x, y) in root-local space. An
+      // optional zCap restricts the scan (e.g. to the back half of a shell).
+      const surfaceZAt = (mesh: THREE.Mesh, x: number, y: number, radX: number, radY: number, mode: "min" | "max", zCap?: number) => {
+        const toRootM = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(mesh.matrixWorld);
+        const pA = mesh.geometry.attributes.position;
+        const vv = new THREE.Vector3();
+        let zBest = mode === "min" ? Infinity : -Infinity;
+        for (let i = 0; i < pA.count; i++) {
+          vv.fromBufferAttribute(pA, i).applyMatrix4(toRootM);
+          if (Math.abs(vv.x - x) > radX || Math.abs(vv.y - y) > radY) continue;
+          if (zCap !== undefined && vv.z > zCap) continue;
+          if (mode === "min" ? vv.z < zBest : vv.z > zBest) zBest = vv.z;
+        }
+        return Number.isFinite(zBest) ? zBest : null;
       };
 
       // All-black leather neck label right under the collar (white print),
@@ -673,7 +736,15 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       tg.fillText("MANOIR KITS", tagCanvas.width / 2, 104);
       tg.font = "600 33px 'League Spartan', sans-serif";
       tg.fillText("www.manoirkits.com", tagCanvas.width / 2, 162);
-      addInsidePlane(tagCanvas, 0.15, 0, 0.36);
+      // Sewn on the interior back wall, centered just under the collar. Scan
+      // only the back half of the lining shell (zCap) and take its innermost
+      // surface, so the tag sits inside the jacket, not inside the wall.
+      {
+        const tagY = inC.y + inS.y * 0.32;
+        const zBack = surfaceZAt(byName["inside_body_button"], inC.x, tagY, inS.x * 0.14, inS.y * 0.1, "max", inC.z);
+        const tag = makePatchPlane(tagCanvas, inS.x * 0.15);
+        tag.plane.position.set(inC.x, tagY, (zBack ?? insideBox.min.z) + inS.z * 0.02);
+      }
 
       // Rectangular gold-bordered woven patch low on the wearer-left lining
       // (behind the pocket): MANOIR KITS / MK crest / ONE OF ONE / LEGEND'S EDITION.
@@ -709,7 +780,25 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         ic.fillText("LEGEND'S EDITION", ipCanvas.width / 2, 538);
       };
       drawPocketPatch(null);
-      const ipTex = addInsidePlane(ipCanvas, 0.16, 0.11, -0.18);
+      // Sewn on the inner face of the wearer-left front panel, at pocket
+      // height, facing inward — it rides the flap as the jacket swings open.
+      let ipTex: THREE.CanvasTexture | null = null;
+      {
+        const panel = byName["front_body_L"];
+        if (panel) {
+          const pb = partBoxInRoot(panel, root);
+          const ps = pb.getSize(new THREE.Vector3());
+          const pc = pb.getCenter(new THREE.Vector3());
+          const px = pc.x + ps.x * 0.02;
+          const py = pc.y - ps.y * 0.14;
+          const zInner = surfaceZAt(panel, px, py, ps.x * 0.2, ps.y * 0.12, "min");
+          const ip = makePatchPlane(ipCanvas, ps.x * 0.34);
+          ipTex = ip.texture;
+          ip.plane.position.set(px, py, (zInner ?? pb.min.z) - ps.z * 0.02);
+          ip.plane.rotation.y = Math.PI;
+          if (rightFlap) rightFlap.attach(ip.plane);
+        }
+      }
       void loadCrest().then((crest) => {
         if (!crest) return;
         drawPocketPatch(crest);
@@ -762,21 +851,29 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
     window.addEventListener("resize", onResize);
 
+    const clock = new THREE.Clock();
     const animate = () => {
       const d = dragRef.current;
+      // Time-based easing so the animation runs at the same speed regardless
+      // of frame rate (throttled tabs, high-refresh displays, ...).
+      const dt = Math.min(clock.getDelta(), 0.25);
+      const k = 1 - Math.exp(-5 * dt); // ≈0.08/frame at 60fps
       // Inside view: face front and open the flaps; else return to rest.
       const openTarget = insideRef.current ? 1 : 0;
-      openRef.current += (openTarget - openRef.current) * 0.08;
+      openRef.current += (openTarget - openRef.current) * k;
       if (insideRef.current) {
-        d.rotX += (-0.03 - d.rotX) * 0.08;
-        d.rotY += (0 - d.rotY) * 0.08;
-        camera.position.z += (6.2 - camera.position.z) * 0.08;
+        d.rotX += (-0.03 - d.rotX) * k;
+        d.rotY += (0 - d.rotY) * k;
+        camera.position.z += (6.9 - camera.position.z) * k;
       }
       const loaded = loadedRef.current;
       if (loaded) {
-        const a = (openRef.current * 52 * Math.PI) / 180;
+        const a = (openRef.current * 128 * Math.PI) / 180;
         if (loaded.leftFlap) loaded.leftFlap.rotation.y = -a;
         if (loaded.rightFlap) loaded.rightFlap.rotation.y = a;
+        // Peel the lining's front away in sync with the flaps so the open
+        // jacket shows its quilted interior, not a closed black shell.
+        liningClip.constant = THREE.MathUtils.lerp(0.6, -0.02, openRef.current);
         // Inside patches only show once the jacket has opened enough.
         if (loaded.insidePatches) {
           const show = openRef.current > 0.5;
@@ -784,6 +881,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         }
       }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
+      modelRoot.updateMatrixWorld();
+      hemClip.copy(hemClipLocal).applyMatrix4(modelRoot.matrixWorld);
       renderer.render(scene, camera);
       frameRef.current = requestAnimationFrame(animate);
     };

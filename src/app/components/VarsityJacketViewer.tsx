@@ -337,6 +337,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
   const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.0, rotX: -0.05 });
   const loadedRef = useRef<Loaded | null>(null);
   const insideRef = useRef(insideView);
+  const alignRef = useRef(insideView);
   const openRef = useRef(0);
   const frameRef = useRef(0);
   const propsRef = useRef(props);
@@ -361,6 +362,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
   useEffect(() => {
     insideRef.current = insideView;
+    // Auto-face the camera when entering the inside view; the user can then
+    // drag to rotate freely, which cancels the auto-align.
+    if (insideView) alignRef.current = true;
   }, [insideView]);
 
   const redrawDesign = () => {
@@ -534,6 +538,53 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       // panel, so it swings open with that flap instead of floating mid-air.
       if (byName["button"] && rightFlap) rightFlap.attach(byName["button"]);
 
+      // Split the collar's FRONT halves onto the flaps: a real collar attaches
+      // to the panels' top edges and spreads apart with them. The back of the
+      // collar stays put. Sub-meshes share the vertex buffers; only indices
+      // are partitioned.
+      const collar = byName["classic_collar"];
+      if (collar && collar.geometry.index && leftFlap && rightFlap) {
+        const cg = collar.geometry;
+        const posA = cg.attributes.position;
+        collar.updateWorldMatrix(true, true);
+        const vv = new THREE.Vector3();
+        const wxs = new Float32Array(posA.count);
+        const wzs = new Float32Array(posA.count);
+        for (let i = 0; i < posA.count; i++) {
+          vv.fromBufferAttribute(posA, i).applyMatrix4(collar.matrixWorld);
+          wxs[i] = vv.x;
+          wzs[i] = vv.z;
+        }
+        const idx = cg.index.array;
+        const backIdx: number[] = [];
+        const leftIdx: number[] = [];
+        const rightIdx: number[] = [];
+        for (let t = 0; t < idx.length; t += 3) {
+          const a = idx[t], b = idx[t + 1], c = idx[t + 2];
+          const cz = (wzs[a] + wzs[b] + wzs[c]) / 3;
+          const cx = (wxs[a] + wxs[b] + wxs[c]) / 3;
+          if (cz > 0.1) (cx >= 0 ? rightIdx : leftIdx).push(a, b, c);
+          else backIdx.push(a, b, c);
+        }
+        cg.setIndex(backIdx);
+        const collarPiece = (indices: number[], flap: THREE.Group) => {
+          if (!indices.length) return;
+          const ng = new THREE.BufferGeometry();
+          for (const key of Object.keys(cg.attributes)) ng.setAttribute(key, cg.attributes[key]);
+          ng.setIndex(indices);
+          const piece = new THREE.Mesh(ng, collar.material);
+          piece.castShadow = true;
+          piece.receiveShadow = true;
+          piece.position.copy(collar.position);
+          piece.quaternion.copy(collar.quaternion);
+          piece.scale.copy(collar.scale);
+          collar.parent!.add(piece);
+          flap.attach(piece);
+        };
+        collarPiece(rightIdx, rightFlap);
+        collarPiece(leftIdx, leftFlap);
+      }
+
       // Back design: a flat artwork plane just off the back panel surface.
       const backCanvas = document.createElement("canvas");
       backCanvas.width = 512;
@@ -635,7 +686,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
         const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, w * (canvas.height / canvas.width)), mat);
         plane.renderOrder = 3;
-        plane.position.set(tx, ty, z + ps.z * 0.015);
+        plane.position.set(tx, ty, z + ps.z * 0.008);
         // Yaw the plane to follow the chest's curve at this spot.
         if (zL > -Infinity && zR > -Infinity) {
           const dzdx = (zR - zL) / (rad * 2);
@@ -649,7 +700,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const badgeCanvas = document.createElement("canvas");
       badgeCanvas.width = 320;
       badgeCanvas.height = 360;
-      const badgeArt = addFrontPlane("front_body_L", badgeCanvas, 0.24, -0.02, 0.13);
+      const badgeArt = addFrontPlane("front_body_L", badgeCanvas, 0.32, -0.02, 0.11);
       const badgeTex = badgeArt?.texture ?? null;
       // Swing the crest away with the wool panel when the jacket opens.
       if (badgeArt && rightFlap) rightFlap.attach(badgeArt.plane);
@@ -678,7 +729,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       wctx.font = "800 62px 'League Spartan', sans-serif";
       outlinedText(wctx, "MANOIR", wordCanvas.width / 2, 78, 62, CHEST_FILL, 320);
       outlinedText(wctx, "KITS", wordCanvas.width / 2, 150, 62, CHEST_FILL, 320);
-      const wordArt = addFrontPlane("front_body_R", wordCanvas, 0.38, -0.05, 0.16);
+      const wordArt = addFrontPlane("front_body_R", wordCanvas, 0.5, -0.05, 0.16);
       if (wordArt && leftFlap) leftFlap.attach(wordArt.plane);
       // Exterior art is hidden while the jacket is open: it lives on the
       // outside of the swung-back panels, and the flat planes would peek
@@ -804,7 +855,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       let ipTex: THREE.CanvasTexture | null = null;
       {
         const px = inC.x + inS.x * 0.09;
-        const py = inC.y - inS.y * 0.2;
+        const py = inC.y - inS.y * 0.3; // just above the hem, like the photo
         const zBack = surfaceZAt(byName["inside_body_button"], px, py, inS.x * 0.12, inS.y * 0.12, "max", inC.z);
         const ip = makePatchPlane(ipCanvas, inS.x * 0.16);
         ipTex = ip.texture;
@@ -831,7 +882,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     });
 
     const onPointerDown = (e: PointerEvent) => {
-      if (insideRef.current) return;
+      alignRef.current = false; // user takes over the camera
       dragRef.current.active = true;
       dragRef.current.x = e.clientX;
       dragRef.current.y = e.clientY;
@@ -839,7 +890,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
     const onPointerMove = (e: PointerEvent) => {
       const d = dragRef.current;
-      if (!d.active || insideRef.current) return;
+      if (!d.active) return;
       d.rotY += (e.clientX - d.x) * 0.006;
       d.rotX += (e.clientY - d.y) * 0.004;
       d.rotX = THREE.MathUtils.clamp(d.rotX, -0.45, 0.35);
@@ -848,7 +899,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
     const onPointerUp = () => (dragRef.current.active = false);
     const onWheel = (e: WheelEvent) => {
-      if (insideRef.current) return;
+      alignRef.current = false;
       camera.position.z = THREE.MathUtils.clamp(camera.position.z + e.deltaY * 0.003, 3.2, 9);
     };
     mount.addEventListener("pointerdown", onPointerDown);
@@ -875,7 +926,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       // Inside view: face front and open the flaps; else return to rest.
       const openTarget = insideRef.current ? 1 : 0;
       openRef.current += (openTarget - openRef.current) * k;
-      if (insideRef.current) {
+      if (insideRef.current && alignRef.current) {
         d.rotX += (-0.03 - d.rotX) * k;
         d.rotY += (0 - d.rotY) * k;
         camera.position.z += (6.3 - camera.position.z) * k;

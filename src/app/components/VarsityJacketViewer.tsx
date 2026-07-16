@@ -490,67 +490,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       modelRoot.rotation.set(0, 0, 0);
       modelRoot.updateWorldMatrix(true, true);
 
-      // The model's placket tongue (plus its snaps) hangs down over the ribbed
-      // hem. The physical jacket has a clean hem, so drop those triangles:
-      // anything on the front placket strip below the hem line.
-      const removeHemTongue = (mesh: THREE.Mesh | undefined, fullWidth: boolean) => {
-        if (!mesh || !mesh.geometry.index) return;
-        const g = mesh.geometry;
-        const posA = g.attributes.position;
-        mesh.updateWorldMatrix(true, true);
-        const vv = new THREE.Vector3();
-        const bad = new Uint8Array(posA.count);
-        for (let i = 0; i < posA.count; i++) {
-          vv.fromBufferAttribute(posA, i).applyMatrix4(mesh.matrixWorld);
-          if (vv.y < -0.8 && vv.z > 0.05 && (fullWidth || Math.abs(vv.x) < 0.25)) bad[i] = 1;
-        }
-        const idx = g.index.array;
-        const keep: number[] = [];
-        for (let t = 0; t < idx.length; t += 3) {
-          if (bad[idx[t]] || bad[idx[t + 1]] || bad[idx[t + 2]]) continue;
-          keep.push(idx[t], idx[t + 1], idx[t + 2]);
-        }
-        g.setIndex(keep);
-      };
-      // Tuck the body into the ribbed hem band. The knit band tops out at
-      // y=-0.855 with a slimmer footprint (z -0.536..0.303) than the body
-      // shells (z -0.645..0.403), so untreated panels drape past and below
-      // it like a detached skirt. Below a blend line, ease each vertex's
-      // depth to just inside the band's faces and stop it at the band top —
-      // the wool gathers into the rib the way the real jacket does. This
-      // also collapses the model's below-hem placket tongue flat.
-      const HEM_TOP = -0.86;
-      const TUCK_START = -0.7;
-      const TUCK_FRONT_Z = 0.29;
-      const TUCK_BACK_Z = -0.52;
-      const tuckHem = (mesh: THREE.Mesh | undefined) => {
-        if (!mesh) return;
-        const posA = mesh.geometry.attributes.position as THREE.BufferAttribute;
-        mesh.updateWorldMatrix(true, true);
-        const toLocal = mesh.matrixWorld.clone().invert();
-        const vv = new THREE.Vector3();
-        for (let i = 0; i < posA.count; i++) {
-          vv.fromBufferAttribute(posA, i).applyMatrix4(mesh.matrixWorld);
-          if (vv.y >= TUCK_START) continue;
-          if (vv.y < HEM_TOP) vv.y = HEM_TOP;
-          const t = (TUCK_START - vv.y) / (TUCK_START - HEM_TOP);
-          const s = t * t * (3 - 2 * t);
-          if (vv.z > TUCK_FRONT_Z) vv.z += (TUCK_FRONT_Z - vv.z) * s;
-          if (vv.z < TUCK_BACK_Z) vv.z += (TUCK_BACK_Z - vv.z) * s;
-          vv.applyMatrix4(toLocal);
-          posA.setXYZ(i, vv.x, vv.y, vv.z);
-        }
-        posA.needsUpdate = true;
-        mesh.geometry.computeBoundingBox();
-        mesh.geometry.computeBoundingSphere();
-      };
-      tuckHem(byName["front_body_L"]);
-      tuckHem(byName["front_body_R"]);
-      tuckHem(byName["front_body_button_back"]);
-      tuckHem(byName["inside_body_button"]);
-      // The tongue's snaps are whole blobs below the line — remove them.
-      removeHemTongue(byName["button"], false);
-
       // Every piece of artwork is a DecalGeometry projection onto the actual
       // jacket mesh, so it hugs the fabric's curvature exactly — like a patch
       // sewn flush onto the wool/leather — instead of floating on a flat

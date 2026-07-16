@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, X, Star } from "lucide-react";
+import { ChevronRight, X, Star, SlidersHorizontal } from "lucide-react";
 import { VarsityJacketViewer, renderNeckLabel, renderInteriorPatch, type BackDesign } from "../components/VarsityJacketViewer";
 import { useNavigate } from "react-router-dom";
 
@@ -188,6 +188,7 @@ export function JacketBuilderPage() {
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Body");
   const [openBodyGroup, setOpenBodyGroup] = useState<string | null>("Neutrals");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [bodyColor, setBodyColor] = useState("#141414");
   const [sleeveColor, setSleeveColor] = useState("#f4f2ea");
@@ -288,45 +289,98 @@ export function JacketBuilderPage() {
   return (
     <div className="fixed inset-0 h-[100dvh] bg-white flex flex-col z-50 font-['League_Spartan',sans-serif]">
       {/* Top bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-4 border-b border-gray-200 bg-white z-10 shrink-0">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1 text-[11px] sm:text-xs tracking-widest text-gray-600 hover:text-black transition-colors uppercase"
-        >
-          <X className="w-3.5 h-3.5" />
-          <span>Exit</span>
-        </button>
+      <div className="border-b border-gray-200 bg-white z-10 shrink-0">
+        <div className="grid h-12 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 sm:h-14 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-1 text-[11px] tracking-widest text-gray-600 hover:text-black transition-colors uppercase sm:text-xs"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Exit</span>
+            </button>
+            <button
+              onClick={() => setSidebarOpen((open) => !open)}
+              className="hidden items-center gap-1 border border-gray-200 px-3 py-2 text-[10px] tracking-widest uppercase text-gray-600 transition-colors hover:border-black hover:text-black md:flex"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              {sidebarOpen ? "Hide" : "Customize"}
+            </button>
+          </div>
 
-        <div className="order-3 flex w-full gap-0 border border-gray-200 sm:order-none sm:w-auto">
-          <button
-            onClick={() => setActiveTab("materials")}
-            className={`flex-1 px-3 py-2 text-[10px] tracking-widest uppercase transition-colors sm:flex-none sm:px-4 ${
-              activeTab === "materials" ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            Materials &amp; Colors
-          </button>
-          <button
-            onClick={() => setActiveTab("patches")}
-            className={`flex-1 px-3 py-2 text-[10px] tracking-widest uppercase transition-colors sm:flex-none sm:px-4 ${
-              activeTab === "patches" ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            Design &amp; Patches
-          </button>
+          <div className="hidden gap-0 border border-gray-200 sm:flex">
+            <button
+              onClick={() => {
+                setActiveTab("materials");
+                setSidebarOpen(true);
+              }}
+              className={`px-4 py-2 text-[10px] tracking-widest uppercase transition-colors ${
+                activeTab === "materials" ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Materials &amp; Colors
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("patches");
+                setSidebarOpen(true);
+              }}
+              className={`px-4 py-2 text-[10px] tracking-widest uppercase transition-colors ${
+                activeTab === "patches" ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Design &amp; Patches
+            </button>
+          </div>
+
+          <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
+            <button onClick={() => setWishlisted((w) => !w)} className="text-gray-400 hover:text-black transition-colors">
+              <Star className={`w-4 h-4 ${wishlisted ? "fill-black text-black" : ""}`} />
+            </button>
+            <div className="h-5 w-px bg-gray-200" />
+            <div className="text-sm font-semibold tracking-wide">${price.toLocaleString()}</div>
+            <button
+              onClick={() => setShowSizeModal(true)}
+              className="bg-black text-white px-3 py-2 text-[10px] tracking-widest uppercase hover:bg-gray-800 transition-colors sm:px-5"
+            >
+              Add to Cart
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button onClick={() => setWishlisted((w) => !w)} className="text-gray-400 hover:text-black transition-colors">
-            <Star className={`w-4 h-4 ${wishlisted ? "fill-black text-black" : ""}`} />
-          </button>
-          <div className="w-px h-5 bg-gray-200" />
-          <div className="text-sm font-semibold tracking-wide">${price.toLocaleString()}</div>
+        <div className="grid grid-cols-[1fr_auto] gap-2 border-t border-gray-100 px-3 py-2 sm:hidden">
+          <div className="flex gap-0 border border-gray-200">
+            <button
+              onClick={() => {
+                setActiveTab("materials");
+                setSidebarOpen(true);
+              }}
+              className={`flex-1 px-3 py-2 text-[10px] tracking-widest uppercase transition-colors ${
+                activeTab === "materials" ? "bg-black text-white" : "bg-white text-gray-600"
+              }`}
+            >
+              Materials
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("patches");
+                setSidebarOpen(true);
+              }}
+              className={`flex-1 px-3 py-2 text-[10px] tracking-widest uppercase transition-colors ${
+                activeTab === "patches" ? "bg-black text-white" : "bg-white text-gray-600"
+              }`}
+            >
+              Design
+            </button>
+          </div>
           <button
-            onClick={() => setShowSizeModal(true)}
-            className="bg-black text-white px-3 py-2 text-[10px] tracking-widest uppercase hover:bg-gray-800 transition-colors sm:px-5"
+            onClick={() => setSidebarOpen((open) => !open)}
+            className={`flex items-center gap-1 border px-3 py-2 text-[10px] tracking-widest uppercase transition-colors ${
+              sidebarOpen ? "border-black bg-black text-white" : "border-gray-200 bg-white text-gray-700"
+            }`}
           >
-            Add to Cart
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            {sidebarOpen ? "Hide" : "Edit"}
           </button>
         </div>
       </div>
@@ -334,7 +388,14 @@ export function JacketBuilderPage() {
       {/* Body */}
       <div className="flex flex-1 min-h-0 flex-col overflow-hidden md:flex-row">
         {/* Left sidebar */}
-        <div className="order-2 h-[44dvh] w-full shrink-0 border-t border-gray-200 overflow-y-auto bg-white md:order-1 md:h-auto md:w-64 md:border-r md:border-t-0">
+        <div
+          className={`order-2 w-full shrink-0 border-t border-gray-200 bg-white transition-[height,width] duration-200 md:order-1 md:border-r md:border-t-0 ${
+            sidebarOpen
+              ? "h-[44dvh] overflow-y-auto md:h-auto md:w-64"
+              : "h-0 overflow-hidden border-t-0 md:h-auto md:w-0 md:border-r-0"
+          }`}
+          aria-hidden={!sidebarOpen}
+        >
           {activeTab === "materials" ? (
             <div>
               {/* Body — grouped wool color picker */}
@@ -536,7 +597,11 @@ export function JacketBuilderPage() {
         </div>
 
         {/* Jacket preview */}
-        <div className="order-1 relative h-[46dvh] min-h-[300px] flex-none bg-[#f0ede8] overflow-hidden sm:min-h-[340px] md:order-2 md:h-auto md:min-h-0 md:flex-1">
+        <div
+          className={`order-1 relative bg-[#f0ede8] overflow-hidden transition-[height] duration-200 md:order-2 md:h-auto md:min-h-0 md:flex-1 ${
+            sidebarOpen ? "h-[46dvh] min-h-[300px] flex-none sm:min-h-[340px]" : "min-h-0 flex-1"
+          }`}
+        >
           <VarsityJacketViewer
             bodyColor={bodyColor}
             sleeveColor={sleeveColor}

@@ -219,22 +219,25 @@ export function JacketBuilderPage() {
 
   const [backStars, setBackStars] = useState(5);
   const [backNumber, setBackNumber] = useState("10");
-  const [sleeveNumbers, setSleeveNumbers] = useState(["", "", "", "", ""]);
+  const [leftSleeveNumbers, setLeftSleeveNumbers] = useState(["", "", "", "", ""]);
+  const [rightSleeveNumbers, setRightSleeveNumbers] = useState(["", "", "", "", ""]);
   const [backCity, setBackCity] = useState("Madrid");
   const [printColor, setPrintColor] = useState(PRINT_COLORS[0].color);
 
   const backDesign: BackDesign = {
     stars: backStars,
     backNumber,
-    sleeveNumbers,
+    leftSleeveNumbers,
+    rightSleeveNumbers,
     city: backCity,
     printColor,
   };
 
   const onBackNumberChange = (value: string) => setBackNumber(value.replace(/\D/g, "").slice(0, 2));
-  const onSleeveNumberChange = (index: number, value: string) => {
+  const onSleeveNumberChange = (side: "left" | "right", index: number, value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 2);
-    setSleeveNumbers((numbers) => numbers.map((n, i) => (i === index ? digits : n)));
+    const setter = side === "left" ? setLeftSleeveNumbers : setRightSleeveNumbers;
+    setter((numbers) => numbers.map((n, i) => (i === index ? digits : n)));
   };
 
   const price = 895;
@@ -548,24 +551,29 @@ export function JacketBuilderPage() {
                 />
               </div>
 
-              {/* Sleeve numbers */}
-              <div>
-                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
-                  Sleeve Numbers (up to 5, run down the arms)
-                </label>
-                <div className="flex gap-1.5">
-                  {sleeveNumbers.map((value, i) => (
-                    <input
-                      key={i}
-                      type="text"
-                      inputMode="numeric"
-                      value={value}
-                      onChange={(e) => onSleeveNumberChange(i, e.target.value)}
-                      placeholder="00"
-                      className="w-10 border border-gray-300 px-0 py-2 text-center text-xs tracking-widest focus:outline-none focus:border-black"
-                    />
-                  ))}
-                </div>
+              {/* Sleeve numbers — each arm has its own set */}
+              <div className="space-y-3">
+                {([
+                  { side: "left" as const, label: "Left Sleeve Numbers (up to 5)", values: leftSleeveNumbers },
+                  { side: "right" as const, label: "Right Sleeve Numbers (up to 5)", values: rightSleeveNumbers },
+                ]).map(({ side, label, values }) => (
+                  <div key={side}>
+                    <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">{label}</label>
+                    <div className="flex gap-1.5">
+                      {values.map((value, i) => (
+                        <input
+                          key={i}
+                          type="text"
+                          inputMode="numeric"
+                          value={value}
+                          onChange={(e) => onSleeveNumberChange(side, i, e.target.value)}
+                          placeholder="00"
+                          className="w-10 border border-gray-300 px-0 py-2 text-center text-xs tracking-widest focus:outline-none focus:border-black"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Print color — black or white only */}

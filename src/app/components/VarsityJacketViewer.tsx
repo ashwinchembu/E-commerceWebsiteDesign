@@ -235,7 +235,8 @@ export async function renderInteriorPatch(): Promise<HTMLCanvasElement> {
 export interface BackDesign {
   stars: number;
   backNumber: string;
-  sleeveNumbers: string[];
+  leftSleeveNumbers: string[];
+  rightSleeveNumbers: string[];
   city: string;
   printColor: string;
 }
@@ -262,10 +263,12 @@ type PartMaterials = {
 
 type Decal = { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture };
 
+type SleeveSet = { canvases: HTMLCanvasElement[]; textures: THREE.CanvasTexture[] };
+
 type Loaded = {
   materials: PartMaterials;
   back: Decal;
-  sleeves: { canvases: HTMLCanvasElement[]; textures: THREE.CanvasTexture[] };
+  sleeves: { left: SleeveSet; right: SleeveSet };
 };
 
 /** Classify a part by its node name into a material group. */
@@ -401,8 +404,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const design = propsRef.current.backDesign;
     drawBackDesign(loaded.back.canvas, design);
     loaded.back.texture.needsUpdate = true;
-    drawSleeveNumbers(loaded.sleeves.canvases, design.sleeveNumbers, design.printColor);
-    for (const t of loaded.sleeves.textures) t.needsUpdate = true;
+    drawSleeveNumbers(loaded.sleeves.left.canvases, design.leftSleeveNumbers, design.printColor);
+    drawSleeveNumbers(loaded.sleeves.right.canvases, design.rightSleeveNumbers, design.printColor);
+    for (const t of loaded.sleeves.left.textures) t.needsUpdate = true;
+    for (const t of loaded.sleeves.right.textures) t.needsUpdate = true;
   };
 
   useEffect(() => {
@@ -579,24 +584,75 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         );
       }
 
+      // The GLB's placket extension — a black snap tab — hangs below the
+      // ribbed hem as a loose flap. Flatten it up to the hem line and drop
+      // its below-hem snaps; the rest of the model stays as authored.
+      const flattenTab = (mesh: THREE.Mesh | undefined) => {
+        if (!mesh) return;
+        const posA = mesh.geometry.attributes.position as THREE.BufferAttribute;
+        mesh.updateWorldMatrix(true, true);
+        const toLocal = mesh.matrixWorld.clone().invert();
+        const vv = new THREE.Vector3();
+        for (let i = 0; i < posA.count; i++) {
+          vv.fromBufferAttribute(posA, i).applyMatrix4(mesh.matrixWorld);
+          if (vv.y >= -0.855 || vv.z <= 0.05 || Math.abs(vv.x) >= 0.3) continue;
+          vv.y = -0.855;
+          vv.applyMatrix4(toLocal);
+          posA.setXYZ(i, vv.x, vv.y, vv.z);
+        }
+        posA.needsUpdate = true;
+        mesh.geometry.computeBoundingBox();
+        mesh.geometry.computeBoundingSphere();
+      };
+      flattenTab(byName["front_body_L"]);
+      flattenTab(byName["front_body_R"]);
+      flattenTab(byName["inside_body_button"]);
+      {
+        const snaps = byName["button"];
+        if (snaps && snaps.geometry.index) {
+          const g = snaps.geometry;
+          const posA = g.attributes.position;
+          snaps.updateWorldMatrix(true, true);
+          const vv = new THREE.Vector3();
+          const bad = new Uint8Array(posA.count);
+          for (let i = 0; i < posA.count; i++) {
+            vv.fromBufferAttribute(posA, i).applyMatrix4(snaps.matrixWorld);
+            if (vv.y < -0.85 && vv.z > 0.05) bad[i] = 1;
+          }
+          const idx = g.index.array;
+          const keep: number[] = [];
+          for (let t = 0; t < idx.length; t += 3) {
+            if (bad[idx[t]] || bad[idx[t + 1]] || bad[idx[t + 2]]) continue;
+            keep.push(idx[t], idx[t + 1], idx[t + 2]);
+          }
+          g.setIndex(keep);
+        }
+      }
+
       // Sleeve numbers: five small patches down the OUTER face of each arm,
       // like the physical jacket. Each number is its own decal projected at
       // its own height, so it lies flat on the local surface instead of one
-      // tall strip smearing around the arm's curve.
+      // tall strip smearing around the arm's curve. Each arm has its own
+      // canvases so the two sleeves can carry different numbers.
       const SLEEVE_SLOTS = 5;
-      const sleeveCanvases: HTMLCanvasElement[] = [];
-      const sleeveTextures: THREE.CanvasTexture[] = [];
-      for (let i = 0; i < SLEEVE_SLOTS; i++) {
-        const c = document.createElement("canvas");
-        c.width = 200;
-        c.height = 170;
-        const t = new THREE.CanvasTexture(c);
-        t.colorSpace = THREE.SRGBColorSpace;
-        t.anisotropy = 8;
-        sleeveCanvases.push(c);
-        sleeveTextures.push(t);
-      }
-      for (const [name, dir] of [["sleeves_L", 1] as const, ["sleeves_R", -1] as const]) {
+      const makeSleeveSet = (): SleeveSet => {
+        const canvases: HTMLCanvasElement[] = [];
+        const textures: THREE.CanvasTexture[] = [];
+        for (let i = 0; i < SLEEVE_SLOTS; i++) {
+          const c = document.createElement("canvas");
+          c.width = 200;
+          c.height = 170;
+          const t = new THREE.CanvasTexture(c);
+          t.colorSpace = THREE.SRGBColorSpace;
+          t.anisotropy = 8;
+          canvases.push(c);
+          textures.push(t);
+        }
+        return { canvases, textures };
+      };
+      // sleeves_L sits on +x, which is the WEARER's left arm.
+      const sleeveSets = { left: makeSleeveSet(), right: makeSleeveSet() };
+      for (const [name, dir, set] of [["sleeves_L", 1, sleeveSets.left] as const, ["sleeves_R", -1, sleeveSets.right] as const]) {
         const s = byName[name];
         if (!s) continue;
         const wb = new THREE.Box3().setFromObject(s);
@@ -644,7 +700,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           // The scanned vertex fixes the outward x/z only; pin the height to
           // the slot's exact y so the numbers space evenly down the arm.
           best.y = yi;
-          addDecal(s, sleeveTextures[slot], best, orientation, new THREE.Vector3(pw, pw * 0.85, pw * 1.2), facing);
+          addDecal(s, set.textures[slot], best, orientation, new THREE.Vector3(pw, pw * 0.85, pw * 1.2), facing);
         }
       }
 
@@ -732,7 +788,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       loadedRef.current = {
         materials,
         back: { canvas: backCanvas, texture: backTexture },
-        sleeves: { canvases: sleeveCanvases, textures: sleeveTextures },
+        sleeves: sleeveSets,
       };
       redrawDesign();
     });

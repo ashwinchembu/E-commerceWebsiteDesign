@@ -584,51 +584,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         );
       }
 
-      // The GLB's placket extension — a black snap tab — hangs below the
-      // ribbed hem as a loose flap. Flatten it up to the hem line and drop
-      // its below-hem snaps; the rest of the model stays as authored.
-      const flattenTab = (mesh: THREE.Mesh | undefined) => {
-        if (!mesh) return;
-        const posA = mesh.geometry.attributes.position as THREE.BufferAttribute;
-        mesh.updateWorldMatrix(true, true);
-        const toLocal = mesh.matrixWorld.clone().invert();
-        const vv = new THREE.Vector3();
-        for (let i = 0; i < posA.count; i++) {
-          vv.fromBufferAttribute(posA, i).applyMatrix4(mesh.matrixWorld);
-          if (vv.y >= -0.855 || vv.z <= 0.05 || Math.abs(vv.x) >= 0.3) continue;
-          vv.y = -0.855;
-          vv.applyMatrix4(toLocal);
-          posA.setXYZ(i, vv.x, vv.y, vv.z);
-        }
-        posA.needsUpdate = true;
-        mesh.geometry.computeBoundingBox();
-        mesh.geometry.computeBoundingSphere();
-      };
-      flattenTab(byName["front_body_L"]);
-      flattenTab(byName["front_body_R"]);
-      flattenTab(byName["inside_body_button"]);
-      {
-        const snaps = byName["button"];
-        if (snaps && snaps.geometry.index) {
-          const g = snaps.geometry;
-          const posA = g.attributes.position;
-          snaps.updateWorldMatrix(true, true);
-          const vv = new THREE.Vector3();
-          const bad = new Uint8Array(posA.count);
-          for (let i = 0; i < posA.count; i++) {
-            vv.fromBufferAttribute(posA, i).applyMatrix4(snaps.matrixWorld);
-            if (vv.y < -0.85 && vv.z > 0.05) bad[i] = 1;
-          }
-          const idx = g.index.array;
-          const keep: number[] = [];
-          for (let t = 0; t < idx.length; t += 3) {
-            if (bad[idx[t]] || bad[idx[t + 1]] || bad[idx[t + 2]]) continue;
-            keep.push(idx[t], idx[t + 1], idx[t + 2]);
-          }
-          g.setIndex(keep);
-        }
-      }
-
       // Sleeve numbers: five small patches down the OUTER face of each arm,
       // like the physical jacket. Each number is its own decal projected at
       // its own height, so it lies flat on the local surface instead of one

@@ -286,21 +286,21 @@ export function JacketBuilderPage() {
   );
 
   return (
-    <div className="fixed inset-0 bg-white flex flex-col z-50 font-['League_Spartan',sans-serif]">
+    <div className="fixed inset-0 h-[100dvh] bg-white flex flex-col z-50 font-['League_Spartan',sans-serif]">
       {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-white z-10 shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-4 border-b border-gray-200 bg-white z-10 shrink-0">
         <button
           onClick={() => navigate(-1)}
-          className="flex items-center gap-1 text-xs tracking-widest text-gray-600 hover:text-black transition-colors uppercase"
+          className="flex items-center gap-1 text-[11px] sm:text-xs tracking-widest text-gray-600 hover:text-black transition-colors uppercase"
         >
           <X className="w-3.5 h-3.5" />
           <span>Exit</span>
         </button>
 
-        <div className="flex gap-0 border border-gray-200">
+        <div className="order-3 flex w-full gap-0 border border-gray-200 sm:order-none sm:w-auto">
           <button
             onClick={() => setActiveTab("materials")}
-            className={`px-4 py-2 text-[10px] tracking-widest uppercase transition-colors ${
+            className={`flex-1 px-3 py-2 text-[10px] tracking-widest uppercase transition-colors sm:flex-none sm:px-4 ${
               activeTab === "materials" ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
             }`}
           >
@@ -308,7 +308,7 @@ export function JacketBuilderPage() {
           </button>
           <button
             onClick={() => setActiveTab("patches")}
-            className={`px-4 py-2 text-[10px] tracking-widest uppercase transition-colors ${
+            className={`flex-1 px-3 py-2 text-[10px] tracking-widest uppercase transition-colors sm:flex-none sm:px-4 ${
               activeTab === "patches" ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
             }`}
           >
@@ -316,7 +316,7 @@ export function JacketBuilderPage() {
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button onClick={() => setWishlisted((w) => !w)} className="text-gray-400 hover:text-black transition-colors">
             <Star className={`w-4 h-4 ${wishlisted ? "fill-black text-black" : ""}`} />
           </button>
@@ -324,7 +324,7 @@ export function JacketBuilderPage() {
           <div className="text-sm font-semibold tracking-wide">${price.toLocaleString()}</div>
           <button
             onClick={() => setShowSizeModal(true)}
-            className="bg-black text-white px-5 py-2 text-[10px] tracking-widest uppercase hover:bg-gray-800 transition-colors"
+            className="bg-black text-white px-3 py-2 text-[10px] tracking-widest uppercase hover:bg-gray-800 transition-colors sm:px-5"
           >
             Add to Cart
           </button>
@@ -332,9 +332,9 @@ export function JacketBuilderPage() {
       </div>
 
       {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 flex-col overflow-hidden md:flex-row">
         {/* Left sidebar */}
-        <div className="w-64 shrink-0 border-r border-gray-200 overflow-y-auto bg-white">
+        <div className="order-2 h-[44dvh] w-full shrink-0 border-t border-gray-200 overflow-y-auto bg-white md:order-1 md:h-auto md:w-64 md:border-r md:border-t-0">
           {activeTab === "materials" ? (
             <div>
               {/* Body — grouped wool color picker */}
@@ -536,7 +536,7 @@ export function JacketBuilderPage() {
         </div>
 
         {/* Jacket preview */}
-        <div className="flex-1 relative bg-[#f0ede8] overflow-hidden">
+        <div className="order-1 relative h-[46dvh] min-h-[300px] flex-none bg-[#f0ede8] overflow-hidden sm:min-h-[340px] md:order-2 md:h-auto md:min-h-0 md:flex-1">
           <VarsityJacketViewer
             bodyColor={bodyColor}
             sleeveColor={sleeveColor}
@@ -551,7 +551,7 @@ export function JacketBuilderPage() {
           {/* Interior details card */}
           <button
             onClick={() => setShowInterior((v) => !v)}
-            className={`absolute top-4 right-4 px-4 py-2 text-[10px] tracking-widest uppercase border transition-colors ${
+            className={`absolute top-3 right-3 px-3 py-2 text-[10px] tracking-widest uppercase border transition-colors sm:top-4 sm:right-4 sm:px-4 ${
               showInterior
                 ? "bg-black text-white border-black"
                 : "bg-white text-gray-700 border-gray-300 hover:border-black"
@@ -560,7 +560,7 @@ export function JacketBuilderPage() {
             {showInterior ? "Close Details" : "Interior Details"}
           </button>
           {showInterior && (
-            <div className="absolute top-14 right-4 w-60 bg-white border border-gray-200 shadow-xl p-4 space-y-4 z-10">
+            <div className="absolute top-14 left-3 right-3 max-h-[calc(100%-4.5rem)] overflow-y-auto bg-white border border-gray-200 shadow-xl p-4 space-y-4 z-10 sm:left-auto sm:right-4 sm:w-60">
               <p className="text-[10px] tracking-widest uppercase text-gray-400">Sewn inside every jacket</p>
               <div>
                 <div className="bg-[#1a1a1a] p-3 flex items-center justify-center rounded-sm">
@@ -586,11 +586,11 @@ export function JacketBuilderPage() {
           )}
 
           {/* City picker + drag hint */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+          <div className="absolute bottom-3 left-1/2 flex w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col items-center gap-2 sm:bottom-4 sm:w-auto">
             <select
               value={backCity}
               onChange={(e) => setBackCity(e.target.value)}
-              className="bg-white border border-gray-300 px-4 py-2 text-xs tracking-widest uppercase focus:outline-none focus:border-black cursor-pointer"
+              className="w-full max-w-xs bg-white border border-gray-300 px-3 py-2 text-[11px] tracking-widest uppercase focus:outline-none focus:border-black cursor-pointer sm:w-auto sm:px-4 sm:text-xs"
             >
               {CITY_LEAGUES.map(({ league, cities }) => (
                 <optgroup key={league} label={league}>
@@ -602,7 +602,7 @@ export function JacketBuilderPage() {
                 </optgroup>
               ))}
             </select>
-            <span className="text-[10px] tracking-widest uppercase text-gray-400 pointer-events-none select-none">
+            <span className="text-center text-[9px] tracking-widest uppercase text-gray-400 pointer-events-none select-none sm:text-[10px]">
               Drag to rotate · Scroll to zoom
             </span>
           </div>
@@ -611,8 +611,8 @@ export function JacketBuilderPage() {
 
       {/* Size picker modal */}
       {showSizeModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowSizeModal(false)}>
-          <div className="bg-white w-full max-w-sm rounded shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4" onClick={() => setShowSizeModal(false)}>
+          <div className="bg-white w-full max-w-sm rounded shadow-xl p-5 sm:p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-1">
               <h3 className="text-sm font-semibold tracking-widest uppercase">Pick a size and proceed to checkout!</h3>
               <button onClick={() => setShowSizeModal(false)} className="text-gray-400 hover:text-black transition-colors">

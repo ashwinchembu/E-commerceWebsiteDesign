@@ -431,8 +431,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     // Near plane matters: zoom never gets closer than z=3.2, and a tiny near
     // value starves the depth buffer, making decals z-fight (black flecks)
     // at some rotation angles.
-    const camera = new THREE.PerspectiveCamera(28, mount.clientWidth / mount.clientHeight, 0.5, 50);
-    camera.position.set(0, 0, 5.6);
+    const initialAspect = (mount.clientWidth || 1) / (mount.clientHeight || 1);
+    const camera = new THREE.PerspectiveCamera(28, initialAspect, 0.5, 50);
+    camera.position.set(0, 0, initialAspect < 0.85 ? 6.35 : 5.6);
 
     scene.add(new THREE.HemisphereLight("#ffffff", "#9aa6b4", 0.3));
     const key = new THREE.DirectionalLight("#fff4e6", 1.7);
@@ -829,6 +830,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       renderer.setSize(w, h);
     };
     window.addEventListener("resize", onResize);
+    const resizeObserver = new ResizeObserver(onResize);
+    resizeObserver.observe(mount);
 
     const animate = () => {
       const d = dragRef.current;
@@ -842,6 +845,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       disposed = true;
       cancelAnimationFrame(frameRef.current);
       window.removeEventListener("resize", onResize);
+      resizeObserver.disconnect();
       mount.removeEventListener("pointerdown", onPointerDown);
       mount.removeEventListener("pointermove", onPointerMove);
       mount.removeEventListener("pointerup", onPointerUp);
@@ -854,5 +858,5 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
   }, []);
 
-  return <div ref={mountRef} className="h-full w-full cursor-grab active:cursor-grabbing" />;
+  return <div ref={mountRef} className="h-full w-full touch-none cursor-grab active:cursor-grabbing" />;
 }

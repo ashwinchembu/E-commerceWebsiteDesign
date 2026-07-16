@@ -615,15 +615,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const wsz = wb.getSize(new THREE.Vector3());
         const pos = s.geometry.attributes.position;
         const v = new THREE.Vector3();
-        // Face mostly sideways with a slight forward bias; "up" follows the
-        // hanging arm's lean.
-        const facing = new THREE.Vector3(dir, 0, 0.35).normalize();
-        const armUp = new THREE.Vector3(-dir * 0.28, 0.95, 0).normalize();
-        // Matrix4.lookAt points +z from target toward eye, and DecalGeometry's
-        // readable face is the projector's +z — so the eye sits outward.
-        const lookM = new THREE.Matrix4().lookAt(facing, new THREE.Vector3(), armUp);
-        const orientation = new THREE.Euler().setFromRotationMatrix(lookM);
         const pw = wsz.x * 0.5;
+        // Scan the arm's outer surface at each slot height first...
+        const slotPoints: (THREE.Vector3 | null)[] = [];
         for (let slot = 0; slot < SLEEVE_SLOTS; slot++) {
           // Evenly spaced from just below the shoulder seam to above the cuff.
           const yi = wc.y + wsz.y * (0.28 - 0.13 * slot);
@@ -637,7 +631,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             if (v.z < zMin) zMin = v.z;
             if (v.z > zMax) zMax = v.z;
           }
-          if (!Number.isFinite(zMin)) continue;
+          if (!Number.isFinite(zMin)) {
+            slotPoints.push(null);
+            continue;
+          }
           const zc = (zMin + zMax) / 2;
           const zTol = (zMax - zMin) * 0.45;
           // ...then take the outermost surface point near the arm's centerline.
@@ -652,10 +649,36 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
               best.copy(v);
             }
           }
-          // The scanned vertex fixes the outward x/z only; pin the height to
-          // the slot's exact y so the numbers space evenly down the arm.
           best.y = yi;
-          addDecal(s, set.textures[slot], best, orientation, new THREE.Vector3(pw, pw * 0.85, pw * 1.2), facing);
+          slotPoints.push(best);
+        }
+        // ...then straighten the column: the raw scan points wobble with the
+        // surface, which made the stack look rigid and misaligned. Run one
+        // straight line from the top slot to the bottom slot, space the
+        // numbers evenly along it, and tilt them to match that line so the
+        // column runs straight down the arm.
+        const anchors = slotPoints
+          .map((p, i) => ({ p, i }))
+          .filter((e): e is { p: THREE.Vector3; i: number } => e.p !== null);
+        if (!anchors.length) continue;
+        const first = anchors[0];
+        const last = anchors[anchors.length - 1];
+        const armUp =
+          first.i === last.i
+            ? new THREE.Vector3(-dir * 0.28, 0.95, 0).normalize()
+            : first.p.clone().sub(last.p).normalize();
+        // Face mostly sideways with a slight forward bias, kept perpendicular
+        // to the arm's measured axis.
+        const facing = new THREE.Vector3(dir, 0, 0.35).normalize();
+        facing.addScaledVector(armUp, -facing.dot(armUp)).normalize();
+        // Matrix4.lookAt points +z from target toward eye, and DecalGeometry's
+        // readable face is the projector's +z — so the eye sits outward.
+        const lookM = new THREE.Matrix4().lookAt(facing, new THREE.Vector3(), armUp);
+        const orientation = new THREE.Euler().setFromRotationMatrix(lookM);
+        for (const { i } of anchors) {
+          const t = first.i === last.i ? 0 : (i - first.i) / (last.i - first.i);
+          const point = first.p.clone().lerp(last.p, t);
+          addDecal(s, set.textures[i], point, orientation, new THREE.Vector3(pw, pw * 0.85, pw * 1.2), facing);
         }
       }
 

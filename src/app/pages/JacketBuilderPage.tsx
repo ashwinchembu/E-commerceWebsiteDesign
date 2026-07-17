@@ -79,7 +79,7 @@ const LEATHER_BW = [
 
 const LEATHER_TYPES = ["Nappa", "Cowhide"] as const;
 type LeatherType = (typeof LEATHER_TYPES)[number];
-type JacketEdition = "Classic" | "Players";
+type JacketEdition = "Classic" | "Footballers";
 
 function labelForColor(color: string) {
   for (const group of COLOR_GROUPS) {
@@ -223,7 +223,7 @@ const PRINT_COLORS = [
 ];
 
 interface JacketBuilderPageProps {
-  user?: { email: string; name: string; isAdmin: boolean; isPlayer?: boolean } | null;
+  user?: { email: string; name: string; isAdmin: boolean; isFootballer?: boolean } | null;
 }
 
 export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
@@ -234,7 +234,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [jacketEdition, setJacketEdition] = useState<JacketEdition>("Classic");
-  const [showPlayersAccess, setShowPlayersAccess] = useState(false);
+  const [showFootballersAccess, setShowFootballersAccess] = useState(false);
   const [bodyColor, setBodyColor] = useState("#141414");
   const [sleeveColor, setSleeveColor] = useState("#f4f2ea");
   const [leatherType, setLeatherType] = useState<LeatherType>("Nappa");
@@ -278,10 +278,10 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
     printColor,
   };
 
-  const isPlayersEdition = jacketEdition === "Players";
-  const canUsePlayersEdition = Boolean(user?.isPlayer || user?.isAdmin);
-  const renderedBodyColor = isPlayersEdition ? sleeveColor : bodyColor;
-  const renderedBodyMaterial: BodyMaterial = isPlayersEdition ? "Leather" : "Wool";
+  const isFootballersEdition = jacketEdition === "Footballers";
+  const canUseFootballersEdition = Boolean(user?.isFootballer || user?.isAdmin);
+  const renderedBodyColor = isFootballersEdition ? sleeveColor : bodyColor;
+  const renderedBodyMaterial: BodyMaterial = isFootballersEdition ? "Leather" : "Wool";
 
   const onBackNumberChange = (value: string) => setBackNumber(value.replace(/\D/g, "").slice(0, 2));
   const onSleeveNumberChange = (side: "left" | "right", index: number, value: string) => {
@@ -455,25 +455,25 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
               <div className="border-b border-gray-100">
                 {accordionHeader(
                   "Jacket",
-                  isPlayersEdition ? sleeveColor : bodyColor,
-                  isPlayersEdition ? `${leatherType} Players Leather` : "Classic Wool + Leather",
+                  isFootballersEdition ? sleeveColor : bodyColor,
+                  isFootballersEdition ? `${leatherType} Footballers Leather` : "Classic Wool + Leather",
                 )}
                 {expandedSection === "Jacket" && (
                   <div className="bg-gray-50 border-t border-gray-100 px-4 py-3 space-y-3">
                     <div className="grid grid-cols-2 gap-2">
-                      {(["Classic", "Players"] as JacketEdition[]).map((edition) => {
+                      {(["Classic", "Footballers"] as JacketEdition[]).map((edition) => {
                         const active = jacketEdition === edition;
                         return (
                           <button
                             key={edition}
                             onClick={() => {
-                              if (edition === "Players" && !canUsePlayersEdition) {
-                                setShowPlayersAccess(true);
+                              if (edition === "Footballers" && !canUseFootballersEdition) {
+                                setShowFootballersAccess(true);
                                 return;
                               }
                               setJacketEdition(edition);
-                              setShowPlayersAccess(false);
-                              if (edition === "Players") setExpandedSection("Body");
+                              setShowFootballersAccess(false);
+                              if (edition === "Footballers") setExpandedSection("Body");
                             }}
                             className={`min-h-20 border px-3 py-3 text-left transition-colors ${
                               active ? "border-black bg-white" : "border-gray-200 bg-white text-gray-500 hover:border-black"
@@ -481,31 +481,31 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
                           >
                             <span className="block text-[10px] tracking-widest uppercase">{edition}</span>
                             <span className="mt-1 block text-xs leading-snug">
-                              {edition === "Players" ? "Full leather body and sleeves" : "Wool body with leather sleeves"}
+                              {edition === "Footballers" ? "Full leather body and sleeves" : "Wool body with leather sleeves"}
                             </span>
-                            {edition === "Players" && !canUsePlayersEdition && (
+                            {edition === "Footballers" && !canUseFootballersEdition && (
                               <span className="mt-2 block text-[9px] tracking-widest uppercase text-gray-400">Login required</span>
                             )}
                           </button>
                         );
                       })}
                     </div>
-                    {showPlayersAccess && !canUsePlayersEdition && (
+                    {showFootballersAccess && !canUseFootballersEdition && (
                       <div className="border border-gray-200 bg-white p-3">
                         <p className="text-xs leading-relaxed text-gray-600">
-                          Players full-leather jackets are credential-gated. Sign in with an approved account to configure Nappa or Cowhide.
+                          Footballers full-leather jackets are credential-gated. Sign in with an approved account to configure Nappa or Cowhide.
                         </p>
                         <button
                           onClick={() => navigate("/account")}
                           className="mt-3 w-full bg-black px-3 py-2 text-[10px] tracking-widest uppercase text-white transition-colors hover:bg-gray-800"
                         >
-                          Sign In For Players
+                          Sign In For Footballers
                         </button>
                       </div>
                     )}
-                    {isPlayersEdition && (
+                    {isFootballersEdition && (
                       <p className="text-[10px] leading-relaxed text-gray-500">
-                        Players jackets use one full-leather shell. Pick Nappa for a smoother finish or Cowhide for a tougher grain.
+                        Footballers jackets use one full-leather shell. Pick Nappa for a smoother finish or Cowhide for a tougher grain.
                       </p>
                     )}
                   </div>
@@ -514,9 +514,9 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
 
               {/* Body — grouped wool color picker */}
               <div className="border-b border-gray-100">
-                {accordionHeader("Body", isPlayersEdition ? sleeveColor : bodyColor, isPlayersEdition ? `${leatherType} Leather` : "Wool")}
+                {accordionHeader("Body", isFootballersEdition ? sleeveColor : bodyColor, isFootballersEdition ? `${leatherType} Leather` : "Wool")}
                 {expandedSection === "Body" && (
-                  isPlayersEdition ? (
+                  isFootballersEdition ? (
                     <div className="bg-gray-50 border-t border-gray-100 px-5 py-3 space-y-3">
                       <div>
                         <div className="text-[10px] tracking-widest uppercase text-gray-400 mb-1.5">Full Leather Color</div>

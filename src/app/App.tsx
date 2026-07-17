@@ -41,7 +41,7 @@ export interface User {
   email: string;
   name: string;
   isAdmin: boolean;
-  isPlayer?: boolean;
+  isFootballer?: boolean;
 }
 
 export default function App() {
@@ -133,8 +133,8 @@ export default function App() {
       setUser({ email, name: 'Admin', isAdmin: true });
       return true;
     }
-    if (email === 'players@manoir.com' && password === 'players123') {
-      setUser({ email, name: 'Player', isAdmin: false, isPlayer: true });
+    if (email === 'footballers@manoir.com' && password === 'footballers123') {
+      setUser({ email, name: 'Footballer', isAdmin: false, isFootballer: true });
       return true;
     }
     return false;

@@ -117,7 +117,6 @@ const CITY_LEAGUES: { league: string; cities: string[] }[] = [
       "Seville",
       "Barcelona",
       "A Coruña",
-      "Augsburg",
       "Bilbao",
       "Elche",
       "Getafe",
@@ -684,14 +683,6 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
                   Gold Stars ({backStars} of 5)
                 </label>
                 <div className="flex flex-wrap items-center gap-1">
-                  <button
-                    onClick={() => setBackStars(0)}
-                    className={`h-8 border px-3 text-[10px] tracking-widest uppercase transition-colors ${
-                      backStars === 0 ? "border-black bg-black text-white" : "border-gray-300 text-gray-500 hover:border-black"
-                    }`}
-                  >
-                    None
-                  </button>
                   {[1, 2, 3, 4, 5].map((n) => (
                     <button
                       key={n}

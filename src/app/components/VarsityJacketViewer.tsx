@@ -60,6 +60,7 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
 }
 
 export type LeatherType = "Nappa" | "Cowhide";
+export type BodyMaterial = "Wool" | "Leather";
 
 /** Varsity chenille lettering: colored fill with a gold outline. */
 function outlinedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontSize: number, fill: string, maxWidth?: number, outlineScale = 0.055) {
@@ -243,6 +244,7 @@ export interface BackDesign {
 
 interface VarsityJacketViewerProps {
   bodyColor: string;
+  bodyMaterial: BodyMaterial;
   sleeveColor: string;
   leatherType: LeatherType;
   trimColor: string;
@@ -271,6 +273,27 @@ type Loaded = {
   sleeves: { left: SleeveSet; right: SleeveSet };
 };
 
+function applyBodyMaterial(material: THREE.MeshPhysicalMaterial, bodyMaterial: BodyMaterial) {
+  if (bodyMaterial === "Leather") {
+    material.roughness = 0.55;
+    material.clearcoat = 0.3;
+    material.clearcoatRoughness = 0.5;
+    material.envMapIntensity = 0.6;
+    material.sheen = 0;
+    material.sheenRoughness = 1;
+    material.sheenColor.set("#000000");
+  } else {
+    material.roughness = 0.97;
+    material.clearcoat = 0;
+    material.clearcoatRoughness = 1;
+    material.envMapIntensity = 0.05;
+    material.sheen = 0.1;
+    material.sheenRoughness = 0.95;
+    material.sheenColor.set("#555555");
+  }
+  material.needsUpdate = true;
+}
+
 /** Classify a part by its node name into a material group. */
 function groupFor(name: string): keyof PartMaterials | "logo" {
   const n = name.toLowerCase();
@@ -285,7 +308,7 @@ function groupFor(name: string): keyof PartMaterials | "logo" {
 }
 
 function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
-  return {
+  const materials = {
     body: new THREE.MeshPhysicalMaterial({
       color: colors.bodyColor,
       roughness: 0.97,
@@ -333,10 +356,14 @@ function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
       side: THREE.DoubleSide,
     }),
   };
+  applyBodyMaterial(materials.body, colors.bodyMaterial);
+  return materials;
 }
 
-function applyLeatherType(m: PartMaterials, type: LeatherType) {
-  for (const leather of [m.sleeve, m.pocket]) {
+function applyLeatherType(m: PartMaterials, type: LeatherType, bodyMaterial: BodyMaterial) {
+  applyBodyMaterial(m.body, bodyMaterial);
+  const leatherMaterials = bodyMaterial === "Leather" ? [m.body, m.sleeve, m.pocket] : [m.sleeve, m.pocket];
+  for (const leather of leatherMaterials) {
     if (type === "Nappa") {
       leather.roughness = 0.55;
       leather.clearcoat = 0.3;
@@ -372,7 +399,7 @@ function makeDecalMaterial(texture: THREE.CanvasTexture): THREE.MeshStandardMate
 }
 
 export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
-  const { bodyColor, sleeveColor, leatherType, trimColor, snapColor, pocketColor, liningColor } = props;
+  const { bodyColor, bodyMaterial, sleeveColor, leatherType, trimColor, snapColor, pocketColor, liningColor } = props;
 
   const mountRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.0, rotX: -0.05 });
@@ -386,17 +413,18 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const m = loadedRef.current?.materials;
     if (!m) return;
     m.body.color.set(bodyColor);
+    applyLeatherType(m, leatherType, bodyMaterial);
     m.sleeve.color.set(sleeveColor);
     m.trim.color.set(trimColor);
     m.snap.color.set(snapColor);
     m.pocket.color.set(pocketColor);
     m.lining.color.set(liningColor);
-  }, [bodyColor, sleeveColor, trimColor, snapColor, pocketColor, liningColor]);
+  }, [bodyColor, bodyMaterial, leatherType, sleeveColor, trimColor, snapColor, pocketColor, liningColor]);
 
   useEffect(() => {
     const m = loadedRef.current?.materials;
-    if (m) applyLeatherType(m, leatherType);
-  }, [leatherType]);
+    if (m) applyLeatherType(m, leatherType, bodyMaterial);
+  }, [leatherType, bodyMaterial]);
 
   const redrawDesign = () => {
     const loaded = loadedRef.current;
@@ -455,7 +483,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     scene.add(modelRoot);
 
     const materials = makeMaterials(propsRef.current);
-    applyLeatherType(materials, propsRef.current.leatherType);
+    applyLeatherType(materials, propsRef.current.leatherType, propsRef.current.bodyMaterial);
 
     let disposed = false;
     const dracoLoader = new DRACOLoader();

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import logoImage from 'figma:asset/49db8db3192aa070a09b2e638fd91cfc6cf1ca1e.png';
 
 interface AccountPageProps {
-  user: { email: string; name: string; isAdmin: boolean } | null;
+  user: { email: string; name: string; isAdmin: boolean; isPlayer?: boolean } | null;
   onLogin: (email: string, password: string) => boolean;
   onLogout: () => void;
   wishlist: Array<{ id: number; name: string; price: number; image: string }>;
@@ -21,7 +21,8 @@ export function AccountPage({ user, onLogin, onLogout, wishlist, onToggleWishlis
   // Fake credentials for testing
   const testCredentials = {
     user: { email: 'user@test.com', password: 'user123' },
-    admin: { email: 'admin@manoir.com', password: 'admin123' }
+    admin: { email: 'admin@manoir.com', password: 'admin123' },
+    player: { email: 'players@manoir.com', password: 'players123' }
   };
 
   const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
@@ -39,6 +40,10 @@ export function AccountPage({ user, onLogin, onLogout, wishlist, onToggleWishlis
       onLogin(email, password);
       setLoginError('');
       toast.success('Successfully signed in as Admin!');
+    } else if (email === testCredentials.player.email && password === testCredentials.player.password) {
+      onLogin(email, password);
+      setLoginError('');
+      toast.success('Successfully signed in for Players access!');
     } else {
       setLoginError('Invalid email or password');
     }
@@ -98,7 +103,8 @@ export function AccountPage({ user, onLogin, onLogout, wishlist, onToggleWishlis
                   <div className="bg-blue-50 border border-blue-200 p-4 text-xs mb-4">
                     <p className="font-semibold mb-2">Test Credentials:</p>
                     <p className="mb-1">User: user@test.com / user123</p>
-                    <p>Admin: admin@manoir.com / admin123</p>
+                    <p className="mb-1">Admin: admin@manoir.com / admin123</p>
+                    <p>Players: players@manoir.com / players123</p>
                   </div>
                   
                   {loginError && (

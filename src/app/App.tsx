@@ -41,6 +41,7 @@ export interface User {
   email: string;
   name: string;
   isAdmin: boolean;
+  isPlayer?: boolean;
 }
 
 export default function App() {
@@ -132,6 +133,10 @@ export default function App() {
       setUser({ email, name: 'Admin', isAdmin: true });
       return true;
     }
+    if (email === 'players@manoir.com' && password === 'players123') {
+      setUser({ email, name: 'Player', isAdmin: false, isPlayer: true });
+      return true;
+    }
     return false;
   };
 
@@ -211,7 +216,7 @@ export default function App() {
             <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/do-not-sell" element={<DoNotSellPage />} />
-            <Route path="/jacket-builder" element={<JacketBuilderPage />} />
+            <Route path="/jacket-builder" element={<JacketBuilderPage user={user} />} />
           </Routes>
         </main>
 

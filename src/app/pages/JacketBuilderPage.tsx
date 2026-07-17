@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronRight, X, Star, SlidersHorizontal } from "lucide-react";
-import { VarsityJacketViewer, renderNeckLabel, renderInteriorPatch, type BackDesign } from "../components/VarsityJacketViewer";
+import { VarsityJacketViewer, renderNeckLabel, renderInteriorPatch, type BackDesign, type BodyMaterial } from "../components/VarsityJacketViewer";
 import { useNavigate } from "react-router-dom";
 
 const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
@@ -79,6 +79,7 @@ const LEATHER_BW = [
 
 const LEATHER_TYPES = ["Nappa", "Cowhide"] as const;
 type LeatherType = (typeof LEATHER_TYPES)[number];
+type JacketEdition = "Classic" | "Players";
 
 function labelForColor(color: string) {
   for (const group of COLOR_GROUPS) {
@@ -89,7 +90,7 @@ function labelForColor(color: string) {
   return bw?.label ?? color;
 }
 
-// City list compiled from the current clubs of the top five leagues.
+// City list from the working top-six European league notes.
 const CITY_LEAGUES: { league: string; cities: string[] }[] = [
   {
     league: "Premier League · England",
@@ -98,31 +99,57 @@ const CITY_LEAGUES: { league: string; cities: string[] }[] = [
       "Manchester",
       "Liverpool",
       "Birmingham",
+      "Bournemouth",
+      "Brighton",
+      "Coventry",
+      "Hull",
+      "Ipswich",
+      "Leeds",
       "Newcastle",
       "Nottingham",
-      "Wolverhampton",
-      "Brighton",
-      "Southampton",
-      "Leicester",
-      "Ipswich",
-      "Bournemouth",
+      "Sunderland",
     ],
   },
   {
     league: "La Liga · Spain",
     cities: [
       "Madrid",
+      "Seville",
       "Barcelona",
-      "Sevilla",
-      "Valencia",
+      "A Coruña",
+      "Augsburg",
       "Bilbao",
+      "Elche",
+      "Getafe",
+      "Málaga",
+      "Pamplona",
       "San Sebastián",
+      "Santander",
+      "Valencia",
       "Vigo",
       "Villarreal",
-      "Girona",
-      "Las Palmas",
-      "Palma",
-      "Pamplona",
+    ],
+  },
+  {
+    league: "Serie A · Italy",
+    cities: [
+      "Milan",
+      "Rome",
+      "Turin",
+      "Bergamo",
+      "Bologna",
+      "Cagliari",
+      "Como",
+      "Florence",
+      "Frosinone",
+      "Genoa",
+      "Lecce",
+      "Monza",
+      "Naples",
+      "Parma",
+      "Reggio Emilia",
+      "Udine",
+      "Venice",
     ],
   },
   {
@@ -130,50 +157,63 @@ const CITY_LEAGUES: { league: string; cities: string[] }[] = [
     cities: [
       "Munich",
       "Dortmund",
-      "Leipzig",
       "Leverkusen",
+      "Leipzig",
+      "Stuttgart",
       "Frankfurt",
       "Berlin",
-      "Stuttgart",
-      "Mönchengladbach",
-      "Wolfsburg",
       "Freiburg",
+      "Augsburg",
       "Bremen",
+      "Cologne",
+      "Gelsenkirchen",
       "Hamburg",
+      "Mainz",
+      "Mönchengladbach",
+      "Paderborn",
+      "Sinsheim",
+      "Spiesen-Elversberg",
     ],
   },
   {
     league: "Ligue 1 · France",
     cities: [
       "Paris",
-      "Marseille",
-      "Lyon",
-      "Monaco",
+      "Angers",
+      "Auxerre",
+      "Brest",
+      "Le Havre",
+      "Le Mans",
+      "Lens",
       "Lille",
+      "Lorient",
+      "Lyon",
+      "Marseille",
+      "Monaco",
       "Nice",
       "Rennes",
-      "Lens",
-      "Nantes",
       "Strasbourg",
       "Toulouse",
-      "Saint-Étienne",
+      "Troyes",
     ],
   },
   {
-    league: "Serie A · Italy",
+    league: "Primeira Liga · Portugal",
     cities: [
-      "Milan",
-      "Turin",
-      "Rome",
-      "Naples",
-      "Florence",
-      "Bergamo",
-      "Bologna",
-      "Genoa",
-      "Verona",
-      "Udine",
-      "Como",
-      "Cagliari",
+      "Lisbon",
+      "Porto",
+      "Amadora",
+      "Arouca",
+      "Barcelos",
+      "Braga",
+      "Funchal",
+      "Guimarães",
+      "Moreira de Cónegos",
+      "Ponta Delgada",
+      "Estoril",
+      "Vila do Conde",
+      "Vila Nova de Famalicão",
+      "Viseu",
     ],
   },
 ];
@@ -183,13 +223,19 @@ const PRINT_COLORS = [
   { label: "Black", color: "#1a1a1a" },
 ];
 
-export function JacketBuilderPage() {
+interface JacketBuilderPageProps {
+  user?: { email: string; name: string; isAdmin: boolean; isPlayer?: boolean } | null;
+}
+
+export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
-  const [expandedSection, setExpandedSection] = useState<string | null>("Body");
+  const [expandedSection, setExpandedSection] = useState<string | null>("Jacket");
   const [openBodyGroup, setOpenBodyGroup] = useState<string | null>("Neutrals");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
+  const [jacketEdition, setJacketEdition] = useState<JacketEdition>("Classic");
+  const [showPlayersAccess, setShowPlayersAccess] = useState(false);
   const [bodyColor, setBodyColor] = useState("#141414");
   const [sleeveColor, setSleeveColor] = useState("#f4f2ea");
   const [leatherType, setLeatherType] = useState<LeatherType>("Nappa");
@@ -217,7 +263,7 @@ export function JacketBuilderPage() {
     };
   }, [showInterior, interiorImages]);
 
-  const [backStars, setBackStars] = useState(5);
+  const [backStars, setBackStars] = useState(0);
   const [backNumber, setBackNumber] = useState("10");
   const [leftSleeveNumbers, setLeftSleeveNumbers] = useState(["", "", "", "", ""]);
   const [rightSleeveNumbers, setRightSleeveNumbers] = useState(["", "", "", "", ""]);
@@ -232,6 +278,11 @@ export function JacketBuilderPage() {
     city: backCity,
     printColor,
   };
+
+  const isPlayersEdition = jacketEdition === "Players";
+  const canUsePlayersEdition = Boolean(user?.isPlayer || user?.isAdmin);
+  const renderedBodyColor = isPlayersEdition ? sleeveColor : bodyColor;
+  const renderedBodyMaterial: BodyMaterial = isPlayersEdition ? "Leather" : "Wool";
 
   const onBackNumberChange = (value: string) => setBackNumber(value.replace(/\D/g, "").slice(0, 2));
   const onSleeveNumberChange = (side: "left" | "right", index: number, value: string) => {
@@ -401,44 +452,147 @@ export function JacketBuilderPage() {
         >
           {activeTab === "materials" ? (
             <div>
+              {/* Jacket edition */}
+              <div className="border-b border-gray-100">
+                {accordionHeader(
+                  "Jacket",
+                  isPlayersEdition ? sleeveColor : bodyColor,
+                  isPlayersEdition ? `${leatherType} Players Leather` : "Classic Wool + Leather",
+                )}
+                {expandedSection === "Jacket" && (
+                  <div className="bg-gray-50 border-t border-gray-100 px-4 py-3 space-y-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["Classic", "Players"] as JacketEdition[]).map((edition) => {
+                        const active = jacketEdition === edition;
+                        return (
+                          <button
+                            key={edition}
+                            onClick={() => {
+                              if (edition === "Players" && !canUsePlayersEdition) {
+                                setShowPlayersAccess(true);
+                                return;
+                              }
+                              setJacketEdition(edition);
+                              setShowPlayersAccess(false);
+                              if (edition === "Players") setExpandedSection("Body");
+                            }}
+                            className={`min-h-20 border px-3 py-3 text-left transition-colors ${
+                              active ? "border-black bg-white" : "border-gray-200 bg-white text-gray-500 hover:border-black"
+                            }`}
+                          >
+                            <span className="block text-[10px] tracking-widest uppercase">{edition}</span>
+                            <span className="mt-1 block text-xs leading-snug">
+                              {edition === "Players" ? "Full leather body and sleeves" : "Wool body with leather sleeves"}
+                            </span>
+                            {edition === "Players" && !canUsePlayersEdition && (
+                              <span className="mt-2 block text-[9px] tracking-widest uppercase text-gray-400">Login required</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {showPlayersAccess && !canUsePlayersEdition && (
+                      <div className="border border-gray-200 bg-white p-3">
+                        <p className="text-xs leading-relaxed text-gray-600">
+                          Players full-leather jackets are credential-gated. Sign in with an approved account to configure Nappa or Cowhide.
+                        </p>
+                        <button
+                          onClick={() => navigate("/account")}
+                          className="mt-3 w-full bg-black px-3 py-2 text-[10px] tracking-widest uppercase text-white transition-colors hover:bg-gray-800"
+                        >
+                          Sign In For Players
+                        </button>
+                      </div>
+                    )}
+                    {isPlayersEdition && (
+                      <p className="text-[10px] leading-relaxed text-gray-500">
+                        Players jackets use one full-leather shell. Pick Nappa for a smoother finish or Cowhide for a tougher grain.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Body — grouped wool color picker */}
               <div className="border-b border-gray-100">
-                {accordionHeader("Body", bodyColor, "Wool")}
+                {accordionHeader("Body", isPlayersEdition ? sleeveColor : bodyColor, isPlayersEdition ? `${leatherType} Leather` : "Wool")}
                 {expandedSection === "Body" && (
-                  <div className="bg-gray-50 border-t border-gray-100 py-1">
-                    {COLOR_GROUPS.map(({ group, shades }) => {
-                      const groupOpen = openBodyGroup === group;
-                      return (
-                        <div key={group} className="border-b border-gray-100 last:border-b-0">
-                          <button
-                            onClick={() => setOpenBodyGroup(groupOpen ? null : group)}
-                            className="w-full flex items-center justify-between px-5 py-2 hover:bg-gray-100 transition-colors"
-                          >
-                            <span className="text-[11px] tracking-widest uppercase text-gray-500">{group}</span>
-                            <ChevronRight className={`w-3 h-3 text-gray-400 transition-transform ${groupOpen ? "rotate-90" : ""}`} />
-                          </button>
-                          {groupOpen && (
-                            <div className="px-5 pb-3 pt-1 flex flex-wrap gap-2">
-                              {shades.map((shade) => {
-                                const active = bodyColor.toLowerCase() === shade.color.toLowerCase();
-                                return (
-                                  <button
-                                    key={shade.color}
-                                    title={shade.label}
-                                    onClick={() => setBodyColor(shade.color)}
-                                    className={`w-8 h-8 rounded-full border shrink-0 transition-transform hover:scale-110 ${
-                                      active ? "border-black ring-2 ring-black ring-offset-1" : "border-gray-300"
-                                    }`}
-                                    style={{ backgroundColor: shade.color }}
-                                  />
-                                );
-                              })}
-                            </div>
-                          )}
+                  isPlayersEdition ? (
+                    <div className="bg-gray-50 border-t border-gray-100 px-5 py-3 space-y-3">
+                      <div>
+                        <div className="text-[10px] tracking-widest uppercase text-gray-400 mb-1.5">Full Leather Color</div>
+                        <div className="flex gap-2">
+                          {LEATHER_BW.map((opt) => {
+                            const active = sleeveColor.toLowerCase() === opt.color.toLowerCase();
+                            return (
+                              <button
+                                key={opt.color}
+                                title={opt.label}
+                                onClick={() => setSleeveColor(opt.color)}
+                                className={`w-8 h-8 rounded-full border shrink-0 transition-transform hover:scale-110 ${
+                                  active ? "border-black ring-2 ring-black ring-offset-1" : "border-gray-300"
+                                }`}
+                                style={{ backgroundColor: opt.color }}
+                              />
+                            );
+                          })}
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] tracking-widest uppercase text-gray-400 mb-1.5">Leather Type</div>
+                        <div className="flex gap-2">
+                          {LEATHER_TYPES.map((type) => (
+                            <button
+                              key={type}
+                              onClick={() => setLeatherType(type)}
+                              className={`px-4 py-1.5 text-xs tracking-wide border transition-colors ${
+                                leatherType === type
+                                  ? "bg-black text-white border-black"
+                                  : "border-gray-300 text-gray-600 hover:border-black"
+                              }`}
+                            >
+                              {type}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 border-t border-gray-100 py-1">
+                      {COLOR_GROUPS.map(({ group, shades }) => {
+                        const groupOpen = openBodyGroup === group;
+                        return (
+                          <div key={group} className="border-b border-gray-100 last:border-b-0">
+                            <button
+                              onClick={() => setOpenBodyGroup(groupOpen ? null : group)}
+                              className="w-full flex items-center justify-between px-5 py-2 hover:bg-gray-100 transition-colors"
+                            >
+                              <span className="text-[11px] tracking-widest uppercase text-gray-500">{group}</span>
+                              <ChevronRight className={`w-3 h-3 text-gray-400 transition-transform ${groupOpen ? "rotate-90" : ""}`} />
+                            </button>
+                            {groupOpen && (
+                              <div className="px-5 pb-3 pt-1 flex flex-wrap gap-2">
+                                {shades.map((shade) => {
+                                  const active = bodyColor.toLowerCase() === shade.color.toLowerCase();
+                                  return (
+                                    <button
+                                      key={shade.color}
+                                      title={shade.label}
+                                      onClick={() => setBodyColor(shade.color)}
+                                      className={`w-8 h-8 rounded-full border shrink-0 transition-transform hover:scale-110 ${
+                                        active ? "border-black ring-2 ring-black ring-offset-1" : "border-gray-300"
+                                      }`}
+                                      style={{ backgroundColor: shade.color }}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
                 )}
               </div>
 
@@ -529,9 +683,22 @@ export function JacketBuilderPage() {
                 <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
                   Gold Stars ({backStars} of 5)
                 </label>
-                <div className="flex gap-1">
+                <div className="flex flex-wrap items-center gap-1">
+                  <button
+                    onClick={() => setBackStars(0)}
+                    className={`h-8 border px-3 text-[10px] tracking-widest uppercase transition-colors ${
+                      backStars === 0 ? "border-black bg-black text-white" : "border-gray-300 text-gray-500 hover:border-black"
+                    }`}
+                  >
+                    None
+                  </button>
                   {[1, 2, 3, 4, 5].map((n) => (
-                    <button key={n} onClick={() => setBackStars(backStars === n ? Math.max(1, n - 1) : n)} className="p-1">
+                    <button
+                      key={n}
+                      onClick={() => setBackStars(backStars === n ? n - 1 : n)}
+                      className="flex h-8 w-8 items-center justify-center"
+                      title={`${n} star${n === 1 ? "" : "s"}`}
+                    >
                       <Star className={`w-5 h-5 ${n <= backStars ? "fill-[#c9a84c] text-[#c9a84c]" : "text-gray-300"}`} />
                     </button>
                   ))}
@@ -611,7 +778,8 @@ export function JacketBuilderPage() {
           }`}
         >
           <VarsityJacketViewer
-            bodyColor={bodyColor}
+            bodyColor={renderedBodyColor}
+            bodyMaterial={renderedBodyMaterial}
             sleeveColor={sleeveColor}
             leatherType={leatherType}
             trimColor={trimColor}

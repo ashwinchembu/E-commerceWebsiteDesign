@@ -402,7 +402,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
   const { bodyColor, bodyMaterial, sleeveColor, leatherType, trimColor, snapColor, pocketColor, liningColor } = props;
 
   const mountRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.0, rotX: -0.05 });
+  const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.0, rotX: -0.05, lastInteraction: 0 });
   const loadedRef = useRef<Loaded | null>(null);
   const frameRef = useRef(0);
   const propsRef = useRef(props);
@@ -481,6 +481,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     const modelRoot = new THREE.Group();
     scene.add(modelRoot);
+    const clock = new THREE.Clock();
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const materials = makeMaterials(propsRef.current);
     applyLeatherType(materials, propsRef.current.leatherType, propsRef.current.bodyMaterial);
@@ -801,6 +803,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     const onPointerDown = (e: PointerEvent) => {
       dragRef.current.active = true;
+      dragRef.current.lastInteraction = performance.now();
       dragRef.current.x = e.clientX;
       dragRef.current.y = e.clientY;
       mount.setPointerCapture(e.pointerId);
@@ -813,10 +816,15 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       d.rotX = THREE.MathUtils.clamp(d.rotX, -0.45, 0.35);
       d.x = e.clientX;
       d.y = e.clientY;
+      d.lastInteraction = performance.now();
     };
-    const onPointerUp = () => (dragRef.current.active = false);
+    const onPointerUp = () => {
+      dragRef.current.active = false;
+      dragRef.current.lastInteraction = performance.now();
+    };
     const onWheel = (e: WheelEvent) => {
       camera.position.z = THREE.MathUtils.clamp(camera.position.z + e.deltaY * 0.003, 3.2, 9);
+      dragRef.current.lastInteraction = performance.now();
     };
     mount.addEventListener("pointerdown", onPointerDown);
     mount.addEventListener("pointermove", onPointerMove);
@@ -836,6 +844,12 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     const animate = () => {
       const d = dragRef.current;
+      const elapsedSinceInteraction = performance.now() - d.lastInteraction;
+      if (!reduceMotion && !d.active && elapsedSinceInteraction > 1800) {
+        d.rotY += clock.getDelta() * 0.22;
+      } else {
+        clock.getDelta();
+      }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
       renderer.render(scene, camera);
       frameRef.current = requestAnimationFrame(animate);

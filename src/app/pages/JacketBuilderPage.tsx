@@ -5,54 +5,120 @@ import { useNavigate } from "react-router-dom";
 
 const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
-// Wool body shades, grouped Figma-style. Gold/metallic and yellow shades are
-// intentionally excluded for now (gold is reserved for the fixed brand
-// details; yellows are skipped per spec).
+// Jacket color options collated from the live Varsity Base builder swatches plus the
+// Figma Make-generated app palette already present in this repo. Varsity Base
+// names are used where visible; descriptive names fill the unlabeled swatches.
 const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] }[] = [
   {
-    group: "Neutrals",
+    group: "Varsity Base Neutrals",
     shades: [
-      { label: "Bright White", color: "#f1ead9" },
-      { label: "Cream", color: "#e7dec8" },
-      { label: "Bone", color: "#d9cfba" },
-      { label: "Stone Grey", color: "#9a958c" },
-      { label: "Charcoal", color: "#2c2c2c" },
-      { label: "Black", color: "#141414" },
+      { label: "Black", color: "#181b20" },
+      { label: "Bright White", color: "#eee3d5" },
+      { label: "Graphite", color: "#3a3a3a" },
+      { label: "Warm Grey", color: "#676263" },
     ],
   },
   {
-    group: "Reds",
+    group: "Varsity Base Reds",
     shades: [
-      { label: "Maroon", color: "#5e1b26" },
-      { label: "Burgundy", color: "#6b1e2a" },
+      { label: "Red", color: "#b3181e" },
+      { label: "Burgundy", color: "#770d22" },
+      { label: "Maroon", color: "#3d1022" },
+      { label: "Dark Maroon", color: "#561e1e" },
+      { label: "Oxblood", color: "#691c1a" },
+      { label: "Clay Red", color: "#be6858" },
+    ],
+  },
+  {
+    group: "Varsity Base Oranges",
+    shades: [
+      { label: "Orange", color: "#ec8e19" },
+      { label: "Papaya Orange", color: "#d83e0d" },
+      { label: "Pumpkin Orange", color: "#a23e01" },
+      { label: "Burnt Orange", color: "#a63000" },
+      { label: "Rust", color: "#9c3d06" },
+      { label: "Copper", color: "#bb6323" },
+    ],
+  },
+  {
+    group: "Varsity Base Yellows",
+    shades: [
+      { label: "Lemon", color: "#f2a407" },
+      { label: "Pale Yellow", color: "#f5e6a6" },
+      { label: "Sunshine", color: "#f2c94c" },
+      { label: "Athletic Yellow", color: "#f1b51c" },
+      { label: "Maize", color: "#d9a520" },
+      { label: "Mustard", color: "#b8860b" },
+      { label: "Ochre", color: "#a87418" },
+    ],
+  },
+  {
+    group: "Varsity Base Blues",
+    shades: [
+      { label: "Bright Royal", color: "#3d87c0" },
+      { label: "Royal Blue", color: "#1b294b" },
+      { label: "High Royal", color: "#1c275f" },
+      { label: "Medium Blue", color: "#184a98" },
+      { label: "Dress Navy", color: "#1c1b2b" },
+    ],
+  },
+  {
+    group: "Varsity Base Greens",
+    shades: [
+      { label: "Forest", color: "#054012" },
+      { label: "Bottle Green", color: "#0e3426" },
+      { label: "Kelly Green", color: "#144c24" },
+      { label: "Olive", color: "#2a3a2d" },
+    ],
+  },
+  {
+    group: "Varsity Base Purples",
+    shades: [
+      { label: "Purple", color: "#4b1d63" },
+      { label: "Eggplant", color: "#28142c" },
+    ],
+  },
+  {
+    group: "Varsity Base Browns",
+    shades: [
+      { label: "Brown", color: "#2a1606" },
+      { label: "Chestnut", color: "#875b32" },
+      { label: "Saddle Brown", color: "#854e0f" },
+    ],
+  },
+  {
+    group: "Figma Reds",
+    shades: [
+      { label: "Figma Maroon", color: "#5e1b26" },
+      { label: "Figma Burgundy", color: "#6b1e2a" },
       { label: "Cardinal", color: "#8f2130" },
       { label: "Crimson", color: "#a11d2e" },
       { label: "Brick", color: "#7c3a34" },
     ],
   },
   {
-    group: "Greens",
+    group: "Figma Greens",
     shades: [
-      { label: "Forest", color: "#1a3d2b" },
+      { label: "Figma Forest", color: "#1a3d2b" },
       { label: "Hunter", color: "#24503a" },
       { label: "Bottle", color: "#0f3d2e" },
-      { label: "Olive", color: "#4a5320" },
+      { label: "Figma Olive", color: "#4a5320" },
       { label: "Sage", color: "#7fa88a" },
     ],
   },
   {
-    group: "Blues",
+    group: "Figma Blues",
     shades: [
       { label: "Navy", color: "#1e2d5a" },
-      { label: "Royal Blue", color: "#20408f" },
-      { label: "Medium Blue", color: "#2f5fb0" },
+      { label: "Figma Royal Blue", color: "#20408f" },
+      { label: "Figma Medium Blue", color: "#2f5fb0" },
       { label: "France Blue", color: "#3a6bd6" },
       { label: "Baby Blue", color: "#8fb8e0" },
       { label: "Powder", color: "#aecbe8" },
     ],
   },
   {
-    group: "Purples",
+    group: "Figma Purples",
     shades: [
       { label: "Deep Purple", color: "#38265a" },
       { label: "Grape", color: "#442a6b" },
@@ -61,12 +127,23 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Oranges",
+    group: "Figma Oranges",
     shades: [
       { label: "Terracotta", color: "#bd6a45" },
-      { label: "Burnt Orange", color: "#b5531f" },
-      { label: "Rust", color: "#9c4419" },
+      { label: "Figma Burnt Orange", color: "#b5531f" },
+      { label: "Figma Rust", color: "#9c4419" },
       { label: "Coral", color: "#d47a5a" },
+    ],
+  },
+  {
+    group: "Figma Neutrals",
+    shades: [
+      { label: "Figma Bright White", color: "#f1ead9" },
+      { label: "Cream", color: "#e7dec8" },
+      { label: "Bone", color: "#d9cfba" },
+      { label: "Stone Grey", color: "#9a958c" },
+      { label: "Charcoal", color: "#2c2c2c" },
+      { label: "Figma Black", color: "#141414" },
     ],
   },
 ];
@@ -90,10 +167,10 @@ function labelForColor(color: string) {
   return bw?.label ?? color;
 }
 
-// City list from the working top-six European league notes.
-const CITY_LEAGUES: { league: string; cities: string[] }[] = [
+// Country-grouped city list. No protected competition or club names are shown.
+const COUNTRY_CITIES: { country: string; cities: string[] }[] = [
   {
-    league: "Premier League · England",
+    country: "England",
     cities: [
       "London",
       "Manchester",
@@ -111,7 +188,7 @@ const CITY_LEAGUES: { league: string; cities: string[] }[] = [
     ],
   },
   {
-    league: "La Liga · Spain",
+    country: "Spain",
     cities: [
       "Madrid",
       "Seville",
@@ -130,7 +207,7 @@ const CITY_LEAGUES: { league: string; cities: string[] }[] = [
     ],
   },
   {
-    league: "Serie A · Italy",
+    country: "Italy",
     cities: [
       "Milan",
       "Rome",
@@ -152,7 +229,7 @@ const CITY_LEAGUES: { league: string; cities: string[] }[] = [
     ],
   },
   {
-    league: "Bundesliga · Germany",
+    country: "Germany",
     cities: [
       "Munich",
       "Dortmund",
@@ -175,7 +252,7 @@ const CITY_LEAGUES: { league: string; cities: string[] }[] = [
     ],
   },
   {
-    league: "Ligue 1 · France",
+    country: "France",
     cities: [
       "Paris",
       "Angers",
@@ -197,7 +274,7 @@ const CITY_LEAGUES: { league: string; cities: string[] }[] = [
     ],
   },
   {
-    league: "Primeira Liga · Portugal",
+    country: "Portugal",
     cities: [
       "Lisbon",
       "Porto",
@@ -230,12 +307,12 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Jacket");
-  const [openBodyGroup, setOpenBodyGroup] = useState<string | null>("Neutrals");
+  const [openBodyGroup, setOpenBodyGroup] = useState<string | null>("Varsity Base Neutrals");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [jacketEdition, setJacketEdition] = useState<JacketEdition>("Classic");
   const [showFootballersAccess, setShowFootballersAccess] = useState(false);
-  const [bodyColor, setBodyColor] = useState("#141414");
+  const [bodyColor, setBodyColor] = useState("#181b20");
   const [sleeveColor, setSleeveColor] = useState("#f4f2ea");
   const [leatherType, setLeatherType] = useState<LeatherType>("Nappa");
   const [pocketColor, setPocketColor] = useState("#f4f2ea");
@@ -824,8 +901,8 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
               onChange={(e) => setBackCity(e.target.value)}
               className="w-full max-w-xs bg-white border border-gray-300 px-3 py-2 text-[11px] tracking-widest uppercase focus:outline-none focus:border-black cursor-pointer sm:w-auto sm:px-4 sm:text-xs"
             >
-              {CITY_LEAGUES.map(({ league, cities }) => (
-                <optgroup key={league} label={league}>
+              {COUNTRY_CITIES.map(({ country, cities }) => (
+                <optgroup key={country} label={country}>
                   {cities.map((city) => (
                     <option key={city} value={city}>
                       {city}

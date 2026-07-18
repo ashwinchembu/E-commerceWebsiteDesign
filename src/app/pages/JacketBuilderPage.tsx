@@ -5,12 +5,11 @@ import { useNavigate } from "react-router-dom";
 
 const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
-// Jacket color options collated from the live Varsity Base builder swatches plus the
-// Figma Make-generated app palette already present in this repo. Varsity Base
-// names are used where visible; descriptive names fill the unlabeled swatches.
+// Jacket color options collated into one product palette. Gold stays reserved
+// for fixed brand details and is not offered as a selectable jacket color.
 const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] }[] = [
   {
-    group: "Varsity Base Neutrals",
+    group: "Neutrals",
     shades: [
       { label: "Black", color: "#181b20" },
       { label: "Bright White", color: "#eee3d5" },
@@ -19,7 +18,7 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Varsity Base Reds",
+    group: "Reds",
     shades: [
       { label: "Red", color: "#b3181e" },
       { label: "Burgundy", color: "#770d22" },
@@ -30,7 +29,7 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Varsity Base Oranges",
+    group: "Oranges",
     shades: [
       { label: "Orange", color: "#ec8e19" },
       { label: "Papaya Orange", color: "#d83e0d" },
@@ -41,7 +40,7 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Varsity Base Yellows",
+    group: "Yellows",
     shades: [
       { label: "Lemon", color: "#f2a407" },
       { label: "Pale Yellow", color: "#f5e6a6" },
@@ -53,7 +52,7 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Varsity Base Blues",
+    group: "Blues",
     shades: [
       { label: "Bright Royal", color: "#3d87c0" },
       { label: "Royal Blue", color: "#1b294b" },
@@ -63,7 +62,7 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Varsity Base Greens",
+    group: "Greens",
     shades: [
       { label: "Forest", color: "#054012" },
       { label: "Bottle Green", color: "#0e3426" },
@@ -72,14 +71,14 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Varsity Base Purples",
+    group: "Purples",
     shades: [
       { label: "Purple", color: "#4b1d63" },
       { label: "Eggplant", color: "#28142c" },
     ],
   },
   {
-    group: "Varsity Base Browns",
+    group: "Browns",
     shades: [
       { label: "Brown", color: "#2a1606" },
       { label: "Chestnut", color: "#875b32" },
@@ -87,38 +86,38 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Figma Reds",
+    group: "Extended Reds",
     shades: [
-      { label: "Figma Maroon", color: "#5e1b26" },
-      { label: "Figma Burgundy", color: "#6b1e2a" },
+      { label: "Deep Maroon", color: "#5e1b26" },
+      { label: "Wine Burgundy", color: "#6b1e2a" },
       { label: "Cardinal", color: "#8f2130" },
       { label: "Crimson", color: "#a11d2e" },
       { label: "Brick", color: "#7c3a34" },
     ],
   },
   {
-    group: "Figma Greens",
+    group: "Extended Greens",
     shades: [
-      { label: "Figma Forest", color: "#1a3d2b" },
+      { label: "Deep Forest", color: "#1a3d2b" },
       { label: "Hunter", color: "#24503a" },
       { label: "Bottle", color: "#0f3d2e" },
-      { label: "Figma Olive", color: "#4a5320" },
+      { label: "Army Olive", color: "#4a5320" },
       { label: "Sage", color: "#7fa88a" },
     ],
   },
   {
-    group: "Figma Blues",
+    group: "Extended Blues",
     shades: [
       { label: "Navy", color: "#1e2d5a" },
-      { label: "Figma Royal Blue", color: "#20408f" },
-      { label: "Figma Medium Blue", color: "#2f5fb0" },
+      { label: "Classic Royal Blue", color: "#20408f" },
+      { label: "Clear Blue", color: "#2f5fb0" },
       { label: "France Blue", color: "#3a6bd6" },
       { label: "Baby Blue", color: "#8fb8e0" },
       { label: "Powder", color: "#aecbe8" },
     ],
   },
   {
-    group: "Figma Purples",
+    group: "Extended Purples",
     shades: [
       { label: "Deep Purple", color: "#38265a" },
       { label: "Grape", color: "#442a6b" },
@@ -127,23 +126,23 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Figma Oranges",
+    group: "Extended Oranges",
     shades: [
       { label: "Terracotta", color: "#bd6a45" },
-      { label: "Figma Burnt Orange", color: "#b5531f" },
-      { label: "Figma Rust", color: "#9c4419" },
+      { label: "Deep Burnt Orange", color: "#b5531f" },
+      { label: "Classic Rust", color: "#9c4419" },
       { label: "Coral", color: "#d47a5a" },
     ],
   },
   {
-    group: "Figma Neutrals",
+    group: "Extended Neutrals",
     shades: [
-      { label: "Figma Bright White", color: "#f1ead9" },
+      { label: "Soft Bright White", color: "#f1ead9" },
       { label: "Cream", color: "#e7dec8" },
       { label: "Bone", color: "#d9cfba" },
       { label: "Stone Grey", color: "#9a958c" },
       { label: "Charcoal", color: "#2c2c2c" },
-      { label: "Figma Black", color: "#141414" },
+      { label: "Classic Black", color: "#141414" },
     ],
   },
 ];
@@ -307,7 +306,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Jacket");
-  const [openBodyGroup, setOpenBodyGroup] = useState<string | null>("Varsity Base Neutrals");
+  const [openBodyGroup, setOpenBodyGroup] = useState<string | null>("Neutrals");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [jacketEdition, setJacketEdition] = useState<JacketEdition>("Classic");

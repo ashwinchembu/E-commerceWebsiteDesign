@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { ChevronRight, X, Star, SlidersHorizontal } from "lucide-react";
 import { VarsityJacketViewer, renderNeckLabel, renderInteriorPatch, type BackDesign, type BodyMaterial } from "../components/VarsityJacketViewer";
 import { useNavigate } from "react-router-dom";
+import { createJacketCheckout, type ShopifyAttribute } from "../lib/shopify";
 
 const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
 // Jacket color options collated into one product palette. Gold stays reserved
 // for fixed brand details and is not offered as a selectable jacket color.
-const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] }[] = [
+const COLOR_GROUP_ENTRIES: { group: string; shades: { label: string; color: string }[] }[] = [
   {
     group: "Neutrals",
     shades: [
@@ -26,29 +27,6 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
       { label: "Dark Maroon", color: "#561e1e" },
       { label: "Oxblood", color: "#691c1a" },
       { label: "Clay Red", color: "#be6858" },
-    ],
-  },
-  {
-    group: "Oranges",
-    shades: [
-      { label: "Orange", color: "#ec8e19" },
-      { label: "Papaya Orange", color: "#d83e0d" },
-      { label: "Pumpkin Orange", color: "#a23e01" },
-      { label: "Burnt Orange", color: "#a63000" },
-      { label: "Rust", color: "#9c3d06" },
-      { label: "Copper", color: "#bb6323" },
-    ],
-  },
-  {
-    group: "Yellows",
-    shades: [
-      { label: "Lemon", color: "#f2a407" },
-      { label: "Pale Yellow", color: "#f5e6a6" },
-      { label: "Sunshine", color: "#f2c94c" },
-      { label: "Athletic Yellow", color: "#f1b51c" },
-      { label: "Maize", color: "#d9a520" },
-      { label: "Mustard", color: "#b8860b" },
-      { label: "Ochre", color: "#a87418" },
     ],
   },
   {
@@ -78,15 +56,32 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Browns",
+    group: "Yellows",
     shades: [
-      { label: "Brown", color: "#2a1606" },
-      { label: "Chestnut", color: "#875b32" },
-      { label: "Saddle Brown", color: "#854e0f" },
+      { label: "Lemon", color: "#f2a407" },
+      { label: "Pale Yellow", color: "#f5e6a6" },
+      { label: "Sunshine", color: "#f2c94c" },
+      { label: "Athletic Yellow", color: "#f1b51c" },
+      { label: "Maize", color: "#d9a520" },
+      { label: "Mustard", color: "#b8860b" },
+      { label: "Ochre", color: "#a87418" },
     ],
   },
   {
-    group: "Extended Reds",
+    group: "Oranges",
+    shades: [
+      { label: "Orange", color: "#ec8e19" },
+      { label: "Papaya Orange", color: "#d83e0d" },
+      { label: "Pumpkin Orange", color: "#a23e01" },
+      { label: "Burnt Orange", color: "#a63000" },
+      { label: "Rust", color: "#9c3d06" },
+      { label: "Copper", color: "#bb6323" },
+      { label: "Terracotta", color: "#bd6a45" },
+      { label: "Coral", color: "#d47a5a" },
+    ],
+  },
+  {
+    group: "Reds",
     shades: [
       { label: "Deep Maroon", color: "#5e1b26" },
       { label: "Wine Burgundy", color: "#6b1e2a" },
@@ -96,7 +91,7 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Extended Greens",
+    group: "Greens",
     shades: [
       { label: "Deep Forest", color: "#1a3d2b" },
       { label: "Hunter", color: "#24503a" },
@@ -106,7 +101,7 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Extended Blues",
+    group: "Blues",
     shades: [
       { label: "Navy", color: "#1e2d5a" },
       { label: "Classic Royal Blue", color: "#20408f" },
@@ -117,7 +112,7 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Extended Purples",
+    group: "Purples",
     shades: [
       { label: "Deep Purple", color: "#38265a" },
       { label: "Grape", color: "#442a6b" },
@@ -126,16 +121,7 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
   {
-    group: "Extended Oranges",
-    shades: [
-      { label: "Terracotta", color: "#bd6a45" },
-      { label: "Deep Burnt Orange", color: "#b5531f" },
-      { label: "Classic Rust", color: "#9c4419" },
-      { label: "Coral", color: "#d47a5a" },
-    ],
-  },
-  {
-    group: "Extended Neutrals",
+    group: "Neutrals",
     shades: [
       { label: "Soft Bright White", color: "#f1ead9" },
       { label: "Cream", color: "#e7dec8" },
@@ -146,6 +132,11 @@ const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] 
     ],
   },
 ];
+
+const COLOR_GROUPS = ["Neutrals", "Reds", "Blues", "Greens", "Purples", "Yellows", "Oranges"].map((group) => ({
+  group,
+  shades: COLOR_GROUP_ENTRIES.filter((entry) => entry.group === group).flatMap((entry) => entry.shades),
+}));
 
 // Leather / trim / snaps are black & white only.
 const LEATHER_BW = [
@@ -320,6 +311,8 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
 
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [checkoutPending, setCheckoutPending] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [wishlisted, setWishlisted] = useState(false);
   const [showInterior, setShowInterior] = useState(false);
   const [interiorImages, setInteriorImages] = useState<{ label: string; patch: string } | null>(null);
@@ -339,11 +332,13 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
   }, [showInterior, interiorImages]);
 
   const [backStars, setBackStars] = useState(0);
-  const [backNumber, setBackNumber] = useState("10");
+  const [backNumber, setBackNumber] = useState("7");
   const [leftSleeveNumbers, setLeftSleeveNumbers] = useState(["", "", "", "", ""]);
   const [rightSleeveNumbers, setRightSleeveNumbers] = useState(["", "", "", "", ""]);
   const [backCity, setBackCity] = useState("Madrid");
-  const [printColor, setPrintColor] = useState(PRINT_COLORS[0].color);
+  const [backPrintColor, setBackPrintColor] = useState(PRINT_COLORS[0].color);
+  const [sleevePrintColor, setSleevePrintColor] = useState(PRINT_COLORS[0].color);
+  const [liningColor, setLiningColor] = useState(LEATHER_BW[0].color);
 
   const backDesign: BackDesign = {
     stars: backStars,
@@ -351,7 +346,8 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
     leftSleeveNumbers,
     rightSleeveNumbers,
     city: backCity,
-    printColor,
+    backPrintColor,
+    sleevePrintColor,
   };
 
   const isFootballersEdition = jacketEdition === "Footballers";
@@ -366,7 +362,42 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
     setter((numbers) => numbers.map((n, i) => (i === index ? digits : n)));
   };
 
-  const price = 895;
+  const price = 1195;
+
+  const checkoutAttributes = (): ShopifyAttribute[] => [
+    { key: "Edition", value: jacketEdition },
+    { key: "Size", value: selectedSize ?? "" },
+    { key: "Body material", value: renderedBodyMaterial },
+    { key: "Body color", value: labelForColor(renderedBodyColor) },
+    { key: "Sleeve color", value: labelForColor(sleeveColor) },
+    { key: "Leather type", value: leatherType },
+    { key: "Pocket color", value: labelForColor(pocketColor) },
+    { key: "Snap color", value: labelForColor(snapColor) },
+    { key: "Knit trim color", value: labelForColor(trimColor) },
+    { key: "Inside lining", value: labelForColor(liningColor) },
+    { key: "Back city", value: backCity },
+    { key: "Back number", value: backNumber || "None" },
+    { key: "Gold stars", value: String(backStars) },
+    { key: "Back print color", value: labelForColor(backPrintColor) },
+    { key: "Left sleeve numbers", value: leftSleeveNumbers.filter(Boolean).join(", ") || "None" },
+    { key: "Right sleeve numbers", value: rightSleeveNumbers.filter(Boolean).join(", ") || "None" },
+    { key: "Sleeve print color", value: labelForColor(sleevePrintColor) },
+    { key: "Production time", value: "4–6 weeks" },
+    { key: "Final sale", value: "Yes" },
+  ];
+
+  const proceedToShopify = async () => {
+    if (!selectedSize || checkoutPending) return;
+    setCheckoutPending(true);
+    setCheckoutError(null);
+    try {
+      const checkoutUrl = await createJacketCheckout(selectedSize, checkoutAttributes());
+      window.location.assign(checkoutUrl);
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : "Unable to start Shopify checkout.");
+      setCheckoutPending(false);
+    }
+  };
 
   // Black/white swatch sections (pockets, snaps, knit trim).
   const BW_SECTIONS: { section: string; color: string; setColor: (c: string) => void; material: string }[] = [
@@ -725,6 +756,11 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
                 </div>
               ))}
 
+              <div className="border-b border-gray-100">
+                {accordionHeader("Inside Lining", liningColor, "Quilted")}
+                {expandedSection === "Inside Lining" && bwSwatches(liningColor, setLiningColor)}
+              </div>
+
               {/* Fixed signature details */}
               <div className="px-4 py-4 space-y-3">
                 <p className="text-[10px] tracking-widest uppercase text-gray-400">Signature details</p>
@@ -735,7 +771,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: "#141414" }} />
-                    Black quilted lining
+                    {labelForColor(liningColor)} quilted lining
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: "#c9a84c" }} />
@@ -810,17 +846,36 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
                 ))}
               </div>
 
-              {/* Print color — black or white only */}
+              {/* Back and sleeve artwork colors are intentionally independent. */}
               <div>
-                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">Print Color</label>
+                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">Back Print Color</label>
                 <div className="flex gap-2">
                   {PRINT_COLORS.map((opt) => (
                     <button
                       key={opt.color}
                       title={opt.label}
-                      onClick={() => setPrintColor(opt.color)}
+                      onClick={() => setBackPrintColor(opt.color)}
                       className={`w-8 h-8 rounded-full border shrink-0 ${
-                        printColor.toLowerCase() === opt.color.toLowerCase()
+                        backPrintColor.toLowerCase() === opt.color.toLowerCase()
+                          ? "border-black ring-2 ring-black ring-offset-1"
+                          : "border-gray-300"
+                      }`}
+                      style={{ backgroundColor: opt.color }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">Sleeve Print Color</label>
+                <div className="flex gap-2">
+                  {PRINT_COLORS.map((opt) => (
+                    <button
+                      key={opt.color}
+                      title={opt.label}
+                      onClick={() => setSleevePrintColor(opt.color)}
+                      className={`w-8 h-8 rounded-full border shrink-0 ${
+                        sleevePrintColor.toLowerCase() === opt.color.toLowerCase()
                           ? "border-black ring-2 ring-black ring-offset-1"
                           : "border-gray-300"
                       }`}
@@ -852,7 +907,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
             trimColor={trimColor}
             snapColor={snapColor}
             pocketColor={pocketColor}
-            liningColor="#141414"
+            liningColor={liningColor}
             backDesign={backDesign}
           />
 
@@ -936,7 +991,10 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
               {SIZES.map((size) => (
                 <button
                   key={size}
-                  onClick={() => setSelectedSize(size)}
+                  onClick={() => {
+                    setSelectedSize(size);
+                    setCheckoutError(null);
+                  }}
                   className={`py-2 border text-xs font-medium tracking-wide transition-colors ${
                     selectedSize === size ? "bg-black text-white border-black" : "border-gray-300 hover:border-black"
                   }`}
@@ -947,11 +1005,18 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
             </div>
 
             <button
-              disabled={!selectedSize}
+              disabled={!selectedSize || checkoutPending}
+              onClick={proceedToShopify}
               className="w-full bg-black text-white py-3 text-xs tracking-widest uppercase disabled:opacity-40 hover:bg-gray-800 transition-colors"
             >
-              Checkout
+              {checkoutPending ? "Creating Shopify Checkout…" : "Checkout Securely on Shopify"}
             </button>
+
+            {checkoutError && (
+              <p role="alert" className="mt-3 border border-red-200 bg-red-50 p-3 text-center text-[11px] leading-relaxed text-red-700">
+                {checkoutError}
+              </p>
+            )}
 
             <p className="text-[10px] text-gray-400 text-center mt-3">
               We accept all debit/credit cards, as well as payment via PayPal.

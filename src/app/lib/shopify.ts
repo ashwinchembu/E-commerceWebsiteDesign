@@ -1,0 +1,72 @@
+export type ShopifyAttribute = { key: string; value: string };
+
+type CartCreateResponse = {
+  data?: {
+    cartCreate?: {
+      cart?: { checkoutUrl: string };
+      userErrors: Array<{ field?: string[]; message: string }>;
+      warnings?: Array<{ message: string }>;
+    };
+  };
+  errors?: Array<{ message: string }>;
+};
+
+function requiredEnv(name: string, value: string | undefined) {
+  if (!value?.trim()) throw new Error(`Shopify checkout is not configured (${name}).`);
+  return value.trim();
+}
+
+function jacketVariantForSize(size: string) {
+  const raw = requiredEnv("VITE_SHOPIFY_JACKET_VARIANTS", import.meta.env.VITE_SHOPIFY_JACKET_VARIANTS);
+  let variants: Record<string, string>;
+  try {
+    variants = JSON.parse(raw);
+  } catch {
+    throw new Error("VITE_SHOPIFY_JACKET_VARIANTS must be valid JSON.");
+  }
+  return requiredEnv(`variant for size ${size}`, variants[size]);
+}
+
+export async function createJacketCheckout(size: string, attributes: ShopifyAttribute[]) {
+  const store = requiredEnv("VITE_SHOPIFY_STORE_DOMAIN", import.meta.env.VITE_SHOPIFY_STORE_DOMAIN)
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
+  const token = requiredEnv("VITE_SHOPIFY_STOREFRONT_TOKEN", import.meta.env.VITE_SHOPIFY_STOREFRONT_TOKEN);
+  const apiVersion = import.meta.env.VITE_SHOPIFY_API_VERSION?.trim() || "2026-07";
+
+  const response = await fetch(`https://${store}/api/${apiVersion}/graphql.json`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Storefront-Access-Token": token,
+    },
+    body: JSON.stringify({
+      query: `
+        mutation CreateJacketCart($input: CartInput!) {
+          cartCreate(input: $input) {
+            cart { checkoutUrl }
+            userErrors { field message }
+            warnings { message }
+          }
+        }
+      `,
+      variables: {
+        input: {
+          lines: [{ merchandiseId: jacketVariantForSize(size), quantity: 1, attributes }],
+          attributes: [{ key: "Builder", value: "Manoir Kits Render configurator" }],
+        },
+      },
+    }),
+  });
+
+  const payload = (await response.json()) as CartCreateResponse;
+  const errors = [
+    ...(payload.errors ?? []).map((error) => error.message),
+    ...(payload.data?.cartCreate?.userErrors ?? []).map((error) => error.message),
+  ];
+  const checkoutUrl = payload.data?.cartCreate?.cart?.checkoutUrl;
+  if (!response.ok || errors.length || !checkoutUrl) {
+    throw new Error(errors.join(" ") || "Shopify could not create this checkout.");
+  }
+  return checkoutUrl;
+}

@@ -303,11 +303,11 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
   const [jacketEdition, setJacketEdition] = useState<JacketEdition>("Classic");
   const [showFootballersAccess, setShowFootballersAccess] = useState(false);
   const [bodyColor, setBodyColor] = useState("#181b20");
-  const [sleeveColor, setSleeveColor] = useState("#f4f2ea");
+  const [sleeveColor, setSleeveColor] = useState("#1a1a1a");
   const [leatherType, setLeatherType] = useState<LeatherType>("Nappa");
-  const [pocketColor, setPocketColor] = useState("#f4f2ea");
-  const [snapColor, setSnapColor] = useState("#f4f2ea");
-  const [trimColor, setTrimColor] = useState("#f4f2ea");
+  const [pocketColor, setPocketColor] = useState("#1a1a1a");
+  const [snapColor, setSnapColor] = useState("#1a1a1a");
+  const [trimColor, setTrimColor] = useState("#1a1a1a");
 
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
@@ -331,7 +331,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
     };
   }, [showInterior, interiorImages]);
 
-  const [backStars, setBackStars] = useState(0);
+  const [backStars, setBackStars] = useState(5);
   const [backNumber, setBackNumber] = useState("7");
   const [leftSleeveNumbers, setLeftSleeveNumbers] = useState(["", "", "", "", ""]);
   const [rightSleeveNumbers, setRightSleeveNumbers] = useState(["", "", "", "", ""]);

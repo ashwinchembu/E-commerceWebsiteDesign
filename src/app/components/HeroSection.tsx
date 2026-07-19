@@ -92,9 +92,6 @@ export function HeroSection() {
       
       <div className="relative h-full flex items-center justify-center text-center text-white px-6">
         <div>
-          <h1 className="text-6xl md:text-8xl tracking-widest mb-6 font-light">
-            SPRING/SUMMER '26
-          </h1>
           <p className="text-sm tracking-widest mb-8 opacity-90">
             DISCOVER THE NEW COLLECTION
           </p>

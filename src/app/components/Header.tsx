@@ -320,6 +320,17 @@ export function Header({ cartItemCount, user, onSearchClick }: HeaderProps) {
               >
                 COLLECTION
               </Link>
+              <Link
+                to="/jacket-builder"
+                className={`border px-4 py-3 text-center text-sm tracking-widest transition-colors ${
+                  isHomePage
+                    ? 'border-white bg-white text-black hover:bg-transparent hover:text-white'
+                    : 'border-black bg-black text-white hover:bg-white hover:text-black'
+                }`}
+                onClick={() => setShowMobileMenu(false)}
+              >
+                CUSTOM JACKET BUILDER
+              </Link>
               <Link 
                 to="/account" 
                 className="text-sm tracking-wide hover:opacity-70 transition-opacity"

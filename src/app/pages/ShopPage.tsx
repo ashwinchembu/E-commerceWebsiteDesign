@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ShopProductCard } from '../components/ShopProductCard';
 import { products } from '../data/products';
 
@@ -68,6 +68,12 @@ export function ShopPage({ onAddToCart, wishlist, onToggleWishlist }: ShopPagePr
       <div className="bg-black text-white py-20 text-center">
         <h1 className="text-5xl tracking-widest mb-4 font-light">SHOP</h1>
         <p className="text-sm tracking-wide opacity-80">Discover our full collection</p>
+        <Link
+          to="/jacket-builder"
+          className="mt-7 inline-flex min-h-12 items-center justify-center border border-white px-6 py-3 text-xs tracking-widest transition-colors hover:bg-white hover:text-black sm:px-9"
+        >
+          DESIGN YOUR CUSTOM JACKET
+        </Link>
       </div>
 
       <div className="container mx-auto px-6 py-12">

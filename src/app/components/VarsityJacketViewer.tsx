@@ -124,18 +124,18 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
     ctx.save();
     ctx.translate(w / 2, 0);
     ctx.scale(sx, 1);
-    outlinedText(ctx, city, 0, 200, fontSize, design.printColor, (w * 0.86) / sx);
+    outlinedText(ctx, city, 0, 200, fontSize, design.backPrintColor, (w * 0.86) / sx);
     ctx.restore();
   }
 
   const number = design.backNumber.trim();
   if (number) {
     ctx.font = "400 390px 'League Spartan', sans-serif";
-    outlinedText(ctx, number, w / 2, 452, 390, design.printColor, w * 0.92);
+    outlinedText(ctx, number, w / 2, 452, 390, design.backPrintColor, w * 0.92);
   }
 
   ctx.font = "400 104px 'League Spartan', sans-serif";
-  outlinedText(ctx, "EST. 2026", w / 2, 652, 104, design.printColor, w * 0.96);
+  outlinedText(ctx, "EST. 2026", w / 2, 652, 104, design.backPrintColor, w * 0.96);
 }
 
 /**
@@ -239,7 +239,8 @@ export interface BackDesign {
   leftSleeveNumbers: string[];
   rightSleeveNumbers: string[];
   city: string;
-  printColor: string;
+  backPrintColor: string;
+  sleevePrintColor: string;
 }
 
 interface VarsityJacketViewerProps {
@@ -258,6 +259,7 @@ type PartMaterials = {
   body: THREE.MeshPhysicalMaterial;
   sleeve: THREE.MeshPhysicalMaterial;
   trim: THREE.MeshPhysicalMaterial;
+  collar: THREE.MeshPhysicalMaterial;
   snap: THREE.MeshPhysicalMaterial;
   pocket: THREE.MeshPhysicalMaterial;
   lining: THREE.MeshStandardMaterial;
@@ -298,7 +300,8 @@ function applyBodyMaterial(material: THREE.MeshPhysicalMaterial, bodyMaterial: B
 function groupFor(name: string): keyof PartMaterials | "logo" {
   const n = name.toLowerCase();
   if (n.includes("sleeve")) return "sleeve";
-  if (n.includes("collar") || n.includes("knit") || n.includes("trim")) return "trim";
+  if (n.includes("collar")) return "collar"; // always black, like the reference jacket
+  if (n.includes("knit") || n.includes("trim")) return "trim";
   if (n.includes("pocket")) return "pocket";
   if (n.includes("logo")) return "logo";
   if (n.includes("front_body")) return "body"; // L / R / button_back
@@ -326,6 +329,13 @@ function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
     }),
     trim: new THREE.MeshPhysicalMaterial({
       color: colors.trimColor,
+      roughness: 0.9,
+      sheen: 0.25,
+      sheenRoughness: 0.95,
+      envMapIntensity: 0.3,
+    }),
+    collar: new THREE.MeshPhysicalMaterial({
+      color: "#141414", // fixed black, like the reference jacket
       roughness: 0.9,
       sheen: 0.25,
       sheenRoughness: 0.95,
@@ -432,8 +442,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const design = propsRef.current.backDesign;
     drawBackDesign(loaded.back.canvas, design);
     loaded.back.texture.needsUpdate = true;
-    drawSleeveNumbers(loaded.sleeves.left.canvases, design.leftSleeveNumbers, design.printColor);
-    drawSleeveNumbers(loaded.sleeves.right.canvases, design.rightSleeveNumbers, design.printColor);
+    drawSleeveNumbers(loaded.sleeves.left.canvases, design.leftSleeveNumbers, design.sleevePrintColor);
+    drawSleeveNumbers(loaded.sleeves.right.canvases, design.rightSleeveNumbers, design.sleevePrintColor);
     for (const t of loaded.sleeves.left.textures) t.needsUpdate = true;
     for (const t of loaded.sleeves.right.textures) t.needsUpdate = true;
   };

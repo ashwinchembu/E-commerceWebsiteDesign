@@ -1,10 +1,21 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Volume2, VolumeX } from 'lucide-react';
 
-const HERO_VIDEO = '/videos/landing-hero.mp4';
+const HERO_VIDEO = '/videos/landing-hero.mp4?v=4';
 
 export function HeroSection() {
   const heroRef = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+
+  const toggleSound = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = !muted;
+    setMuted(!muted);
+    if (video.paused) await video.play();
+  };
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -52,11 +63,12 @@ export function HeroSection() {
         {/* The hero matches the source's 9:16 ratio, so every frame is visible
             at full width without cropping, distortion, or side bars. */}
         <video
+          ref={videoRef}
           className="absolute inset-0 h-full w-full object-cover object-center"
           src={HERO_VIDEO}
           autoPlay
           loop
-          muted
+          muted={muted}
           playsInline
           preload="auto"
           aria-label="Manoir Kits collection film"
@@ -67,6 +79,16 @@ export function HeroSection() {
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.35),transparent_10%,transparent_90%,rgba(0,0,0,0.45))]" />
         <div className="absolute inset-0 bg-black/20" />
       </div>
+
+      <button
+        type="button"
+        onClick={toggleSound}
+        className="absolute right-4 top-4 z-20 flex items-center gap-2 border border-white/60 bg-black/35 px-3 py-2 text-[10px] tracking-widest text-white backdrop-blur-sm transition-colors hover:bg-black/60 sm:right-6 sm:top-6"
+        aria-label={muted ? 'Turn video sound on' : 'Mute video'}
+      >
+        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        {muted ? 'SOUND ON' : 'MUTE'}
+      </button>
       
       <div className="relative h-full flex items-center justify-center text-center text-white px-6">
         <div>

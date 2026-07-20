@@ -580,7 +580,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
                     {showFootballersAccess && !canUseFootballersEdition && (
                       <div className="border border-gray-200 bg-white p-3">
                         <p className="text-xs leading-relaxed text-gray-600">
-                          Footballers full-leather jackets are credential-gated. Sign in with an approved account to configure Nappa or Cowhide.
+                          Footballers full-leather jackets are credential-gated. Sign in with an approved account to configure.
                         </p>
                         <button
                           onClick={() => navigate("/account")}

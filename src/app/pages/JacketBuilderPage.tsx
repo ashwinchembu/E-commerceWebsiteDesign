@@ -933,7 +933,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
             <select
               value={backCity}
               onChange={(e) => setBackCity(e.target.value)}
-              className="w-full max-w-xs bg-white border border-gray-300 px-3 py-2 text-[11px] tracking-widest uppercase focus:outline-none focus:border-black cursor-pointer sm:w-auto sm:px-4 sm:text-xs"
+              className="w-full max-w-xs bg-white border border-gray-300 px-3 py-2 text-[11px] tracking-widest uppercase focus:outline-none focus:border-black cursor-default sm:w-auto sm:px-4 sm:text-xs"
             >
               <optgroup label="Countries">
                 {WORLD_CUP_COUNTRIES.map((country) => (

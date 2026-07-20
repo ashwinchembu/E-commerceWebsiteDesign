@@ -259,7 +259,6 @@ type PartMaterials = {
   body: THREE.MeshPhysicalMaterial;
   sleeve: THREE.MeshPhysicalMaterial;
   trim: THREE.MeshPhysicalMaterial;
-  collar: THREE.MeshPhysicalMaterial;
   snap: THREE.MeshPhysicalMaterial;
   pocket: THREE.MeshPhysicalMaterial;
   lining: THREE.MeshStandardMaterial;
@@ -300,8 +299,7 @@ function applyBodyMaterial(material: THREE.MeshPhysicalMaterial, bodyMaterial: B
 function groupFor(name: string): keyof PartMaterials | "logo" {
   const n = name.toLowerCase();
   if (n.includes("sleeve")) return "sleeve";
-  if (n.includes("collar")) return "collar"; // always black, like the reference jacket
-  if (n.includes("knit") || n.includes("trim")) return "trim";
+  if (n.includes("collar") || n.includes("knit") || n.includes("trim")) return "trim";
   if (n.includes("pocket")) return "pocket";
   if (n.includes("logo")) return "logo";
   if (n.includes("front_body")) return "body"; // L / R / button_back
@@ -329,13 +327,6 @@ function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
     }),
     trim: new THREE.MeshPhysicalMaterial({
       color: colors.trimColor,
-      roughness: 0.9,
-      sheen: 0.25,
-      sheenRoughness: 0.95,
-      envMapIntensity: 0.3,
-    }),
-    collar: new THREE.MeshPhysicalMaterial({
-      color: "#141414", // fixed black, like the reference jacket
       roughness: 0.9,
       sheen: 0.25,
       sheenRoughness: 0.95,

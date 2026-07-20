@@ -13,7 +13,6 @@ interface HeaderProps {
 
 export function Header({ cartItemCount, user, onSearchClick }: HeaderProps) {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [showCollectionDropdown, setShowCollectionDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [showResultsAnimation, setShowResultsAnimation] = useState(false);
@@ -51,10 +50,6 @@ export function Header({ cartItemCount, user, onSearchClick }: HeaderProps) {
     ? "bg-black text-white border-b border-gray-800 z-40" 
     : "bg-white border-b border-gray-200 z-40";
   
-  const dropdownClass = isHomePage
-    ? "bg-black border-gray-800 text-white"
-    : "bg-white border-gray-200";
-
   const mobileMenuBorderClass = isHomePage
     ? "border-gray-800"
     : "border-gray-200";
@@ -73,97 +68,9 @@ export function Header({ cartItemCount, user, onSearchClick }: HeaderProps) {
               {showMobileMenu ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
             
-            <nav className="hidden md:flex items-center gap-8">
-              <Link to="/shop" className="text-sm tracking-wide hover:opacity-70 transition-opacity">
-                NEW
-              </Link>
-              <div 
-                className="relative group"
-                onMouseEnter={() => setShowCollectionDropdown(true)}
-                onMouseLeave={() => setShowCollectionDropdown(false)}
-              >
-                <Link to="/shop" className="text-sm tracking-wide hover:opacity-70 transition-opacity">
-                  COLLECTION
-                </Link>
-                <div className={`absolute top-full left-0 mt-0 ${dropdownClass} border min-w-[200px] py-4 px-6 shadow-lg transition-all duration-700 ease-out origin-top overflow-hidden ${
-                  showCollectionDropdown 
-                    ? 'opacity-100 max-h-96 pointer-events-auto' 
-                    : 'opacity-0 max-h-0 pointer-events-none'
-                }`}>
-                  <Link 
-                    to="/shop" 
-                    className={`block text-sm tracking-wide hover:opacity-70 transition-all duration-400 mb-3 ${
-                      showCollectionDropdown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-                    }`}
-                    style={{ transitionDelay: showCollectionDropdown ? '100ms' : '0ms' }}
-                  >
-                    ALL
-                  </Link>
-                  <Link 
-                    to="/shop?category=jackets" 
-                    className={`block text-sm tracking-wide hover:opacity-70 transition-all duration-400 mb-3 ${
-                      showCollectionDropdown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-                    }`}
-                    style={{ transitionDelay: showCollectionDropdown ? '200ms' : '0ms' }}
-                  >
-                    JACKETS
-                  </Link>
-                  <Link 
-                    to="/jacket-builder" 
-                    className={`block text-sm tracking-wide hover:opacity-70 transition-all duration-400 mb-3 pl-4 text-gray-600 ${
-                      showCollectionDropdown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-                    }`}
-                    style={{ transitionDelay: showCollectionDropdown ? '250ms' : '0ms' }}
-                  >
-                    → CUSTOM JACKET BUILDER
-                  </Link>
-                  <Link 
-                    to="/shop?category=hoodies" 
-                    className={`block text-sm tracking-wide hover:opacity-70 transition-all duration-400 mb-3 ${
-                      showCollectionDropdown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-                    }`}
-                    style={{ transitionDelay: showCollectionDropdown ? '300ms' : '0ms' }}
-                  >
-                    HOODIES
-                  </Link>
-                  <Link 
-                    to="/shop?category=pants" 
-                    className={`block text-sm tracking-wide hover:opacity-70 transition-all duration-400 mb-3 ${
-                      showCollectionDropdown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-                    }`}
-                    style={{ transitionDelay: showCollectionDropdown ? '400ms' : '0ms' }}
-                  >
-                    PANTS
-                  </Link>
-                  <Link 
-                    to="/shop?category=upcycled-kits" 
-                    className={`block text-sm tracking-wide hover:opacity-70 transition-all duration-400 mb-3 ${
-                      showCollectionDropdown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-                    }`}
-                    style={{ transitionDelay: showCollectionDropdown ? '500ms' : '0ms' }}
-                  >
-                    UPCYCLED KITS
-                  </Link>
-                  <Link 
-                    to="/shop?category=footwear" 
-                    className={`block text-sm tracking-wide hover:opacity-70 transition-all duration-400 mb-3 ${
-                      showCollectionDropdown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-                    }`}
-                    style={{ transitionDelay: showCollectionDropdown ? '600ms' : '0ms' }}
-                  >
-                    FOOTWEAR
-                  </Link>
-                  <Link 
-                    to="/shop?category=accessories" 
-                    className={`block text-sm tracking-wide hover:opacity-70 transition-all duration-400 ${
-                      showCollectionDropdown ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-                    }`}
-                    style={{ transitionDelay: showCollectionDropdown ? '700ms' : '0ms' }}
-                  >
-                    ACCESSORIES
-                  </Link>
-                </div>
-              </div>
+            <nav className="hidden md:flex items-center gap-8" aria-label="Future collections">
+              <span className="text-sm tracking-wide opacity-35 cursor-default" aria-disabled="true">NEW</span>
+              <span className="text-sm tracking-wide opacity-35 cursor-default" aria-disabled="true">COLLECTION</span>
             </nav>
           </div>
 
@@ -306,20 +213,8 @@ export function Header({ cartItemCount, user, onSearchClick }: HeaderProps) {
         {showMobileMenu && (
           <nav className={`md:hidden py-4 border-t ${mobileMenuBorderClass}`}>
             <div className="flex flex-col gap-4">
-              <Link 
-                to="/shop" 
-                className="text-sm tracking-wide hover:opacity-70 transition-opacity"
-                onClick={() => setShowMobileMenu(false)}
-              >
-                NEW
-              </Link>
-              <Link 
-                to="/shop" 
-                className="text-sm tracking-wide hover:opacity-70 transition-opacity"
-                onClick={() => setShowMobileMenu(false)}
-              >
-                COLLECTION
-              </Link>
+              <span className="text-sm tracking-wide opacity-35 cursor-default" aria-disabled="true">NEW</span>
+              <span className="text-sm tracking-wide opacity-35 cursor-default" aria-disabled="true">COLLECTION</span>
               <Link
                 to="/jacket-builder"
                 className={`border px-4 py-3 text-center text-sm tracking-widest transition-colors ${

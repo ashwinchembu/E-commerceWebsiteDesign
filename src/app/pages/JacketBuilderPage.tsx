@@ -21,7 +21,8 @@ const COLOR_GROUP_ENTRIES: { group: string; shades: { label: string; color: stri
   {
     group: "Reds",
     shades: [
-      { label: "Red", color: "#b3181e" },
+      { label: "Solid Red", color: "#d71920" },
+      { label: "Varsity Red", color: "#b3181e" },
       { label: "Burgundy", color: "#770d22" },
       { label: "Maroon", color: "#3d1022" },
       { label: "Dark Maroon", color: "#561e1e" },
@@ -32,6 +33,7 @@ const COLOR_GROUP_ENTRIES: { group: string; shades: { label: string; color: stri
   {
     group: "Blues",
     shades: [
+      { label: "Solid Blue", color: "#0057b8" },
       { label: "Bright Royal", color: "#3d87c0" },
       { label: "Royal Blue", color: "#1b294b" },
       { label: "High Royal", color: "#1c275f" },
@@ -42,6 +44,7 @@ const COLOR_GROUP_ENTRIES: { group: string; shades: { label: string; color: stri
   {
     group: "Greens",
     shades: [
+      { label: "Solid Green", color: "#00843d" },
       { label: "Forest", color: "#054012" },
       { label: "Bottle Green", color: "#0e3426" },
       { label: "Kelly Green", color: "#144c24" },
@@ -51,13 +54,15 @@ const COLOR_GROUP_ENTRIES: { group: string; shades: { label: string; color: stri
   {
     group: "Purples",
     shades: [
-      { label: "Purple", color: "#4b1d63" },
+      { label: "Solid Purple", color: "#6a1b9a" },
+      { label: "Varsity Purple", color: "#4b1d63" },
       { label: "Eggplant", color: "#28142c" },
     ],
   },
   {
     group: "Yellows",
     shades: [
+      { label: "Solid Yellow", color: "#ffd400" },
       { label: "Lemon", color: "#f2a407" },
       { label: "Pale Yellow", color: "#f5e6a6" },
       { label: "Sunshine", color: "#f2c94c" },
@@ -157,14 +162,12 @@ function labelForColor(color: string) {
   return bw?.label ?? color;
 }
 
-// Country-grouped city list. No protected competition or club names are shown.
+// 2026–27 top-division club cities for England, France, Germany, Italy,
+// Portugal and Spain. No protected competition or club names are shown.
 const COUNTRY_CITIES: { country: string; cities: string[] }[] = [
   {
     country: "England",
     cities: [
-      "London",
-      "Manchester",
-      "Liverpool",
       "Birmingham",
       "Bournemouth",
       "Brighton",
@@ -172,79 +175,17 @@ const COUNTRY_CITIES: { country: string; cities: string[] }[] = [
       "Hull",
       "Ipswich",
       "Leeds",
+      "Liverpool",
+      "London",
+      "Manchester",
       "Newcastle",
       "Nottingham",
       "Sunderland",
     ],
   },
   {
-    country: "Spain",
-    cities: [
-      "Madrid",
-      "Seville",
-      "Barcelona",
-      "A Coruña",
-      "Bilbao",
-      "Elche",
-      "Getafe",
-      "Málaga",
-      "Pamplona",
-      "San Sebastián",
-      "Santander",
-      "Valencia",
-      "Vigo",
-      "Villarreal",
-    ],
-  },
-  {
-    country: "Italy",
-    cities: [
-      "Milan",
-      "Rome",
-      "Turin",
-      "Bergamo",
-      "Bologna",
-      "Cagliari",
-      "Como",
-      "Florence",
-      "Frosinone",
-      "Genoa",
-      "Lecce",
-      "Monza",
-      "Naples",
-      "Parma",
-      "Reggio Emilia",
-      "Udine",
-      "Venice",
-    ],
-  },
-  {
-    country: "Germany",
-    cities: [
-      "Munich",
-      "Dortmund",
-      "Leverkusen",
-      "Leipzig",
-      "Stuttgart",
-      "Frankfurt",
-      "Berlin",
-      "Freiburg",
-      "Augsburg",
-      "Bremen",
-      "Cologne",
-      "Gelsenkirchen",
-      "Hamburg",
-      "Mainz",
-      "Mönchengladbach",
-      "Paderborn",
-      "Sinsheim",
-      "Spiesen-Elversberg",
-    ],
-  },
-  {
     country: "France",
     cities: [
-      "Paris",
       "Angers",
       "Auxerre",
       "Brest",
@@ -257,6 +198,7 @@ const COUNTRY_CITIES: { country: string; cities: string[] }[] = [
       "Marseille",
       "Monaco",
       "Nice",
+      "Paris",
       "Rennes",
       "Strasbourg",
       "Toulouse",
@@ -264,22 +206,45 @@ const COUNTRY_CITIES: { country: string; cities: string[] }[] = [
     ],
   },
   {
+    country: "Germany",
+    cities: [
+      "Augsburg", "Berlin", "Bremen", "Cologne", "Dortmund", "Frankfurt", "Freiburg", "Gelsenkirchen",
+      "Hamburg", "Leipzig", "Leverkusen", "Mainz", "Mönchengladbach", "Munich", "Paderborn", "Sinsheim",
+      "Spiesen-Elversberg", "Stuttgart",
+    ],
+  },
+  {
+    country: "Italy",
+    cities: [
+      "Bergamo", "Bologna", "Cagliari", "Como", "Florence", "Frosinone", "Genoa", "Lecce", "Milan",
+      "Monza", "Naples", "Parma", "Reggio Emilia", "Rome", "Turin", "Udine", "Venice",
+    ],
+  },
+  {
     country: "Portugal",
     cities: [
-      "Lisbon",
-      "Porto",
+      "Alverca do Ribatejo",
       "Amadora",
       "Arouca",
       "Barcelos",
       "Braga",
+      "Estoril",
       "Funchal",
       "Guimarães",
+      "Lisbon",
       "Moreira de Cónegos",
       "Ponta Delgada",
-      "Estoril",
+      "Porto",
       "Vila do Conde",
       "Vila Nova de Famalicão",
       "Viseu",
+    ],
+  },
+  {
+    country: "Spain",
+    cities: [
+      "A Coruña", "Barcelona", "Bilbao", "Cornellà de Llobregat", "Elche", "Getafe", "Madrid", "Málaga",
+      "Pamplona", "San Sebastián", "Santander", "Seville", "Valencia", "Vigo", "Villarreal", "Vitoria-Gasteiz",
     ],
   },
 ];
@@ -393,10 +358,10 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
     { key: "Back city", value: backCity },
     { key: "Back number", value: backNumber || "None" },
     { key: "Gold stars", value: String(backStars) },
-    { key: "Back print color", value: labelForColor(backPrintColor) },
+    { key: "Back design color", value: labelForColor(backPrintColor) },
     { key: "Left sleeve numbers", value: leftSleeveNumbers.filter(Boolean).join(", ") || "None" },
     { key: "Right sleeve numbers", value: rightSleeveNumbers.filter(Boolean).join(", ") || "None" },
-    { key: "Sleeve print color", value: labelForColor(sleevePrintColor) },
+    { key: "Sleeve number color", value: labelForColor(sleevePrintColor) },
     { key: "Production time", value: "4–6 weeks" },
     { key: "Final sale", value: "Yes" },
   ];
@@ -794,7 +759,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
                   </li>
                 </ul>
                 <p className="text-[10px] text-gray-400 leading-relaxed pt-1">
-                  Every jacket ships with the Manoir Kits “One of One · Legends Edition” neck tag.
+                  Every jacket ships with the Manoir Kits “One of One · Legends Edition” lining patch.
                 </p>
               </div>
             </div>
@@ -863,7 +828,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
 
               {/* Back and sleeve artwork colors are intentionally independent. */}
               <div>
-                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">Back Print Color</label>
+                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">Back Design Color</label>
                 <div className="flex gap-2">
                   {PRINT_COLORS.map((opt) => (
                     <button
@@ -882,7 +847,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
               </div>
 
               <div>
-                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">Sleeve Print Color</label>
+                <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">Sleeve Number Color</label>
                 <div className="flex gap-2">
                   {PRINT_COLORS.map((opt) => (
                     <button
@@ -901,7 +866,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
               </div>
 
               <p className="text-[10px] text-gray-400 leading-relaxed">
-                Gold stars, the chest badge and “EST. 2026” are fixed brand details. Pick your city from the dropdown
+                Gold stars, the chest badge and “EST. 2026” are fixed brand details. Pick your country or city from the dropdown
                 below the jacket.
               </p>
             </div>

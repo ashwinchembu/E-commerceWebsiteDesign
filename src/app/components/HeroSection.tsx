@@ -96,13 +96,13 @@ export function HeroSection() {
       <div className="relative h-full flex items-center justify-center text-center text-white px-6">
         <div>
           <p className="text-sm tracking-widest mb-8 opacity-90">
-            DISCOVER THE NEW COLLECTION
+            SHOP
           </p>
           <Link 
-            to="/shop"
+            to="/jacket-builder"
             className="inline-block border-2 border-white px-12 py-4 hover:bg-white hover:text-black transition-all tracking-widest text-sm"
           >
-            EXPLORE
+            DESIGN YOUR CUSTOM JACKET
           </Link>
         </div>
       </div>

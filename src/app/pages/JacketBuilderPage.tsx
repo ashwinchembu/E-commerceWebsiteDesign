@@ -284,6 +284,21 @@ const COUNTRY_CITIES: { country: string; cities: string[] }[] = [
   },
 ];
 
+// Every national team to have reached a men's World Cup finals tournament,
+// including the four 2026 debutants. Current country/team names are used.
+const WORLD_CUP_COUNTRIES = [
+  "Algeria", "Angola", "Argentina", "Australia", "Austria", "Belgium", "Bolivia", "Bosnia and Herzegovina",
+  "Brazil", "Bulgaria", "Cabo Verde", "Cameroon", "Canada", "Chile", "China PR", "Colombia", "Costa Rica",
+  "Croatia", "Cuba", "Curaçao", "Czech Republic", "Denmark", "DR Congo", "East Germany", "Ecuador", "Egypt", "El Salvador",
+  "England", "France", "Germany", "Ghana", "Greece", "Haiti", "Honduras", "Hungary", "Iceland", "Indonesia",
+  "Iran", "Iraq", "Israel", "Italy", "Ivory Coast", "Jamaica", "Japan", "Jordan", "Kuwait", "Mexico",
+  "Morocco", "Netherlands", "New Zealand", "Nigeria", "North Korea", "Northern Ireland", "Norway", "Panama",
+  "Paraguay", "Peru", "Poland", "Portugal", "Qatar", "Republic of Ireland", "Romania", "Russia", "Saudi Arabia",
+  "Scotland", "Senegal", "Serbia", "Slovakia", "Slovenia", "South Africa", "South Korea", "Spain", "Sweden",
+  "Switzerland", "Togo", "Trinidad and Tobago", "Tunisia", "Turkey", "Ukraine", "United Arab Emirates",
+  "United States", "Uruguay", "Uzbekistan", "Wales",
+].sort((a, b) => a.localeCompare(b));
+
 const PRINT_COLORS = [
   { label: "White", color: "#f4f2ea" },
   { label: "Black", color: "#1a1a1a" },
@@ -362,7 +377,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
     setter((numbers) => numbers.map((n, i) => (i === index ? digits : n)));
   };
 
-  const price = 1195;
+  const price = isFootballersEdition ? 1695 : 1195;
 
   const checkoutAttributes = (): ShopifyAttribute[] => [
     { key: "Edition", value: jacketEdition },
@@ -391,7 +406,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
     setCheckoutPending(true);
     setCheckoutError(null);
     try {
-      const checkoutUrl = await createJacketCheckout(selectedSize, checkoutAttributes());
+      const checkoutUrl = await createJacketCheckout(selectedSize, jacketEdition, checkoutAttributes());
       window.location.assign(checkoutUrl);
     } catch (error) {
       setCheckoutError(error instanceof Error ? error.message : "Unable to start Shopify checkout.");
@@ -955,9 +970,16 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
               onChange={(e) => setBackCity(e.target.value)}
               className="w-full max-w-xs bg-white border border-gray-300 px-3 py-2 text-[11px] tracking-widest uppercase focus:outline-none focus:border-black cursor-pointer sm:w-auto sm:px-4 sm:text-xs"
             >
+              <optgroup label="Countries">
+                {WORLD_CUP_COUNTRIES.map((country) => (
+                  <option key={`country-${country}`} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </optgroup>
               {COUNTRY_CITIES.map(({ country, cities }) => (
                 <optgroup key={country} label={country}>
-                  {cities.map((city) => (
+                  {[...cities].sort((a, b) => a.localeCompare(b)).map((city) => (
                     <option key={city} value={city}>
                       {city}
                     </option>

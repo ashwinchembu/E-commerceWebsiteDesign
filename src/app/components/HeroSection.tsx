@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Volume2, VolumeX } from 'lucide-react';
 
 const HERO_VIDEO = '/videos/landing-hero.mp4?v=4';
+const HERO_VIDEO_DESKTOP = '/videos/landing-hero-desktop.mp4?v=5';
 
 export function HeroSection() {
   const heroRef = useRef<HTMLElement>(null);
@@ -65,14 +66,16 @@ export function HeroSection() {
         <video
           ref={videoRef}
           className="absolute inset-0 h-full w-full object-cover object-center"
-          src={HERO_VIDEO}
           autoPlay
           loop
           muted={muted}
           playsInline
           preload="auto"
           aria-label="Manoir Kits collection film"
-        />
+        >
+          <source media="(min-width: 768px)" src={HERO_VIDEO_DESKTOP} type="video/mp4" />
+          <source src={HERO_VIDEO} type="video/mp4" />
+        </video>
         {/* Feather the outer desktop edges into the site's black canvas. */}
         <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-[11%] bg-gradient-to-r from-black/80 to-transparent backdrop-blur-sm [mask-image:linear-gradient(to_right,black,transparent)] md:block" />
         <div className="pointer-events-none absolute inset-y-0 right-0 hidden w-[11%] bg-gradient-to-l from-black/80 to-transparent backdrop-blur-sm [mask-image:linear-gradient(to_left,black,transparent)] md:block" />

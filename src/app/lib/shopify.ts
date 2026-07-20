@@ -16,18 +16,20 @@ function requiredEnv(name: string, value: string | undefined) {
   return value.trim();
 }
 
-function jacketVariantForSize(size: string) {
+function jacketVariantForSize(size: string, edition: string) {
   const raw = requiredEnv("VITE_SHOPIFY_JACKET_VARIANTS", import.meta.env.VITE_SHOPIFY_JACKET_VARIANTS);
-  let variants: Record<string, string>;
+  let variants: Record<string, string | Record<string, string>>;
   try {
     variants = JSON.parse(raw);
   } catch {
     throw new Error("VITE_SHOPIFY_JACKET_VARIANTS must be valid JSON.");
   }
-  return requiredEnv(`variant for size ${size}`, variants[size]);
+  const editionVariants = variants[edition];
+  const variant = typeof editionVariants === "object" ? editionVariants[size] : variants[size];
+  return requiredEnv(`${edition} variant for size ${size}`, typeof variant === "string" ? variant : undefined);
 }
 
-export async function createJacketCheckout(size: string, attributes: ShopifyAttribute[]) {
+export async function createJacketCheckout(size: string, edition: string, attributes: ShopifyAttribute[]) {
   const store = requiredEnv("VITE_SHOPIFY_STORE_DOMAIN", import.meta.env.VITE_SHOPIFY_STORE_DOMAIN)
     .replace(/^https?:\/\//, "")
     .replace(/\/$/, "");
@@ -52,7 +54,7 @@ export async function createJacketCheckout(size: string, attributes: ShopifyAttr
       `,
       variables: {
         input: {
-          lines: [{ merchandiseId: jacketVariantForSize(size), quantity: 1, attributes }],
+          lines: [{ merchandiseId: jacketVariantForSize(size, edition), quantity: 1, attributes }],
           attributes: [{ key: "Builder", value: "Manoir Kits Render configurator" }],
         },
       },

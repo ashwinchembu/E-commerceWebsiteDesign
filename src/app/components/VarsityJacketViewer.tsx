@@ -847,7 +847,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const d = dragRef.current;
       const elapsedSinceInteraction = performance.now() - d.lastInteraction;
       if (!reduceMotion && !d.active && elapsedSinceInteraction > 1800) {
-        d.rotY += clock.getDelta() * 0.22;
+        d.rotY += clock.getDelta() * 0.176;
       } else {
         clock.getDelta();
       }
@@ -874,5 +874,5 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
   }, []);
 
-  return <div ref={mountRef} className="h-full w-full touch-none cursor-pointer" />;
+  return <div ref={mountRef} className="h-full w-full touch-none cursor-grab active:cursor-grabbing" />;
 }

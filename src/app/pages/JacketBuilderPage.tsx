@@ -4,7 +4,7 @@ import { VarsityJacketViewer, renderNeckLabel, renderInteriorPatch, type BackDes
 import { useNavigate } from "react-router-dom";
 import { createJacketCheckout, type ShopifyAttribute } from "../lib/shopify";
 
-const SIZES = ["XXS", "XS", "S", "M", "L", "XL", "2XL", "3XL"];
+const SIZES = ["S", "M", "L", "XL", "2XL", "3XL"];
 
 // Jacket color options collated into one product palette. Gold stays reserved
 // for fixed brand details and is not offered as a selectable jacket color.

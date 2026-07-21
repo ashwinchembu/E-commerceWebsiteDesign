@@ -874,5 +874,5 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
   }, []);
 
-  return <div ref={mountRef} className="h-full w-full touch-none cursor-default" />;
+  return <div ref={mountRef} className="h-full w-full touch-none cursor-pointer" />;
 }

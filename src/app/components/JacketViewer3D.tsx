@@ -463,7 +463,7 @@ export function JacketViewer3D({
     };
   }, []);
 
-  return <div ref={mountRef} className="h-full w-full cursor-default" />;
+  return <div ref={mountRef} className="h-full w-full cursor-pointer" />;
 }
 
 type JacketColors = {

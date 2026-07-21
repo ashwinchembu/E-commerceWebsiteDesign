@@ -86,7 +86,7 @@ export function HeroSection() {
       <button
         type="button"
         onClick={toggleSound}
-        className="absolute right-4 top-4 z-20 flex cursor-default items-center gap-2 border border-white/60 bg-black/35 px-3 py-2 text-[10px] tracking-widest text-white backdrop-blur-sm transition-colors hover:bg-black/60 sm:right-6 sm:top-6"
+        className="absolute right-4 top-4 z-20 flex cursor-pointer items-center gap-2 border border-white/60 bg-black/35 px-3 py-2 text-[10px] tracking-widest text-white backdrop-blur-sm transition-colors hover:bg-black/60 sm:right-6 sm:top-6"
         aria-label={muted ? 'Turn video sound on' : 'Mute video'}
       >
         {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}

@@ -913,7 +913,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const badgeCanvas = document.createElement("canvas");
       badgeCanvas.width = 320;
       badgeCanvas.height = 360;
-      const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.42, -0.02, 0.2);
+      const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.336, -0.02, 0.2);
       void loadCrest().then((crest) => {
         if (!crest) return;
         const bctx = badgeCanvas.getContext("2d")!;

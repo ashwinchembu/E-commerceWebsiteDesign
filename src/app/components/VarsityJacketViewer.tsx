@@ -4,7 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { DecalGeometry } from "three/examples/jsm/geometries/DecalGeometry.js";
-import crestImage from "figma:asset/65260e3ff07725a684ad1d29eb3db00cb66a8976.png";
+import crestImage from "figma:asset/49db8db3192aa070a09b2e638fd91cfc6cf1ca1e.png";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#c9a24a";
@@ -13,7 +13,7 @@ const CHEST_FILL = "#f2ede2";
 let crestElement: HTMLCanvasElement | null = null;
 let crestLoading: Promise<HTMLCanvasElement | null> | null = null;
 
-/** Load the gold MK crest, cropped and background-keyed by luminance. */
+/** Load the embroidered MK crest, trimmed to its own opaque bounds. */
 function loadCrest(): Promise<HTMLCanvasElement | null> {
   if (crestElement) return Promise.resolve(crestElement);
   if (crestLoading) return crestLoading;
@@ -25,19 +25,17 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
       scan.height = image.height;
       const ctx = scan.getContext("2d")!;
       ctx.drawImage(image, 0, 0);
-      const imageData = ctx.getImageData(0, 0, scan.width, scan.height);
-      const { data } = imageData;
+      const { data } = ctx.getImageData(0, 0, scan.width, scan.height);
+      // The embroidered patch ships with a clean alpha channel, so crop to its
+      // own opaque bounds. No luminance keying here — that would knock out the
+      // near-white merrowed border and the white MK monogram.
       let minX = scan.width;
       let minY = scan.height;
       let maxX = 0;
       let maxY = 0;
       for (let y = 0; y < scan.height; y += 1) {
         for (let x = 0; x < scan.width; x += 1) {
-          const i = (y * scan.width + x) * 4;
-          const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-          const alpha = Math.min(255, Math.max(0, Math.round((242 - lum) * 6)));
-          data[i + 3] = Math.min(data[i + 3], alpha);
-          if (alpha < 32) continue;
+          if (data[(y * scan.width + x) * 4 + 3] < 32) continue;
           if (x < minX) minX = x;
           if (x > maxX) maxX = x;
           if (y < minY) minY = y;
@@ -45,11 +43,10 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
         }
       }
       if (maxX <= minX || maxY <= minY) return resolve(null);
-      ctx.putImageData(imageData, 0, 0);
       const cropped = document.createElement("canvas");
       cropped.width = maxX - minX + 1;
       cropped.height = maxY - minY + 1;
-      cropped.getContext("2d")!.drawImage(scan, -minX, -minY);
+      cropped.getContext("2d")!.drawImage(image, -minX, -minY);
       crestElement = cropped;
       resolve(cropped);
     };
@@ -274,15 +271,109 @@ type Loaded = {
   sleeves: { left: SleeveSet; right: SleeveSet };
 };
 
+type SurfaceTextures = {
+  wool: THREE.CanvasTexture;
+  leather: THREE.CanvasTexture;
+  rib: THREE.CanvasTexture;
+  quilt: THREE.CanvasTexture;
+};
+
+/**
+ * Procedural, color-neutral height maps so every selectable color stays
+ * tactile. Grayscale only (used as bump maps, not albedo) and tiled, tuned
+ * against the physical jacket: fine wool nap, medium pebbled full-grain
+ * leather, vertical ribbed knit, and diamond-quilted lining.
+ */
+function makeSurfaceTextures(): SurfaceTextures {
+  const texture = (draw: (ctx: CanvasRenderingContext2D, size: number) => void, repeat: number) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 256;
+    const ctx = canvas.getContext("2d")!;
+    draw(ctx, canvas.width);
+    const map = new THREE.CanvasTexture(canvas);
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.repeat.set(repeat, repeat);
+    map.colorSpace = THREE.NoColorSpace;
+    return map;
+  };
+
+  // Black melton nap: fine dense mottling with short directional fibres.
+  const wool = texture((ctx, size) => {
+    ctx.fillStyle = "#777";
+    ctx.fillRect(0, 0, size, size);
+    let seed = 1947;
+    const random = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    for (let i = 0; i < 14000; i += 1) {
+      const shade = 70 + Math.floor(random() * 105);
+      ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
+      const x = random() * size;
+      const y = random() * size;
+      ctx.fillRect(x, y, random() > 0.7 ? 1.8 : 1, random() > 0.5 ? 0.7 : 1.3);
+    }
+  }, 7);
+
+  // Pebbled full-grain leather, matching the close sleeve shots.
+  const leather = texture((ctx, size) => {
+    ctx.fillStyle = "#6a6a6a";
+    ctx.fillRect(0, 0, size, size);
+    let seed = 8013;
+    const random = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 4294967296);
+    for (let i = 0; i < 3200; i += 1) {
+      const x = random() * size;
+      const y = random() * size;
+      const r = 0.8 + random() * 2.6;
+      const gradient = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r);
+      gradient.addColorStop(0, "#c2c2c2");
+      gradient.addColorStop(0.6, "#787878");
+      gradient.addColorStop(1, "#3c3c3c");
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * (0.6 + random() * 0.5), random() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, 5);
+
+  // Vertical ribbed knit for the collar, cuffs, and waistband.
+  const rib = texture((ctx, size) => {
+    ctx.fillStyle = "#686868";
+    ctx.fillRect(0, 0, size, size);
+    for (let x = 0; x < size; x += 8) {
+      const gradient = ctx.createLinearGradient(x, 0, x + 8, 0);
+      gradient.addColorStop(0, "#444");
+      gradient.addColorStop(0.45, "#b4b4b4");
+      gradient.addColorStop(1, "#4a4a4a");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x, 0, 8, size);
+    }
+  }, 11);
+
+  // Diamond quilting for the lining.
+  const quilt = texture((ctx, size) => {
+    ctx.fillStyle = "#666";
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = "#232323";
+    ctx.lineWidth = 5;
+    for (let offset = -size; offset < size * 2; offset += 48) {
+      ctx.beginPath(); ctx.moveTo(offset, 0); ctx.lineTo(offset + size, size); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(offset, size); ctx.lineTo(offset + size, 0); ctx.stroke();
+    }
+  }, 2.3);
+
+  return { wool, leather, rib, quilt };
+}
+
 function applyBodyMaterial(material: THREE.MeshPhysicalMaterial, bodyMaterial: BodyMaterial) {
+  const surfaces = material.userData.surfaces as SurfaceTextures | undefined;
   if (bodyMaterial === "Leather") {
-    material.roughness = 0.55;
-    material.clearcoat = 0.3;
-    material.clearcoatRoughness = 0.5;
-    material.envMapIntensity = 0.6;
+    material.roughness = 0.68;
+    material.clearcoat = 0.15;
+    material.clearcoatRoughness = 0.6;
+    material.envMapIntensity = 0.35;
     material.sheen = 0;
     material.sheenRoughness = 1;
     material.sheenColor.set("#000000");
+    material.bumpMap = surfaces?.leather ?? null;
+    material.bumpScale = 0.05;
   } else {
     material.roughness = 0.97;
     material.clearcoat = 0;
@@ -291,6 +382,8 @@ function applyBodyMaterial(material: THREE.MeshPhysicalMaterial, bodyMaterial: B
     material.sheen = 0.1;
     material.sheenRoughness = 0.95;
     material.sheenColor.set("#555555");
+    material.bumpMap = surfaces?.wool ?? null;
+    material.bumpScale = 0.022;
   }
   material.needsUpdate = true;
 }
@@ -308,7 +401,7 @@ function groupFor(name: string): keyof PartMaterials | "logo" {
   return "body";
 }
 
-function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
+function makeMaterials(colors: VarsityJacketViewerProps, surfaces: SurfaceTextures): PartMaterials {
   const materials = {
     body: new THREE.MeshPhysicalMaterial({
       color: colors.bodyColor,
@@ -357,6 +450,15 @@ function makeMaterials(colors: VarsityJacketViewerProps): PartMaterials {
       side: THREE.DoubleSide,
     }),
   };
+  materials.body.userData.surfaces = surfaces;
+  materials.sleeve.bumpMap = surfaces.leather;
+  materials.sleeve.bumpScale = 0.05;
+  materials.pocket.bumpMap = surfaces.leather;
+  materials.pocket.bumpScale = 0.05;
+  materials.trim.bumpMap = surfaces.rib;
+  materials.trim.bumpScale = 0.038;
+  materials.lining.bumpMap = surfaces.quilt;
+  materials.lining.bumpScale = 0.022;
   applyBodyMaterial(materials.body, colors.bodyMaterial);
   return materials;
 }
@@ -366,15 +468,17 @@ function applyLeatherType(m: PartMaterials, type: LeatherType, bodyMaterial: Bod
   const leatherMaterials = bodyMaterial === "Leather" ? [m.body, m.sleeve, m.pocket] : [m.sleeve, m.pocket];
   for (const leather of leatherMaterials) {
     if (type === "Nappa") {
-      leather.roughness = 0.55;
-      leather.clearcoat = 0.3;
-      leather.clearcoatRoughness = 0.5;
-      leather.envMapIntensity = 0.6;
-    } else {
-      leather.roughness = 0.78;
-      leather.clearcoat = 0.08;
-      leather.clearcoatRoughness = 0.8;
+      // Nappa is the smoother, softer hide — a low sheen, not a wet gloss.
+      leather.roughness = 0.68;
+      leather.clearcoat = 0.15;
+      leather.clearcoatRoughness = 0.6;
       leather.envMapIntensity = 0.35;
+    } else {
+      // Cowhide reads more matte and grainy.
+      leather.roughness = 0.85;
+      leather.clearcoat = 0.05;
+      leather.clearcoatRoughness = 0.85;
+      leather.envMapIntensity = 0.28;
     }
     leather.needsUpdate = true;
   }
@@ -383,19 +487,43 @@ function applyLeatherType(m: PartMaterials, type: LeatherType, bodyMaterial: Bod
 /**
  * Fabric-lit decal material: the artwork shades with the scene lights like a
  * sewn-on patch instead of glowing like a sticker. polygonOffset pulls it in
- * front of the coincident jacket surface without any visible air gap.
+ * front of the coincident jacket surface without any visible air gap. The
+ * artwork canvas doubles as a bump map, so the lettering and numbers stand
+ * proud of the fabric like raised chenille/embroidery instead of flat print.
  */
 function makeDecalMaterial(texture: THREE.CanvasTexture): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     map: texture,
+    bumpMap: texture,
+    bumpScale: 0.035,
     transparent: true,
-    depthWrite: false,
+    alphaTest: 0.035,
+    depthWrite: true,
     polygonOffset: true,
     polygonOffsetFactor: -4,
     polygonOffsetUnits: -4,
-    roughness: 0.88,
+    roughness: 0.78,
     metalness: 0,
-    envMapIntensity: 0.35,
+    envMapIntensity: 0.42,
+  });
+}
+
+/**
+ * Darker, matte thread edge used below the artwork's top face. Repeating the
+ * curved decal geometry at tiny physical offsets produces a connected patch
+ * profile and visible parallax at grazing angles — actual geometry rather
+ * than a lighting-only bump illusion.
+ */
+function makeEmbroideryEdgeMaterial(texture: THREE.CanvasTexture): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    map: texture,
+    color: new THREE.Color("#8f7440"),
+    transparent: true,
+    alphaTest: 0.06,
+    depthWrite: true,
+    roughness: 0.94,
+    metalness: 0,
+    envMapIntensity: 0.18,
   });
 }
 
@@ -454,6 +582,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
@@ -472,6 +602,11 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     scene.add(new THREE.HemisphereLight("#ffffff", "#9aa6b4", 0.3));
     const key = new THREE.DirectionalLight("#fff4e6", 1.7);
     key.position.set(2.6, 4, 3.4);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.camera.left = key.shadow.camera.bottom = -3;
+    key.shadow.camera.right = key.shadow.camera.top = 3;
+    key.shadow.bias = -0.00035;
     scene.add(key);
     const fill = new THREE.DirectionalLight("#dceaff", 0.7);
     fill.position.set(-3.2, 1.6, 2.4);
@@ -485,7 +620,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const clock = new THREE.Clock();
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const materials = makeMaterials(propsRef.current);
+    const surfaces = makeSurfaceTextures();
+    const materials = makeMaterials(propsRef.current, surfaces);
     applyLeatherType(materials, propsRef.current.leatherType, propsRef.current.bodyMaterial);
 
     let disposed = false;
@@ -577,14 +713,26 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         outward: THREE.Vector3,
       ) => {
         const geometry = cullAwayFacing(new DecalGeometry(mesh, position, orientation, size), outward);
-        const decal = new THREE.Mesh(geometry, makeDecalMaterial(texture));
-        decal.renderOrder = 3;
-        // Lift the decal a hair off the surface (~1.5mm at jacket scale):
-        // polygonOffset alone loses the depth fight in spots on these large
-        // curved projections, which read as dark pinholes through the art.
-        decal.position.copy(outward).multiplyScalar(0.006);
-        modelRoot.add(decal);
-        return decal;
+        const edgeMaterial = makeEmbroideryEdgeMaterial(texture);
+
+        // Start virtually flush with the garment and build outward in very
+        // small connected steps. The lower layers form the embroidered edge;
+        // because they share the projected curvature, nothing hovers away
+        // from the jacket around the shoulders or sleeves.
+        const edgeOffsets = [0.0022, 0.0038, 0.0054, 0.007];
+        edgeOffsets.forEach((offset, index) => {
+          const edge = new THREE.Mesh(geometry, edgeMaterial);
+          edge.position.copy(outward).multiplyScalar(offset);
+          edge.renderOrder = 3 + index;
+          modelRoot.add(edge);
+        });
+
+        const top = new THREE.Mesh(geometry, makeDecalMaterial(texture));
+        top.position.copy(outward).multiplyScalar(0.0086);
+        top.renderOrder = 8;
+        top.castShadow = true;
+        modelRoot.add(top);
+        return top;
       };
 
       // Back design: projected straight onto the back panel.
@@ -867,6 +1015,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       mount.removeEventListener("pointerup", onPointerUp);
       mount.removeEventListener("wheel", onWheel);
       envTexture.dispose();
+      Object.values(surfaces).forEach((surface) => surface.dispose());
       dracoLoader.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);

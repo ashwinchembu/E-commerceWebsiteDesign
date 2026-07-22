@@ -763,6 +763,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             const edge = new THREE.Mesh(stackGeometry, edgeMaterial);
             edge.position.copy(stackOutward).multiplyScalar(offset);
             edge.renderOrder = renderOrder + index;
+            edge.receiveShadow = true;
             modelRoot.add(edge);
           });
 
@@ -988,14 +989,18 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             topOffset: number,
             renderOrder: number,
           ) => THREE.Mesh;
-          addStack(
+          const threadTop = addStack(
             badgeArt.decal.geometry,
             threadTexture,
             new THREE.Vector3(0, 0, 1),
-            [0.0094, 0.0107, 0.012],
-            0.0135,
+            [0.0092, 0.0103, 0.0114, 0.0125, 0.0136, 0.0147],
+            0.0158,
             9,
           );
+          const threadMaterial = threadTop.material as THREE.MeshStandardMaterial;
+          threadMaterial.bumpScale = 0.07;
+          threadMaterial.roughness = 0.7;
+          threadMaterial.envMapIntensity = 0.55;
         }
       });
 

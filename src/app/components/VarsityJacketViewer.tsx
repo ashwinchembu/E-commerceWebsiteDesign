@@ -56,6 +56,43 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
   return crestLoading;
 }
 
+/**
+ * Isolate the cream/white threadwork from the gold crest field. The returned
+ * transparent canvas becomes a second geometric embroidery layer containing
+ * the merrowed border, laurels, MK monogram, and MANOIR KITS lettering.
+ */
+function extractCrestThreadwork(source: HTMLCanvasElement): HTMLCanvasElement {
+  const detail = document.createElement("canvas");
+  detail.width = source.width;
+  detail.height = source.height;
+  const ctx = detail.getContext("2d")!;
+  ctx.drawImage(source, 0, 0);
+  const image = ctx.getImageData(0, 0, detail.width, detail.height);
+  const { data } = image;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const sourceAlpha = data[i + 3];
+    const max = Math.max(data[i], data[i + 1], data[i + 2]);
+    const min = Math.min(data[i], data[i + 1], data[i + 2]);
+    const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    const chroma = max - min;
+    // Neutral, bright fibres are the cream embroidery. Gold fibres have much
+    // higher chroma and are intentionally left on the lower shield surface.
+    const lightThread = brightness > 145 && chroma < 88;
+    if (!lightThread || sourceAlpha < 24) {
+      data[i + 3] = 0;
+      continue;
+    }
+    data[i] = Math.max(data[i], 226);
+    data[i + 1] = Math.max(data[i + 1], 218);
+    data[i + 2] = Math.max(data[i + 2], 198);
+    data[i + 3] = Math.min(sourceAlpha, Math.round(((brightness - 140) / 75) * 255));
+  }
+
+  ctx.putImageData(image, 0, 0);
+  return detail;
+}
+
 export type LeatherType = "Nappa" | "Cowhide";
 export type BodyMaterial = "Wool" | "Leather";
 
@@ -108,7 +145,7 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
     const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
     const x = w / 2 + starArc * Math.sin(a);
     const y = starCenterY - starArc * Math.cos(a);
-    drawStar(ctx, x, y, 29, BRAND_GOLD, a);
+    drawStar(ctx, x, y, 33, BRAND_GOLD, a);
   }
 
   // City rides high, stretched to span the shoulders like the reference.
@@ -713,25 +750,36 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         outward: THREE.Vector3,
       ) => {
         const geometry = cullAwayFacing(new DecalGeometry(mesh, position, orientation, size), outward);
-        const edgeMaterial = makeEmbroideryEdgeMaterial(texture);
+        const addEmbroideryStack = (
+          stackGeometry: THREE.BufferGeometry,
+          stackTexture: THREE.CanvasTexture,
+          stackOutward: THREE.Vector3,
+          edgeOffsets: number[],
+          topOffset: number,
+          renderOrder: number,
+        ) => {
+          const edgeMaterial = makeEmbroideryEdgeMaterial(stackTexture);
+          edgeOffsets.forEach((offset, index) => {
+            const edge = new THREE.Mesh(stackGeometry, edgeMaterial);
+            edge.position.copy(stackOutward).multiplyScalar(offset);
+            edge.renderOrder = renderOrder + index;
+            modelRoot.add(edge);
+          });
+
+          const top = new THREE.Mesh(stackGeometry, makeDecalMaterial(stackTexture));
+          top.position.copy(stackOutward).multiplyScalar(topOffset);
+          top.renderOrder = renderOrder + edgeOffsets.length + 1;
+          top.castShadow = true;
+          modelRoot.add(top);
+          return top;
+        };
 
         // Start virtually flush with the garment and build outward in very
         // small connected steps. The lower layers form the embroidered edge;
         // because they share the projected curvature, nothing hovers away
         // from the jacket around the shoulders or sleeves.
-        const edgeOffsets = [0.0022, 0.0038, 0.0054, 0.007];
-        edgeOffsets.forEach((offset, index) => {
-          const edge = new THREE.Mesh(geometry, edgeMaterial);
-          edge.position.copy(outward).multiplyScalar(offset);
-          edge.renderOrder = 3 + index;
-          modelRoot.add(edge);
-        });
-
-        const top = new THREE.Mesh(geometry, makeDecalMaterial(texture));
-        top.position.copy(outward).multiplyScalar(0.0086);
-        top.renderOrder = 8;
-        top.castShadow = true;
-        modelRoot.add(top);
+        const top = addEmbroideryStack(geometry, texture, outward, [0.0022, 0.0038, 0.0054, 0.007], 0.0086, 3);
+        top.userData.addEmbroideryStack = addEmbroideryStack;
         return top;
       };
 
@@ -926,7 +974,29 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         bctx.filter = "none";
         bctx.globalAlpha = 1;
         bctx.drawImage(crest, (badgeCanvas.width - cw) / 2, (badgeCanvas.height - chh) / 2, cw, chh);
-        if (badgeArt) badgeArt.texture.needsUpdate = true;
+        if (badgeArt) {
+          badgeArt.texture.needsUpdate = true;
+          const threadCanvas = extractCrestThreadwork(badgeCanvas);
+          const threadTexture = new THREE.CanvasTexture(threadCanvas);
+          threadTexture.colorSpace = THREE.SRGBColorSpace;
+          threadTexture.anisotropy = 8;
+          const addStack = badgeArt.decal.userData.addEmbroideryStack as (
+            geometry: THREE.BufferGeometry,
+            texture: THREE.CanvasTexture,
+            outward: THREE.Vector3,
+            edgeOffsets: number[],
+            topOffset: number,
+            renderOrder: number,
+          ) => THREE.Mesh;
+          addStack(
+            badgeArt.decal.geometry,
+            threadTexture,
+            new THREE.Vector3(0, 0, 1),
+            [0.0094, 0.0107, 0.012],
+            0.0135,
+            9,
+          );
+        }
       });
 
       // MANOIR / KITS wordmark on the wearer-right chest (front_body_R).
@@ -936,9 +1006,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const wctx = wordCanvas.getContext("2d")!;
       wctx.textAlign = "center";
       wctx.textBaseline = "middle";
-      wctx.font = "400 62px 'League Spartan', sans-serif";
-      outlinedText(wctx, "MANOIR", wordCanvas.width / 2, 78, 62, CHEST_FILL, 320, 0.1);
-      outlinedText(wctx, "KITS", wordCanvas.width / 2, 150, 62, CHEST_FILL, 320, 0.1);
+      wctx.font = "400 68px 'League Spartan', sans-serif";
+      outlinedText(wctx, "MANOIR", wordCanvas.width / 2, 76, 68, CHEST_FILL, 320, 0.15);
+      outlinedText(wctx, "KITS", wordCanvas.width / 2, 154, 68, CHEST_FILL, 320, 0.15);
       // Same height as the chest badge on the opposite panel.
       addFrontDecal("front_body_R", wordCanvas, 0.62, -0.05, 0.2);
 

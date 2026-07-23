@@ -116,7 +116,7 @@ async function hashSecret(secret: string, salt: string) {
       name: "PBKDF2",
       hash: "SHA-256",
       salt: fromBase64Url(salt),
-      iterations: 120_000,
+      iterations: 100_000,
     },
     key,
     256,

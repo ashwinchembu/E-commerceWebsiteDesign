@@ -33,15 +33,15 @@ export async function createJacketCheckout(size: string, edition: string, attrib
   const store = requiredEnv("VITE_SHOPIFY_STORE_DOMAIN", import.meta.env.VITE_SHOPIFY_STORE_DOMAIN)
     .replace(/^https?:\/\//, "")
     .replace(/\/$/, "");
-  const token = requiredEnv("VITE_SHOPIFY_STOREFRONT_TOKEN", import.meta.env.VITE_SHOPIFY_STOREFRONT_TOKEN);
+  const token = import.meta.env.VITE_SHOPIFY_STOREFRONT_TOKEN?.trim();
   const apiVersion = import.meta.env.VITE_SHOPIFY_API_VERSION?.trim() || "2026-07";
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["X-Shopify-Storefront-Access-Token"] = token;
 
   const response = await fetch(`https://${store}/api/${apiVersion}/graphql.json`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Storefront-Access-Token": token,
-    },
+    headers,
     body: JSON.stringify({
       query: `
         mutation CreateJacketCart($input: CartInput!) {

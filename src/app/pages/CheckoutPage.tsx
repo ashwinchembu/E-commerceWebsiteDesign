@@ -24,9 +24,6 @@ export function CheckoutPage({ cart, clearCart }: CheckoutPageProps) {
   });
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = 15;
-  const tax = subtotal * 0.08;
-  const total = subtotal + shipping + tax;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,15 +219,15 @@ export function CheckoutPage({ cart, clearCart }: CheckoutPageProps) {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Shipping</span>
-                  <span>${shipping.toFixed(2)}</span>
+                  <span>Calculated at checkout</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Tax</span>
-                  <span>${tax.toFixed(2)}</span>
+                  <span className="text-gray-600">Tax & duties</span>
+                  <span>Calculated at checkout</span>
                 </div>
                 <div className="border-t border-gray-300 pt-3 flex justify-between">
-                  <span className="tracking-wide">Total</span>
-                  <span className="text-xl">${total.toFixed(2)}</span>
+                  <span className="tracking-wide">Estimated total</span>
+                  <span className="text-xl">${subtotal.toFixed(2)}</span>
                 </div>
               </div>
             </div>

@@ -20,6 +20,7 @@ import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsPage } from './pages/TermsPage';
 import { DoNotSellPage } from './pages/DoNotSellPage';
 import { JacketBuilderPage } from './pages/JacketBuilderPage';
+import { SecurityWatermark } from './components/SecurityWatermark';
 
 export interface CartItem {
   id: number;
@@ -44,12 +45,40 @@ export interface User {
   isFootballer?: boolean;
 }
 
+interface AccessIdentity {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export default function App() {
   const [showNewsletterModal, setShowNewsletterModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [accessIdentity, setAccessIdentity] = useState<AccessIdentity | null>(null);
+  const [accessChecked, setAccessChecked] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/access/session', { credentials: 'same-origin' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Private access session is required.');
+        return response.json();
+      })
+      .then(({ access }) => {
+        if (!active) return;
+        setAccessIdentity({ id: access.id, name: access.name, email: access.email || '' });
+        setAccessChecked(true);
+      })
+      .catch(() => {
+        window.location.assign(`/access?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (window.location.pathname === '/jacket-builder') return;
@@ -124,7 +153,6 @@ export default function App() {
   };
 
   const handleLogin = (email: string, password: string) => {
-    // Test credentials
     if (email === 'user@test.com' && password === 'user123') {
       setUser({ email, name: 'John', isAdmin: false });
       return true;
@@ -145,6 +173,10 @@ export default function App() {
   };
 
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
+
+  if (!accessChecked || !accessIdentity) {
+    return <div className="min-h-screen bg-black" aria-label="Verifying private access" />;
+  }
 
   return (
     <Router>
@@ -233,6 +265,8 @@ export default function App() {
         />
 
         <CookieConsent />
+
+        <SecurityWatermark name={accessIdentity.name} email={accessIdentity.email} accessId={accessIdentity.id} />
 
         <Toaster position="bottom-right" />
 

@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Access Control — Manoir Kits</title>
+    <link rel="stylesheet" href="/access.css" />
+    <script src="/admin-access.js" defer></script>
+  </head>
+  <body class="admin-page">
+    <header class="admin-header">
+      <div>
+        <p class="eyebrow">MANOIR KITS</p>
+        <h1>PRIVATE ACCESS CONTROL</h1>
+      </div>
+      <a href="/">RETURN TO SITE</a>
+    </header>
+
+    <main class="admin-shell">
+      <section id="admin-unlock" class="panel compact-panel">
+        <h2>Administrator verification</h2>
+        <p>The administrator key stays in this browser tab and is never saved locally.</p>
+        <form id="admin-form" class="inline-form">
+          <input id="admin-key" type="password" autocomplete="current-password" placeholder="Administrator key" required />
+          <button type="submit">UNLOCK</button>
+        </form>
+        <p id="admin-status" class="status" role="alert"></p>
+      </section>
+
+      <div id="admin-content" hidden>
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">ISSUE ACCESS</p>
+              <h2>Create a personal code</h2>
+            </div>
+          </div>
+          <form id="grant-form" class="form-grid">
+            <label>
+              PERSON OR ORGANIZATION
+              <input name="label" type="text" maxlength="120" required />
+            </label>
+            <label>
+              EMAIL (OPTIONAL)
+              <input name="email" type="email" maxlength="180" />
+            </label>
+            <label>
+              PREVIEW CODE TYPE
+              <select name="role">
+                <option value="visitor">Private visitor — site gate only</option>
+                <option value="admin">Owner preview — site gate only</option>
+              </select>
+            </label>
+            <label>
+              EXPIRES
+              <input id="expires-at" name="expiresAt" type="datetime-local" required />
+            </label>
+            <label>
+              SIGN-IN LIMIT
+              <input name="maxUses" type="number" min="1" max="500" value="25" required />
+            </label>
+            <label>
+              UNIQUE NETWORK LIMIT
+              <input name="maxIps" type="number" min="1" max="50" value="3" required />
+            </label>
+            <label class="full-width">
+              INTERNAL NOTES (OPTIONAL)
+              <textarea name="notes" rows="3" maxlength="500"></textarea>
+            </label>
+            <div class="full-width form-actions">
+              <button type="submit">GENERATE PERSONAL CODE</button>
+              <p class="muted">The full code is shown once. Store it in your password manager before leaving this page.</p>
+            </div>
+          </form>
+          <div id="generated-code" class="generated-code" hidden>
+            <div>
+              <span>NEW PERSONAL CODE</span>
+              <strong id="generated-code-value"></strong>
+            </div>
+            <button id="copy-code" type="button">COPY</button>
+          </div>
+          <p id="grant-status" class="status" role="alert"></p>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">ACTIVE INVITES</p>
+              <h2>Personal access codes</h2>
+            </div>
+            <button id="refresh-grants" class="secondary" type="button">REFRESH</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  <th>Code type</th>
+                  <th>Uses</th>
+                  <th>Last used</th>
+                  <th>Expires</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="grants-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">SECURITY LOG</p>
+              <h2>Recent access activity</h2>
+            </div>
+            <button id="refresh-events" class="secondary" type="button">REFRESH</button>
+          </div>
+          <p class="muted">Connection and disclosed device data is retained for 30 days. Location and coordinates are IP-derived, approximate, and only appear when supplied by the trusted host.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Person</th>
+                  <th>Result</th>
+                  <th>IP</th>
+                  <th>Approx. location</th>
+                  <th>Browser / device</th>
+                  <th>Requested page</th>
+                </tr>
+              </thead>
+              <tbody id="events-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

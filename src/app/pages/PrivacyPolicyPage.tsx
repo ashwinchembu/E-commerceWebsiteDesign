@@ -4,7 +4,7 @@ export function PrivacyPolicyPage() {
       {/* Header */}
       <div className="bg-black text-white py-20 text-center">
         <h1 className="text-5xl tracking-widest mb-4 font-light">PRIVACY POLICY</h1>
-        <p className="text-sm tracking-wide opacity-80">Last Updated: February 2, 2026</p>
+        <p className="text-sm tracking-wide opacity-80">Last Updated: July 22, 2026</p>
       </div>
 
       <div className="container mx-auto px-6 py-20">
@@ -18,6 +18,9 @@ export function PrivacyPolicyPage() {
               <p className="text-sm leading-relaxed">
                 We also automatically collect certain information about your device when you use our website, including your IP address, browser type, operating system, referring URLs, and information about your usage of our website.
               </p>
+              <p className="text-sm leading-relaxed mt-4">
+                For private-preview access, we associate security events with the person or organization assigned to an access code. These events can include the time and result of an attempt, exact connection IP, requested page, browser and operating-system information, language, timezone, screen size, a limited device-capability summary, and an approximate city, region, country, postal area, network number, or coordinates only when our trusted hosting provider supplies them. IP-derived location is approximate and does not reveal a precise street address. We do not request precise device geolocation or use covert canvas or audio fingerprinting.
+              </p>
             </div>
 
             <div>
@@ -30,6 +33,7 @@ export function PrivacyPolicyPage() {
                 <li>Communicate with you about products, services, and promotional offers</li>
                 <li>Improve our website and customer experience</li>
                 <li>Detect and prevent fraud</li>
+                <li>Identify shared, leaked, expired, or abused private-preview access codes</li>
                 <li>Comply with legal obligations</li>
               </ul>
             </div>
@@ -50,8 +54,11 @@ export function PrivacyPolicyPage() {
 
             <div>
               <h3 className="text-xl tracking-wide mb-4 font-light">5. Data Security</h3>
+              <p className="text-sm leading-relaxed mb-4">
+                We protect private previews using personal expiring access codes, use and network limits, revocation, rate limiting, secure session cookies, and personalized on-screen watermarks. Access codes are stored as one-way cryptographic hashes rather than readable passwords.
+              </p>
               <p className="text-sm leading-relaxed">
-                We implement reasonable security measures to protect your personal information. However, no method of transmission over the internet is 100% secure, and we cannot guarantee absolute security.
+                Raw private-access security logs are automatically deleted after 30 days. However, no method of transmission over the internet is 100% secure, and we cannot guarantee absolute security.
               </p>
             </div>
 

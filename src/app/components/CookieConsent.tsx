@@ -33,7 +33,7 @@ export function CookieConsent() {
             <p className="text-[11px] leading-relaxed text-gray-400 tracking-wide max-w-2xl sm:text-xs">
               We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
               By clicking "Accept", you consent to our use of cookies. Read our{' '}
-              <Link to="/contact" className="underline hover:text-white">
+              <Link to="/privacy-policy" className="underline hover:text-white">
                 Privacy Policy
               </Link>{' '}
               for more information.

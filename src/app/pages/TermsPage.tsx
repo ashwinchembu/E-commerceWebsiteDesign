@@ -37,7 +37,7 @@ export function TermsPage() {
             <div>
               <h3 className="text-xl tracking-wide mb-4 font-light">4. Shipping and Delivery</h3>
               <p className="text-sm leading-relaxed">
-                Shipping times vary depending on your location. Some items ship from the US, while others ship from the Middle East. We are not responsible for delays caused by customs or shipping carriers. Risk of loss passes to you upon delivery to the carrier.
+                Available shipping rates and estimated delivery windows are shown at checkout and depend on the destination, shipping origin, package, and selected carrier service. International orders may be subject to import duties, taxes, or customs fees charged by the destination country unless checkout states that they are included. Customs and carrier delays may affect delivery estimates.
               </p>
             </div>
 

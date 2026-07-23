@@ -3,7 +3,6 @@ import { User, Package, Heart, Settings, LogOut, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { toast } from 'sonner';
-import logoImage from 'figma:asset/49db8db3192aa070a09b2e638fd91cfc6cf1ca1e.png';
 
 interface AccountPageProps {
   user: { email: string; name: string; isAdmin: boolean; isFootballer?: boolean } | null;
@@ -18,32 +17,14 @@ export function AccountPage({ user, onLogin, onLogout, wishlist, onToggleWishlis
   const [activeAccountTab, setActiveAccountTab] = useState<'profile' | 'orders' | 'wishlist' | 'settings'>('profile');
   const [loginError, setLoginError] = useState('');
 
-  // Fake credentials for testing
-  const testCredentials = {
-    user: { email: 'user@test.com', password: 'user123' },
-    admin: { email: 'admin@manoir.com', password: 'admin123' },
-    footballer: { email: 'footballers@manoir.com', password: 'footballers123' }
-  };
-
   const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
-
-    // Check credentials
-    if (email === testCredentials.user.email && password === testCredentials.user.password) {
-      onLogin(email, password);
+    if (onLogin(email, password)) {
       setLoginError('');
       toast.success('Successfully signed in!');
-    } else if (email === testCredentials.admin.email && password === testCredentials.admin.password) {
-      onLogin(email, password);
-      setLoginError('');
-      toast.success('Successfully signed in as Admin!');
-    } else if (email === testCredentials.footballer.email && password === testCredentials.footballer.password) {
-      onLogin(email, password);
-      setLoginError('');
-      toast.success('Successfully signed in for Footballers access!');
     } else {
       setLoginError('Invalid email or password');
     }
@@ -66,15 +47,6 @@ export function AccountPage({ user, onLogin, onLogout, wishlist, onToggleWishlis
         <div className="container mx-auto px-6">
           <div className="max-w-md mx-auto">
             <div className="bg-white p-12 shadow-sm">
-              {/* Logo at the top */}
-              <div className="flex justify-center mb-8">
-                <img 
-                  src={logoImage} 
-                  alt="Manoir Kits Crest" 
-                  className="w-auto h-40 max-w-[250px]"
-                />
-              </div>
-
               <div className="flex mb-8 border-b border-gray-200">
                 <button
                   onClick={() => setActiveLoginTab('login')}
@@ -100,13 +72,6 @@ export function AccountPage({ user, onLogin, onLogout, wishlist, onToggleWishlis
 
               {activeLoginTab === 'login' ? (
                 <form className="space-y-6" onSubmit={handleLogin}>
-                  <div className="bg-blue-50 border border-blue-200 p-4 text-xs mb-4">
-                    <p className="font-semibold mb-2">Test Credentials:</p>
-                    <p className="mb-1">User: user@test.com / user123</p>
-                    <p className="mb-1">Admin: admin@manoir.com / admin123</p>
-                    <p>Footballers: footballers@manoir.com / footballers123</p>
-                  </div>
-                  
                   {loginError && (
                     <div className="bg-red-50 border border-red-200 p-3 text-sm text-red-600">
                       {loginError}
@@ -438,36 +403,20 @@ export function AccountPage({ user, onLogin, onLogout, wishlist, onToggleWishlis
                 
                 <div className="space-y-8">
                   <div>
-                    <h3 className="text-lg tracking-wide mb-4">Change Password</h3>
-                    <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); toast.success('Password updated!'); }}>
-                      <div>
-                        <label className="block text-sm mb-2 tracking-wide">CURRENT PASSWORD</label>
-                        <input
-                          type="password"
-                          className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-black transition-colors"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-2 tracking-wide">NEW PASSWORD</label>
-                        <input
-                          type="password"
-                          className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-black transition-colors"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm mb-2 tracking-wide">CONFIRM NEW PASSWORD</label>
-                        <input
-                          type="password"
-                          className="w-full px-4 py-3 border border-gray-300 focus:outline-none focus:border-black transition-colors"
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        className="bg-black text-white px-12 py-4 hover:bg-gray-800 transition-colors tracking-widest text-sm cursor-pointer"
-                      >
-                        UPDATE PASSWORD
-                      </button>
-                    </form>
+                    <h3 className="text-lg tracking-wide mb-4">Private Access</h3>
+                    <div className="border border-gray-200 p-5">
+                      <p className="text-sm leading-relaxed text-gray-600">
+                        Private-preview access is separate from this customer account. Preview codes are personal, expiring, and managed through the security dashboard.
+                      </p>
+                      {user.isAdmin && (
+                        <a
+                          href="/admin/access"
+                          className="inline-block mt-4 bg-black text-white px-8 py-3 hover:bg-gray-800 transition-colors tracking-widest text-xs"
+                        >
+                          MANAGE PRIVATE ACCESS
+                        </a>
+                      )}
+                    </div>
                   </div>
 
                   <div className="pt-8 border-t border-gray-200">

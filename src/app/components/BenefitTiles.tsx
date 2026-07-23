@@ -5,7 +5,7 @@ export function BenefitTiles() {
     {
       icon: Truck,
       title: 'SHIPPING',
-      description: 'US & International Shipping Rates Apply'
+      description: 'Rates & Delivery Estimates Calculated at Checkout'
     },
     {
       icon: Tag,

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Private Access — Manoir Kits</title>
+    <link rel="stylesheet" href="/access.css" />
+    <script src="/access.js" defer></script>
+  </head>
+  <body class="gate-page">
+    <main class="gate-shell">
+      <section class="gate-card" aria-labelledby="gate-title">
+        <p class="eyebrow">PRIVATE PREVIEW</p>
+        <h1 id="gate-title">MANOIR KITS</h1>
+        <p class="lede">Enter the personal access code issued to you.</p>
+
+        <form id="access-form" class="stack">
+          <label for="access-code">PERSONAL ACCESS CODE</label>
+          <input
+            id="access-code"
+            name="code"
+            type="password"
+            autocomplete="one-time-code"
+            autocapitalize="characters"
+            spellcheck="false"
+            placeholder="MK-XXXXXXXX-XXXX-XXXX-XXXX-XXXX"
+            required
+          />
+          <button type="submit">ENTER PRIVATE SITE</button>
+          <p id="access-status" class="status" role="alert" aria-live="polite"></p>
+        </form>
+
+        <div class="privacy-note">
+          <h2>Access security notice</h2>
+          <p>
+            To protect this private preview, access attempts record the person assigned to the code,
+            time, exact connection IP, approximate region or coordinates when supplied by our hosting provider,
+            requested page, browser/OS, language, timezone, screen size, and a limited device-capability summary.
+            We do not request precise device location or use covert canvas/audio fingerprinting. IP-derived location is approximate
+            and cannot identify a precise address. Security logs are retained for 30 days.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

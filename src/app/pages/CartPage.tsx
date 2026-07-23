@@ -10,8 +10,6 @@ interface CartPageProps {
 
 export function CartPage({ cart, updateQuantity, removeFromCart }: CartPageProps) {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const shipping = 15;
-  const total = subtotal + shipping;
 
   if (cart.length === 0) {
     return (
@@ -94,12 +92,12 @@ export function CartPage({ cart, updateQuantity, removeFromCart }: CartPageProps
             </div>
             <div className="flex justify-between text-sm">
               <span>Shipping</span>
-              <span>${shipping.toFixed(2)}</span>
+              <span>Calculated at checkout</span>
             </div>
             <div className="border-t border-gray-300 pt-4">
               <div className="flex justify-between">
-                <span>Total</span>
-                <span className="text-xl">${total.toFixed(2)}</span>
+                <span>Estimated total</span>
+                <span className="text-xl">${subtotal.toFixed(2)}</span>
               </div>
             </div>
           </div>

@@ -52,15 +52,17 @@ interface AccessIdentity {
 }
 
 export default function App() {
+  const privateAccessEnabled = import.meta.env.VITE_PRIVATE_ACCESS_ENABLED === 'true';
   const [showNewsletterModal, setShowNewsletterModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [accessIdentity, setAccessIdentity] = useState<AccessIdentity | null>(null);
-  const [accessChecked, setAccessChecked] = useState(false);
+  const [accessChecked, setAccessChecked] = useState(!privateAccessEnabled);
 
   useEffect(() => {
+    if (!privateAccessEnabled) return;
     let active = true;
     fetch('/api/access/session', { credentials: 'same-origin' })
       .then(async (response) => {
@@ -78,7 +80,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [privateAccessEnabled]);
 
   useEffect(() => {
     if (window.location.pathname === '/jacket-builder') return;
@@ -174,7 +176,7 @@ export default function App() {
 
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
 
-  if (!accessChecked || !accessIdentity) {
+  if (privateAccessEnabled && (!accessChecked || !accessIdentity)) {
     return <div className="min-h-screen bg-black" aria-label="Verifying private access" />;
   }
 
@@ -266,7 +268,9 @@ export default function App() {
 
         <CookieConsent />
 
-        <SecurityWatermark name={accessIdentity.name} email={accessIdentity.email} accessId={accessIdentity.id} />
+        {accessIdentity && (
+          <SecurityWatermark name={accessIdentity.name} email={accessIdentity.email} accessId={accessIdentity.id} />
+        )}
 
         <Toaster position="bottom-right" />
 

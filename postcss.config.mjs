@@ -1,5 +1,3 @@
-export default {
-  plugins: {
-    "@tailwindcss/postcss": {},
-  },
-};
+// Add any additional PostCSS configuration here
+
+export default {}

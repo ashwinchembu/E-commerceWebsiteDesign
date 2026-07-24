@@ -11,3 +11,17 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "24.14.1"
+      - key: VITE_PRIVATE_ACCESS_ENABLED
+        value: "true"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: ACCESS_EVENT_RETENTION_DAYS
+        value: "30"
+      - key: ACCESS_ADMIN_SECRET
+        sync: false
+      - key: ACCESS_SESSION_SECRET
+        generateValue: true
+      - key: MONGODB_DATABASE
+        value: manoir_kits_access
+      - key: MONGODB_URI
+        sync: false

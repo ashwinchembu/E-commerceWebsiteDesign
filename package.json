@@ -6,8 +6,9 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "start": "node server/storefront-server.mjs",
-    "start:access": "node --env-file-if-exists=.env.access.local server/access-server.mjs"
+    "dev:access": "node --env-file-if-exists=.env.access.local server/access-server.mjs",
+    "start": "node --env-file-if-exists=.env.access.local server/access-server.mjs",
+    "secure": "npm run build && npm run start"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

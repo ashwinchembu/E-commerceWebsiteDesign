@@ -36,7 +36,7 @@ export function SecurityWatermark({ name, email, accessId, onLogout }: SecurityW
         className="pointer-events-none fixed inset-0 z-[9998] overflow-hidden select-none"
         aria-hidden="true"
       >
-        <div className="absolute left-1/2 top-1/2 flex h-[135vh] w-[150vw] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] flex-col justify-around opacity-[0.025] sm:hidden">
+        <div className="absolute left-1/2 top-1/2 flex h-[135vh] w-[150vw] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] flex-col justify-around opacity-[0.05] mix-blend-difference sm:hidden">
           {Array.from({ length: 8 }, (_, index) => (
             <span
               key={index}

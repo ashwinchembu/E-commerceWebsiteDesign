@@ -278,7 +278,9 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Jacket");
   const [openBodyGroup, setOpenBodyGroup] = useState<string | null>("Neutrals");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window === "undefined" || window.matchMedia("(min-width: 768px)").matches,
+  );
 
   const [jacketEdition, setJacketEdition] = useState<JacketEdition>("Classic");
   const [showFootballersAccess, setShowFootballersAccess] = useState(false);
@@ -876,7 +878,7 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
         {/* Jacket preview */}
         <div
           className={`order-1 relative bg-[#f0ede8] overflow-hidden transition-[height] duration-200 md:order-2 md:h-auto md:min-h-0 md:flex-1 ${
-            sidebarOpen ? "h-[46dvh] min-h-[300px] flex-none sm:min-h-[340px]" : "min-h-0 flex-1"
+            sidebarOpen ? "h-[46dvh] min-h-[260px] flex-none sm:min-h-[340px]" : "min-h-[320px] flex-1"
           }`}
         >
           <VarsityJacketViewer

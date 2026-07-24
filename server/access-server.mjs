@@ -363,7 +363,7 @@ async function handleCreateGrant(request, response) {
   const label = String(body.label || "").trim().slice(0, 120);
   const email = String(body.email || "").trim().toLowerCase().slice(0, 180);
   const notes = String(body.notes || "").trim().slice(0, 500);
-  const role = ["visitor", "admin"].includes(body.role) ? body.role : "visitor";
+  const role = ["visitor", "footballer", "admin"].includes(body.role) ? body.role : "visitor";
   const maxUses = Math.min(500, Math.max(1, Number(body.maxUses || 25)));
   const maxIps = Math.min(50, Math.max(1, Number(body.maxIps || 3)));
   const expiresAt = body.expiresAt ? Date.parse(body.expiresAt) : now() + 14 * 24 * 60 * 60 * 1000;

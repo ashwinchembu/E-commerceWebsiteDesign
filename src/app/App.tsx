@@ -38,17 +38,11 @@ export interface WishlistItem {
   image: string;
 }
 
-export interface User {
-  email: string;
-  name: string;
-  isAdmin: boolean;
-  isFootballer?: boolean;
-}
-
 interface AccessIdentity {
   id: string;
   name: string;
   email: string;
+  role: 'visitor' | 'footballer' | 'admin';
 }
 
 export default function App() {
@@ -57,7 +51,6 @@ export default function App() {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
-  const [user, setUser] = useState<User | null>(null);
   const [accessIdentity, setAccessIdentity] = useState<AccessIdentity | null>(null);
   const [accessChecked, setAccessChecked] = useState(!privateAccessEnabled);
 
@@ -71,7 +64,12 @@ export default function App() {
       })
       .then(({ access }) => {
         if (!active) return;
-        setAccessIdentity({ id: access.id, name: access.name, email: access.email || '' });
+        setAccessIdentity({
+          id: access.id,
+          name: access.name,
+          email: access.email || '',
+          role: access.role === 'footballer' || access.role === 'admin' ? access.role : 'visitor',
+        });
         setAccessChecked(true);
       })
       .catch(() => {
@@ -138,12 +136,6 @@ export default function App() {
   };
 
   const toggleWishlist = (item: WishlistItem) => {
-    // Check if user is logged in
-    if (!user) {
-      // Redirect to login page if not logged in
-      return { requiresLogin: true };
-    }
-    
     setWishlist((prevWishlist) => {
       const exists = prevWishlist.find((wishlistItem) => wishlistItem.id === item.id);
       if (exists) {
@@ -152,26 +144,6 @@ export default function App() {
       return [...prevWishlist, item];
     });
     return { requiresLogin: false };
-  };
-
-  const handleLogin = (email: string, password: string) => {
-    if (email === 'user@test.com' && password === 'user123') {
-      setUser({ email, name: 'John', isAdmin: false });
-      return true;
-    }
-    if (email === 'admin@manoir.com' && password === 'admin123') {
-      setUser({ email, name: 'Admin', isAdmin: true });
-      return true;
-    }
-    if (email === 'footballers@manoir.com' && password === 'footballers123') {
-      setUser({ email, name: 'Footballer', isAdmin: false, isFootballer: true });
-      return true;
-    }
-    return false;
-  };
-
-  const handleLogout = () => {
-    setUser(null);
   };
 
   const handlePrivateAccessLogout = async () => {
@@ -196,7 +168,6 @@ export default function App() {
         <Header 
           cartItemCount={cartItemCount} 
           onSearchClick={() => setShowSearchModal(true)}
-          user={user}
         />
         
         <main className="flex-1">
@@ -242,25 +213,17 @@ export default function App() {
                 />
               } 
             />
-            <Route path="/checkout" element={<CheckoutPage cart={cart} />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
-            <Route 
-              path="/account" 
-              element={
-                <AccountPage 
-                  user={user}
-                  onLogin={handleLogin}
-                  onLogout={handleLogout}
-                  wishlist={wishlist}
-                  onToggleWishlist={toggleWishlist}
-                />
-              } 
-            />
+            <Route path="/account" element={<AccountPage />} />
             <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/do-not-sell" element={<DoNotSellPage />} />
-            <Route path="/jacket-builder" element={<JacketBuilderPage user={user} />} />
+            <Route
+              path="/jacket-builder"
+              element={<JacketBuilderPage accessRole={accessIdentity?.role ?? 'visitor'} />}
+            />
           </Routes>
         </main>
 

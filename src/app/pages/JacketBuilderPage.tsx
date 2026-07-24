@@ -270,10 +270,10 @@ const PRINT_COLORS = [
 ];
 
 interface JacketBuilderPageProps {
-  user?: { email: string; name: string; isAdmin: boolean; isFootballer?: boolean } | null;
+  accessRole?: "visitor" | "footballer" | "admin";
 }
 
-export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
+export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Jacket");
@@ -331,7 +331,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
   };
 
   const isFootballersEdition = jacketEdition === "Footballers";
-  const canUseFootballersEdition = Boolean(user?.isFootballer || user?.isAdmin);
+  const canUseFootballersEdition = accessRole === "footballer" || accessRole === "admin";
   const renderedBodyColor = isFootballersEdition ? sleeveColor : bodyColor;
   const renderedBodyMaterial: BodyMaterial = isFootballersEdition ? "Leather" : "Wool";
 
@@ -580,13 +580,13 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
                     {showFootballersAccess && !canUseFootballersEdition && (
                       <div className="border border-gray-200 bg-white p-3">
                         <p className="text-xs leading-relaxed text-gray-600">
-                          Footballers full-leather jackets are credential-gated. Sign in with an approved account to configure.
+                          Footballers full-leather jackets require a Footballer or Owner access code.
                         </p>
                         <button
-                          onClick={() => navigate("/account")}
+                          onClick={() => navigate("/contact")}
                           className="mt-3 w-full bg-black px-3 py-2 text-[10px] tracking-widest uppercase text-white transition-colors hover:bg-gray-800"
                         >
-                          Sign In For Footballers
+                          Request Footballers Access
                         </button>
                       </div>
                     )}
@@ -1006,7 +1006,7 @@ export function JacketBuilderPage({ user }: JacketBuilderPageProps) {
             )}
 
             <p className="text-[10px] text-gray-400 text-center mt-3">
-              We accept all debit/credit cards, as well as payment via PayPal.
+              Available payment methods are shown and processed securely by Shopify.
             </p>
 
             <div className="mt-3 bg-amber-50 border border-amber-200 p-3 text-center">

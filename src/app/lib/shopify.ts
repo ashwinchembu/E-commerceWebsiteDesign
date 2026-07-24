@@ -16,6 +16,13 @@ function requiredEnv(name: string, value: string | undefined) {
   return value.trim();
 }
 
+export function shopifyAccountUrl() {
+  const store = requiredEnv("VITE_SHOPIFY_STORE_DOMAIN", import.meta.env.VITE_SHOPIFY_STORE_DOMAIN)
+    .replace(/^https?:\/\//, "")
+    .replace(/\/$/, "");
+  return `https://${store}/account`;
+}
+
 function jacketVariantForSize(size: string, edition: string) {
   const raw = requiredEnv("VITE_SHOPIFY_JACKET_VARIANTS", import.meta.env.VITE_SHOPIFY_JACKET_VARIANTS);
   let variants: Record<string, string | Record<string, string>>;

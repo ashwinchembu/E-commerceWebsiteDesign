@@ -8,10 +8,9 @@ import logoImage from 'figma:asset/49db8db3192aa070a09b2e638fd91cfc6cf1ca1e.png'
 interface HeaderProps {
   cartItemCount: number;
   onSearchClick: () => void;
-  user: { email: string; name: string; isAdmin: boolean } | null;
 }
 
-export function Header({ cartItemCount, user, onSearchClick }: HeaderProps) {
+export function Header({ cartItemCount, onSearchClick }: HeaderProps) {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchBar, setShowSearchBar] = useState(false);
@@ -84,7 +83,7 @@ export function Header({ cartItemCount, user, onSearchClick }: HeaderProps) {
           {/* Right Section - Login, Search, Cart */}
           <div className="flex items-center gap-6">
             <Link to="/account" className="text-sm tracking-wide hover:opacity-70 transition-opacity hidden md:block mr-2">
-              {user ? user.name.toUpperCase() : 'LOGIN'}
+              ACCOUNT
             </Link>
 
             {/* Search with Expanding Bar */}
@@ -220,7 +219,7 @@ export function Header({ cartItemCount, user, onSearchClick }: HeaderProps) {
                 className="text-sm tracking-wide hover:opacity-70 transition-opacity"
                 onClick={() => setShowMobileMenu(false)}
               >
-                LOGIN
+                ACCOUNT
               </Link>
               <button
                 onClick={() => {

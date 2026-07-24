@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#090909" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <title>Manoir Kits — Opening Private Showroom</title>
+    <style>
+      :root {
+        color: #f4f0e7;
+        background: #090909;
+        font-family: Arial, Helvetica, sans-serif;
+        font-synthesis: none;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: grid;
+        min-height: 100svh;
+        place-items: center;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 50% 32%, rgba(197, 164, 92, 0.11), transparent 34rem),
+          linear-gradient(145deg, #111 0%, #080808 58%, #050505 100%);
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        content: "";
+        opacity: 0.16;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+        background-size: 52px 52px;
+        mask-image: linear-gradient(to bottom, black, transparent 82%);
+      }
+
+      main {
+        position: relative;
+        width: min(42rem, calc(100% - 2rem));
+        padding: clamp(2.25rem, 7vw, 4.75rem);
+        border: 1px solid rgba(244, 240, 231, 0.14);
+        background: rgba(9, 9, 9, 0.76);
+        box-shadow: 0 2rem 6rem rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(18px);
+      }
+
+      .eyebrow,
+      .time,
+      button {
+        font-size: 0.67rem;
+        font-weight: 700;
+        letter-spacing: 0.24em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow {
+        margin: 0 0 1.4rem;
+        color: #c5a45c;
+      }
+
+      h1 {
+        max-width: 12ch;
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(2.7rem, 8vw, 5.4rem);
+        font-weight: 400;
+        letter-spacing: -0.05em;
+        line-height: 0.91;
+      }
+
+      .description {
+        max-width: 34rem;
+        margin: 1.8rem 0 0;
+        color: rgba(244, 240, 231, 0.68);
+        font-size: clamp(0.95rem, 2vw, 1.08rem);
+        line-height: 1.65;
+      }
+
+      .progress {
+        position: relative;
+        height: 2px;
+        margin: 2.5rem 0 1.25rem;
+        overflow: hidden;
+        background: rgba(244, 240, 231, 0.13);
+      }
+
+      .progress::after {
+        position: absolute;
+        inset: 0;
+        width: 36%;
+        content: "";
+        background: linear-gradient(90deg, transparent, #c5a45c, #f4f0e7, transparent);
+        animation: wake 1.8s ease-in-out infinite;
+      }
+
+      .status-row {
+        display: flex;
+        min-height: 2.5rem;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1.5rem;
+      }
+
+      #status {
+        margin: 0;
+        color: rgba(244, 240, 231, 0.86);
+        font-size: 0.84rem;
+        line-height: 1.5;
+      }
+
+      .time {
+        flex: 0 0 auto;
+        padding-top: 0.2rem;
+        color: rgba(244, 240, 231, 0.38);
+      }
+
+      button {
+        margin-top: 1.4rem;
+        padding: 0.75rem 0;
+        border: 0;
+        border-bottom: 1px solid rgba(197, 164, 92, 0.75);
+        color: #f4f0e7;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      button:hover,
+      button:focus-visible {
+        color: #c5a45c;
+        outline: none;
+      }
+
+      .ready .progress::after {
+        width: 100%;
+        animation: none;
+        background: #c5a45c;
+        transition: width 240ms ease;
+      }
+
+      @keyframes wake {
+        from {
+          transform: translateX(-120%);
+        }
+        to {
+          transform: translateX(380%);
+        }
+      }
+
+      @media (max-width: 520px) {
+        main {
+          padding: 2.25rem 1.5rem;
+        }
+
+        .status-row {
+          display: block;
+        }
+
+        .time {
+          margin-top: 0.55rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .progress::after {
+          animation-duration: 4s;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main aria-labelledby="page-title">
+      <p class="eyebrow">Private preview</p>
+      <h1 id="page-title">Opening Manoir Kits</h1>
+      <p class="description">
+        The private showroom is waking securely. Free hosting can take up to a minute after a quiet period.
+        Keep this page open—we’ll continue automatically.
+      </p>
+      <div class="progress" aria-hidden="true"></div>
+      <div class="status-row">
+        <p id="status" role="status" aria-live="polite">Contacting the private server…</p>
+        <span class="time" id="elapsed">0 seconds</span>
+      </div>
+      <button id="retry" type="button">Retry connection</button>
+      <noscript>
+        <p class="description">
+          JavaScript is required for the automatic handoff.
+          <a href="https://manoir-kits-private.onrender.com/">Continue to the private site</a>.
+        </p>
+      </noscript>
+    </main>
+
+    <script>
+      (() => {
+        const privateOrigin = "https://manoir-kits-private.onrender.com";
+        const healthUrl = `${privateOrigin}/health`;
+        const targetUrl = `${privateOrigin}${window.location.pathname}${window.location.search}${window.location.hash}`;
+        const startedAt = Date.now();
+        const status = document.querySelector("#status");
+        const elapsed = document.querySelector("#elapsed");
+        const retry = document.querySelector("#retry");
+        let connecting = false;
+        let retryTimer;
+        let attempt = 0;
+
+        const updateElapsed = () => {
+          const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+          elapsed.textContent = `${seconds} second${seconds === 1 ? "" : "s"}`;
+          if (connecting && seconds >= 45) {
+            status.textContent = "Still waking the secure server—almost there…";
+          } else if (connecting && seconds >= 12) {
+            status.textContent = "The secure server is starting. This can take about a minute…";
+          }
+        };
+
+        const scheduleRetry = () => {
+          window.clearTimeout(retryTimer);
+          retryTimer = window.setTimeout(connect, Math.min(7000, 1800 + attempt * 700));
+        };
+
+        const connect = async () => {
+          if (connecting) return;
+          connecting = true;
+          attempt += 1;
+          status.textContent = navigator.onLine
+            ? "Contacting the private server…"
+            : "You appear to be offline. Waiting for your connection…";
+
+          if (!navigator.onLine) {
+            connecting = false;
+            scheduleRetry();
+            return;
+          }
+
+          try {
+            const response = await fetch(`${healthUrl}?wake=${Date.now()}`, {
+              cache: "no-store",
+              credentials: "omit",
+              mode: "cors",
+            });
+            const payload = await response.json();
+            if (!response.ok || payload.ok !== true) throw new Error("Server is not ready");
+
+            document.body.classList.add("ready");
+            status.textContent = "Private server ready. Opening the access gate…";
+            window.clearTimeout(retryTimer);
+            window.setTimeout(() => window.location.replace(targetUrl), 450);
+          } catch {
+            connecting = false;
+            status.textContent = "The server is still waking. Retrying automatically…";
+            scheduleRetry();
+          }
+        };
+
+        retry.addEventListener("click", () => {
+          if (connecting) {
+            status.textContent = "A secure connection is already in progress…";
+            return;
+          }
+          window.clearTimeout(retryTimer);
+          connect();
+        });
+        window.addEventListener("online", connect);
+        window.setInterval(updateElapsed, 1000);
+        updateElapsed();
+        connect();
+      })();
+    </script>
+  </body>
+</html>

@@ -459,7 +459,16 @@ const server = createServer(async (request, response) => {
     const pathname = url.pathname;
 
     if (request.method === "GET" && pathname === "/health") {
-      sendJson(response, 200, { ok: true });
+      sendJson(
+        response,
+        200,
+        { ok: true },
+        {
+          "Access-Control-Allow-Origin": "https://ecommerce-website-design.onrender.com",
+          "Access-Control-Allow-Methods": "GET",
+          Vary: "Origin",
+        },
+      );
       return;
     }
     if (request.method === "GET" && pathname === "/access") {

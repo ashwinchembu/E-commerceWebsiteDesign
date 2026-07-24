@@ -5,12 +5,10 @@ services:
     plan: free
     region: oregon
     buildCommand: npm ci && npm run build
-    startCommand: npm start
+    startCommand: NODE_ENV=production npm start
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: NODE_VERSION
         value: "24.14.1"
       - key: VITE_PRIVATE_ACCESS_ENABLED

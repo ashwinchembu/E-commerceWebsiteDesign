@@ -1,16 +1,17 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
-import { createReadStream, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer } from "node:http";
-import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createAccessStore } from "./access-store.mjs";
 
 const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(serverDirectory, "..");
 const publicDirectory = path.join(serverDirectory, "public");
 const distDirectory = path.resolve(process.env.WEB_DIST_DIR || path.join(projectDirectory, "dist"));
 const dataDirectory = path.resolve(process.env.ACCESS_DATA_DIR || path.join(projectDirectory, "data"));
-const databasePath = path.join(dataDirectory, "access.sqlite");
+const mongoUrl = process.env.MONGODB_URI || "";
+const mongoDatabase = process.env.MONGODB_DATABASE || "manoir_kits_access";
 const isProduction = process.env.NODE_ENV === "production";
 const port = Number(process.env.PORT || 8787);
 const trustProxy = process.env.TRUST_PROXY === "1";
@@ -21,86 +22,21 @@ const sessionSecret = process.env.ACCESS_SESSION_SECRET || "";
 if (!adminSecret || !sessionSecret) {
   throw new Error("ACCESS_ADMIN_SECRET and ACCESS_SESSION_SECRET are required.");
 }
-
-mkdirSync(dataDirectory, { recursive: true });
-
-const database = new DatabaseSync(databasePath);
-database.exec(`
-  PRAGMA journal_mode = WAL;
-  PRAGMA foreign_keys = ON;
-
-  CREATE TABLE IF NOT EXISTS access_grants (
-    id TEXT PRIMARY KEY,
-    salt TEXT NOT NULL,
-    secret_hash TEXT NOT NULL,
-    label TEXT NOT NULL,
-    email TEXT,
-    role TEXT NOT NULL DEFAULT 'visitor',
-    notes TEXT,
-    created_at INTEGER NOT NULL,
-    expires_at INTEGER,
-    max_uses INTEGER NOT NULL DEFAULT 25,
-    max_ips INTEGER NOT NULL DEFAULT 3,
-    use_count INTEGER NOT NULL DEFAULT 0,
-    last_used_at INTEGER,
-    revoked_at INTEGER
-  );
-
-  CREATE TABLE IF NOT EXISTS access_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    grant_id TEXT,
-    result TEXT NOT NULL,
-    ip TEXT NOT NULL,
-    city TEXT,
-    region TEXT,
-    country TEXT,
-    latitude TEXT,
-    longitude TEXT,
-    postal_code TEXT,
-    asn TEXT,
-    user_agent TEXT,
-    client_meta TEXT,
-    requested_path TEXT,
-    occurred_at INTEGER NOT NULL,
-    FOREIGN KEY (grant_id) REFERENCES access_grants(id)
-  );
-
-  CREATE INDEX IF NOT EXISTS access_events_ip_time
-    ON access_events(ip, occurred_at);
-  CREATE INDEX IF NOT EXISTS access_events_grant_time
-    ON access_events(grant_id, occurred_at);
-`);
-
-const eventColumns = new Set(database.prepare("PRAGMA table_info(access_events)").all().map((column) => column.name));
-for (const [column, definition] of [
-  ["latitude", "TEXT"],
-  ["longitude", "TEXT"],
-  ["postal_code", "TEXT"],
-  ["asn", "TEXT"],
-  ["client_meta", "TEXT"],
-  ["requested_path", "TEXT"],
-]) {
-  if (!eventColumns.has(column)) database.exec(`ALTER TABLE access_events ADD COLUMN ${column} ${definition}`);
+if (isProduction && !mongoUrl) {
+  throw new Error("MONGODB_URI is required in production so access codes and logs are not stored on ephemeral disk.");
 }
 
-const now = () => Date.now();
-const deleteOldEvents = database.prepare("DELETE FROM access_events WHERE occurred_at < ?");
-const cleanOldEvents = () => deleteOldEvents.run(now() - eventRetentionDays * 24 * 60 * 60 * 1000);
-cleanOldEvents();
-setInterval(cleanOldEvents, 60 * 60 * 1000).unref();
+const store = createAccessStore({ mongoUrl, mongoDatabase, dataDirectory });
+await store.initialize();
 
-const selectGrant = database.prepare("SELECT * FROM access_grants WHERE id = ?");
-const insertGrant = database.prepare(`
-  INSERT INTO access_grants (
-    id, salt, secret_hash, label, email, role, notes, created_at, expires_at, max_uses, max_ips
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`);
-const insertEvent = database.prepare(`
-  INSERT INTO access_events (
-    grant_id, result, ip, city, region, country, latitude, longitude, postal_code, asn,
-    user_agent, client_meta, requested_path, occurred_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`);
+const now = () => Date.now();
+const cleanOldEvents = () => store.deleteEventsBefore(
+  now() - eventRetentionDays * 24 * 60 * 60 * 1000,
+);
+await cleanOldEvents();
+setInterval(() => {
+  cleanOldEvents().catch((error) => console.error("Access event cleanup failed.", error));
+}, 60 * 60 * 1000).unref();
 
 function sendJson(response, statusCode, payload, extraHeaders = {}) {
   const body = JSON.stringify(payload);
@@ -214,23 +150,23 @@ function normalizeClientMeta(value) {
   return JSON.stringify(meta).slice(0, 1500);
 }
 
-function logEvent(grantId, result, context) {
-  insertEvent.run(
-    grantId || null,
+async function logEvent(grantId, result, context) {
+  await store.insertEvent({
+    grantId: grantId || null,
     result,
-    context.ip,
-    context.city || null,
-    context.region || null,
-    context.country || null,
-    context.latitude || null,
-    context.longitude || null,
-    context.postalCode || null,
-    context.asn || null,
-    context.userAgent || null,
-    context.clientMeta || null,
-    context.requestedPath || null,
-    now(),
-  );
+    ip: context.ip,
+    city: context.city || null,
+    region: context.region || null,
+    country: context.country || null,
+    latitude: context.latitude || null,
+    longitude: context.longitude || null,
+    postalCode: context.postalCode || null,
+    asn: context.asn || null,
+    userAgent: context.userAgent || null,
+    clientMeta: context.clientMeta || null,
+    requestedPath: context.requestedPath || null,
+    occurredAt: now(),
+  });
 }
 
 function randomCharacters(length) {
@@ -296,7 +232,7 @@ function parseCookies(request) {
   );
 }
 
-function sessionGrant(request) {
+async function sessionGrant(request) {
   const token = parseCookies(request).manoir_access;
   if (!token) return null;
   const separator = token.lastIndexOf(".");
@@ -307,11 +243,23 @@ function sessionGrant(request) {
   try {
     const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     if (!decoded.grantId || decoded.expiresAt <= now()) return null;
-    const grant = selectGrant.get(decoded.grantId);
+    const grant = await store.getGrant(decoded.grantId);
     if (!grant || grant.revoked_at || (grant.expires_at && grant.expires_at <= now())) return null;
     return grant;
   } catch {
     return null;
+  }
+}
+
+function safeNextPath(value) {
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return "/";
+  if (/[\u0000-\u001f\u007f\\]/.test(value)) return "/";
+  try {
+    const target = new URL(value, "https://manoir.invalid");
+    if (target.origin !== "https://manoir.invalid") return "/";
+    return `${target.pathname}${target.search}${target.hash}`;
+  } catch {
+    return "/";
   }
 }
 
@@ -359,13 +307,10 @@ function safeStaticPath(directory, pathname) {
 
 async function handleRedeem(request, response) {
   const context = clientContext(request);
-  const recentFailures = database.prepare(`
-    SELECT COUNT(*) AS count FROM access_events
-    WHERE ip = ? AND result IN ('denied', 'rate_limited', 'ip_limit') AND occurred_at >= ?
-  `).get(context.ip, now() - 15 * 60 * 1000).count;
+  const recentFailures = await store.countRecentFailures(context.ip, now() - 15 * 60 * 1000);
 
   if (recentFailures >= 10) {
-    logEvent(null, "rate_limited", context);
+    await logEvent(null, "rate_limited", context);
     sendJson(response, 429, { error: "Too many attempts. Try again in 15 minutes." });
     return;
   }
@@ -375,42 +320,42 @@ async function handleRedeem(request, response) {
   context.requestedPath = cleanHeader(body.path, 300);
   const parsed = parseCode(body.code);
   if (!parsed) {
-    logEvent(null, "denied", context);
+    await logEvent(null, "denied", context);
     sendJson(response, 401, { error: "That access code is not valid." });
     return;
   }
 
-  const grant = selectGrant.get(parsed.id);
+  const grant = await store.getGrant(parsed.id);
   const validHash = grant ? secureEqual(hashSecret(parsed.secret, grant.salt), grant.secret_hash) : false;
   const expired = grant?.expires_at && grant.expires_at <= now();
   const exhausted = grant && grant.max_uses > 0 && grant.use_count >= grant.max_uses;
 
   if (!grant || !validHash || grant.revoked_at || expired || exhausted) {
-    logEvent(grant?.id || null, "denied", context);
+    await logEvent(grant?.id || null, "denied", context);
     sendJson(response, 401, { error: "That access code is invalid, expired, revoked, or has reached its use limit." });
     return;
   }
 
-  const knownIp = database.prepare(`
-    SELECT 1 FROM access_events WHERE grant_id = ? AND result = 'allowed' AND ip = ? LIMIT 1
-  `).get(grant.id, context.ip);
-  const uniqueIps = database.prepare(`
-    SELECT COUNT(DISTINCT ip) AS count FROM access_events WHERE grant_id = ? AND result = 'allowed'
-  `).get(grant.id).count;
-
-  if (!knownIp && grant.max_ips > 0 && uniqueIps >= grant.max_ips) {
-    logEvent(grant.id, "ip_limit", context);
+  const accessTime = now();
+  const consumed = await store.consumeGrant(grant.id, context.ip, accessTime);
+  if (consumed.status === "ip_limit") {
+    await logEvent(grant.id, "ip_limit", context);
     sendJson(response, 403, { error: "This code has reached its network limit. Ask the administrator for a new code." });
     return;
   }
+  if (consumed.status !== "ok") {
+    await logEvent(grant.id, "denied", context);
+    sendJson(response, 401, { error: "That access code is invalid, expired, revoked, or has reached its use limit." });
+    return;
+  }
 
-  const accessTime = now();
-  database.prepare(`
-    UPDATE access_grants SET use_count = use_count + 1, last_used_at = ? WHERE id = ?
-  `).run(accessTime, grant.id);
-  logEvent(grant.id, "allowed", context);
-  const updatedGrant = selectGrant.get(grant.id);
-  sendJson(response, 200, { ok: true, access: publicGrant(updatedGrant) }, { "Set-Cookie": createSessionCookie(updatedGrant) });
+  await logEvent(grant.id, "allowed", context);
+  sendJson(
+    response,
+    200,
+    { ok: true, access: publicGrant(consumed.grant) },
+    { "Set-Cookie": createSessionCookie(consumed.grant) },
+  );
 }
 
 async function handleCreateGrant(request, response) {
@@ -433,44 +378,43 @@ async function handleCreateGrant(request, response) {
   }
 
   let id;
-  do id = randomCharacters(8); while (selectGrant.get(id));
+  do id = randomCharacters(8); while (await store.getGrant(id));
   const secret = randomCharacters(16);
   const salt = randomBytes(16).toString("base64url");
   const secretHash = hashSecret(secret, salt);
   const createdAt = now();
-  insertGrant.run(id, salt, secretHash, label, email || null, role, notes || null, createdAt, expiresAt, maxUses, maxIps);
+  await store.insertGrant({
+    id,
+    salt,
+    secretHash,
+    label,
+    email: email || null,
+    role,
+    notes: notes || null,
+    createdAt,
+    expiresAt,
+    maxUses,
+    maxIps,
+  });
   const groupedSecret = secret.match(/.{1,4}/g).join("-");
   const code = `MK-${id}-${groupedSecret}`;
-  sendJson(response, 201, { code, grant: publicGrant(selectGrant.get(id)) });
+  sendJson(response, 201, { code, grant: publicGrant(await store.getGrant(id)) });
 }
 
-function handleListGrants(response) {
-  const grants = database.prepare(`
-    SELECT id, label, email, role, notes, created_at, expires_at, max_uses, max_ips,
-           use_count, last_used_at, revoked_at
-    FROM access_grants ORDER BY created_at DESC
-  `).all();
+async function handleListGrants(response) {
+  const grants = await store.listGrants();
   sendJson(response, 200, { grants });
 }
 
-function handleListEvents(response, url) {
+async function handleListEvents(response, url) {
   const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") || 200)));
-  const events = database.prepare(`
-    SELECT e.id, e.grant_id, e.result, e.ip, e.city, e.region, e.country,
-           e.latitude, e.longitude, e.postal_code, e.asn, e.user_agent,
-           e.client_meta, e.requested_path, e.occurred_at, g.label, g.email
-    FROM access_events e
-    LEFT JOIN access_grants g ON g.id = e.grant_id
-    ORDER BY e.occurred_at DESC LIMIT ?
-  `).all(limit);
+  const events = await store.listEvents(limit);
   sendJson(response, 200, { events, retentionDays: eventRetentionDays });
 }
 
-function handleRevokeGrant(response, grantId) {
-  const result = database.prepare(`
-    UPDATE access_grants SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL
-  `).run(now(), grantId);
-  if (!result.changes) {
+async function handleRevokeGrant(response, grantId) {
+  const revoked = await store.revokeGrant(grantId, now());
+  if (!revoked) {
     sendJson(response, 404, { error: "Access code was not found or is already revoked." });
     return;
   }
@@ -519,8 +463,8 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (request.method === "GET" && pathname === "/access") {
-      if (sessionGrant(request)) {
-        redirect(response, url.searchParams.get("next") || "/");
+      if (await sessionGrant(request)) {
+        redirect(response, safeNextPath(url.searchParams.get("next") || "/"));
         return;
       }
       serveFile(response, path.join(publicDirectory, "access.html"), "text/html; charset=utf-8");
@@ -551,7 +495,7 @@ const server = createServer(async (request, response) => {
       return;
     }
     if (request.method === "GET" && pathname === "/api/access/session") {
-      const grant = sessionGrant(request);
+      const grant = await sessionGrant(request);
       if (!grant) {
         sendJson(response, 401, { error: "Access session is required." });
         return;
@@ -566,7 +510,7 @@ const server = createServer(async (request, response) => {
         return;
       }
       if (request.method === "GET" && pathname === "/api/admin/grants") {
-        handleListGrants(response);
+        await handleListGrants(response);
         return;
       }
       if (request.method === "POST" && pathname === "/api/admin/grants") {
@@ -574,19 +518,19 @@ const server = createServer(async (request, response) => {
         return;
       }
       if (request.method === "GET" && pathname === "/api/admin/events") {
-        handleListEvents(response, url);
+        await handleListEvents(response, url);
         return;
       }
       const revokeMatch = pathname.match(/^\/api\/admin\/grants\/([A-Z2-9]{8})\/revoke$/);
       if (request.method === "POST" && revokeMatch) {
-        handleRevokeGrant(response, revokeMatch[1]);
+        await handleRevokeGrant(response, revokeMatch[1]);
         return;
       }
       sendJson(response, 404, { error: "Admin endpoint not found." });
       return;
     }
 
-    const grant = sessionGrant(request);
+    const grant = await sessionGrant(request);
     if (!grant) {
       const next = pathname === "/" ? "/" : `${pathname}${url.search}`;
       redirect(response, `/access?next=${encodeURIComponent(next)}`);
@@ -600,5 +544,19 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, () => {
-  console.log(`Manoir Kits secure access server listening on http://127.0.0.1:${port}`);
+  console.log(`Manoir Kits secure access server listening on http://127.0.0.1:${port} with ${store.backend}.`);
 });
+
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  server.close(async () => {
+    await store.close();
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+
+process.once("SIGTERM", shutdown);
+process.once("SIGINT", shutdown);

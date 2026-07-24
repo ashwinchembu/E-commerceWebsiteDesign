@@ -1,11 +1,29 @@
 services:
-  - type: static_site
-    name: ecommerce-website-design
-    repo: https://github.com/ashwinchembu/E-commerceWebsiteDesign
-    branch: main
+  - type: web
+    name: manoir-kits-private
+    runtime: node
+    plan: free
+    region: oregon
     buildCommand: npm ci && npm run build
-    staticPublishPath: dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "24.14.1"
+      - key: VITE_PRIVATE_ACCESS_ENABLED
+        value: "true"
+      - key: TRUST_PROXY
+        value: "1"
+      - key: ACCESS_EVENT_RETENTION_DAYS
+        value: "30"
+      - key: ACCESS_ADMIN_SECRET
+        sync: false
+      - key: ACCESS_SESSION_SECRET
+        generateValue: true
+      - key: MONGODB_DATABASE
+        value: manoir_kits_access
+      - key: MONGODB_URI
+        sync: false

@@ -174,6 +174,16 @@ export default function App() {
     setUser(null);
   };
 
+  const handlePrivateAccessLogout = async () => {
+    const response = await fetch('/api/access/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) throw new Error('Private access logout failed.');
+    window.location.assign('/access');
+  };
+
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
 
   if (privateAccessEnabled && (!accessChecked || !accessIdentity)) {
@@ -269,7 +279,12 @@ export default function App() {
         <CookieConsent />
 
         {accessIdentity && (
-          <SecurityWatermark name={accessIdentity.name} email={accessIdentity.email} accessId={accessIdentity.id} />
+          <SecurityWatermark
+            name={accessIdentity.name}
+            email={accessIdentity.email}
+            accessId={accessIdentity.id}
+            onLogout={handlePrivateAccessLogout}
+          />
         )}
 
         <Toaster position="bottom-right" />

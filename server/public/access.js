@@ -4,7 +4,15 @@ const status = document.querySelector("#access-status");
 
 function safeNextPath() {
   const requested = new URLSearchParams(window.location.search).get("next") || "/";
-  return requested.startsWith("/") && !requested.startsWith("//") ? requested : "/";
+  if (!requested.startsWith("/") || requested.startsWith("//") || requested.includes("\\")) return "/";
+  try {
+    const target = new URL(requested, window.location.origin);
+    return target.origin === window.location.origin
+      ? `${target.pathname}${target.search}${target.hash}`
+      : "/";
+  } catch {
+    return "/";
+  }
 }
 
 function disclosedClientContext() {

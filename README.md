@@ -18,7 +18,9 @@
   3. Run `npm run secure` to build the site and serve it behind the private-access gate.
   4. Open `/admin/access`, enter `ACCESS_ADMIN_SECRET`, and issue a unique code for each person.
 
-  In production, configure the same environment variables in the hosting platform and route all traffic through `server/access-server.mjs`. Set `TRUST_PROXY=1` only behind a trusted proxy so IP and approximate provider location headers cannot be spoofed.
+  In production, configure the same environment variables in the hosting platform, provide `MONGODB_URI`, and route all traffic through `server/access-server.mjs`. Set `TRUST_PROXY=1` only behind a trusted proxy so IP and approximate provider location headers cannot be spoofed.
+
+  `render.yaml` deploys this same private GitHub repository as a free Node web service and stores private-access data in MongoDB Atlas. Render's free web service sleeps after 15 minutes of inactivity and can take about a minute to wake.
 
   Access logs store the assigned person, allowed/denied result, timestamp, IP address, approximate provider-supplied location, and browser/device user agent for 30 days. The system does not use covert fingerprinting or precise-location collection.
 

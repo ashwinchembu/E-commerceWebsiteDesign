@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
@@ -568,6 +568,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
   const { bodyColor, bodyMaterial, sleeveColor, leatherType, trimColor, snapColor, pocketColor, liningColor } = props;
 
   const mountRef = useRef<HTMLDivElement>(null);
+  const [viewerStatus, setViewerStatus] = useState<"loading" | "ready" | "error">("loading");
   const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.0, rotX: -0.05, lastInteraction: 0 });
   const loadedRef = useRef<Loaded | null>(null);
   const frameRef = useRef(0);
@@ -613,13 +614,24 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const mount = mountRef.current;
     if (!mount) return;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const isMobile = window.matchMedia("(max-width: 767px)").matches;
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: !isMobile,
+        alpha: true,
+        powerPreference: "high-performance",
+      });
+    } catch {
+      setViewerStatus("error");
+      return;
+    }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = !isMobile;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     mount.appendChild(renderer.domElement);
 
@@ -1023,6 +1035,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         sleeves: sleeveSets,
       };
       redrawDesign();
+      setViewerStatus("ready");
+    }, undefined, () => {
+      if (!disposed) setViewerStatus("error");
     });
 
     const onPointerDown = (e: PointerEvent) => {
@@ -1098,5 +1113,16 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
   }, []);
 
-  return <div ref={mountRef} className="h-full w-full touch-none cursor-grab active:cursor-grabbing" />;
+  return (
+    <div className="relative h-full min-h-[260px] w-full">
+      <div ref={mountRef} className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing" />
+      {viewerStatus !== "ready" && (
+        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
+          <p className="bg-white/85 px-4 py-2 text-[10px] uppercase tracking-[0.18em] text-gray-600 backdrop-blur">
+            {viewerStatus === "error" ? "Jacket preview could not load · Refresh to retry" : "Loading jacket preview"}
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }

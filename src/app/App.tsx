@@ -20,7 +20,6 @@ import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsPage } from './pages/TermsPage';
 import { DoNotSellPage } from './pages/DoNotSellPage';
 import { JacketBuilderPage } from './pages/JacketBuilderPage';
-import { SecurityWatermark } from './components/SecurityWatermark';
 
 export interface CartItem {
   id: number;
@@ -38,47 +37,11 @@ export interface WishlistItem {
   image: string;
 }
 
-interface AccessIdentity {
-  id: string;
-  name: string;
-  email: string;
-  role: 'visitor' | 'footballer' | 'admin';
-}
-
 export default function App() {
-  const privateAccessEnabled = import.meta.env.VITE_PRIVATE_ACCESS_ENABLED === 'true';
   const [showNewsletterModal, setShowNewsletterModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
-  const [accessIdentity, setAccessIdentity] = useState<AccessIdentity | null>(null);
-  const [accessChecked, setAccessChecked] = useState(!privateAccessEnabled);
-
-  useEffect(() => {
-    if (!privateAccessEnabled) return;
-    let active = true;
-    fetch('/api/access/session', { credentials: 'same-origin' })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Private access session is required.');
-        return response.json();
-      })
-      .then(({ access }) => {
-        if (!active) return;
-        setAccessIdentity({
-          id: access.id,
-          name: access.name,
-          email: access.email || '',
-          role: access.role === 'footballer' || access.role === 'admin' ? access.role : 'visitor',
-        });
-        setAccessChecked(true);
-      })
-      .catch(() => {
-        window.location.assign(`/access?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
-      });
-    return () => {
-      active = false;
-    };
-  }, [privateAccessEnabled]);
 
   useEffect(() => {
     if (window.location.pathname === '/jacket-builder') return;
@@ -146,21 +109,7 @@ export default function App() {
     return { requiresLogin: false };
   };
 
-  const handlePrivateAccessLogout = async () => {
-    const response = await fetch('/api/access/logout', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!response.ok) throw new Error('Private access logout failed.');
-    window.location.assign('/access');
-  };
-
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
-
-  if (privateAccessEnabled && (!accessChecked || !accessIdentity)) {
-    return <div className="min-h-screen bg-black" aria-label="Verifying private access" />;
-  }
 
   return (
     <Router>
@@ -220,10 +169,7 @@ export default function App() {
             <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/do-not-sell" element={<DoNotSellPage />} />
-            <Route
-              path="/jacket-builder"
-              element={<JacketBuilderPage accessRole={accessIdentity?.role ?? 'visitor'} />}
-            />
+            <Route path="/jacket-builder" element={<JacketBuilderPage />} />
           </Routes>
         </main>
 
@@ -240,15 +186,6 @@ export default function App() {
         />
 
         <CookieConsent />
-
-        {accessIdentity && (
-          <SecurityWatermark
-            name={accessIdentity.name}
-            email={accessIdentity.email}
-            accessId={accessIdentity.id}
-            onLogout={handlePrivateAccessLogout}
-          />
-        )}
 
         <Toaster position="bottom-right" />
 

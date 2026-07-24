@@ -269,11 +269,7 @@ const PRINT_COLORS = [
   { label: "Black", color: "#1a1a1a" },
 ];
 
-interface JacketBuilderPageProps {
-  accessRole?: "visitor" | "footballer" | "admin";
-}
-
-export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageProps) {
+export function JacketBuilderPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Jacket");
@@ -283,7 +279,6 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
   );
 
   const [jacketEdition, setJacketEdition] = useState<JacketEdition>("Classic");
-  const [showFootballersAccess, setShowFootballersAccess] = useState(false);
   const [bodyColor, setBodyColor] = useState("#181b20");
   const [sleeveColor, setSleeveColor] = useState("#1a1a1a");
   const [leatherType, setLeatherType] = useState<LeatherType>("Nappa");
@@ -333,7 +328,6 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
   };
 
   const isFootballersEdition = jacketEdition === "Footballers";
-  const canUseFootballersEdition = accessRole === "footballer" || accessRole === "admin";
   const renderedBodyColor = isFootballersEdition ? sleeveColor : bodyColor;
   const renderedBodyMaterial: BodyMaterial = isFootballersEdition ? "Leather" : "Wool";
 
@@ -556,12 +550,7 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
                           <button
                             key={edition}
                             onClick={() => {
-                              if (edition === "Footballers" && !canUseFootballersEdition) {
-                                setShowFootballersAccess(true);
-                                return;
-                              }
                               setJacketEdition(edition);
-                              setShowFootballersAccess(false);
                               if (edition === "Footballers") setExpandedSection("Body");
                             }}
                             className={`min-h-20 border px-3 py-3 text-left transition-colors ${
@@ -572,26 +561,10 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
                             <span className="mt-1 block text-xs leading-snug">
                               {edition === "Footballers" ? "Full leather body and sleeves" : "Wool body with leather sleeves"}
                             </span>
-                            {edition === "Footballers" && !canUseFootballersEdition && (
-                              <span className="mt-2 block text-[9px] tracking-widest uppercase text-gray-400">Login required</span>
-                            )}
                           </button>
                         );
                       })}
                     </div>
-                    {showFootballersAccess && !canUseFootballersEdition && (
-                      <div className="border border-gray-200 bg-white p-3">
-                        <p className="text-xs leading-relaxed text-gray-600">
-                          Footballers full-leather jackets require a Footballer or Owner access code.
-                        </p>
-                        <button
-                          onClick={() => navigate("/contact")}
-                          className="mt-3 w-full bg-black px-3 py-2 text-[10px] tracking-widest uppercase text-white transition-colors hover:bg-gray-800"
-                        >
-                          Request Footballers Access
-                        </button>
-                      </div>
-                    )}
                     {isFootballersEdition && (
                       <p className="text-[10px] leading-relaxed text-gray-500">
                         Footballers jackets use one full-leather shell. Pick Nappa for a smoother finish or Cowhide for a tougher grain.

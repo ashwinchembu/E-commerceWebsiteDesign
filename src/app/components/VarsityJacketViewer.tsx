@@ -442,7 +442,23 @@ function groupFor(name: string): keyof PartMaterials | "logo" {
   return "body";
 }
 
-function makeMaterials(colors: VarsityJacketViewerProps, surfaces: SurfaceTextures): PartMaterials {
+function applySurfaceTextures(materials: PartMaterials, surfaces: SurfaceTextures, colors: VarsityJacketViewerProps) {
+  materials.body.userData.surfaces = surfaces;
+  materials.sleeve.bumpMap = surfaces.leather;
+  materials.sleeve.bumpScale = 0.05;
+  materials.pocket.bumpMap = surfaces.leather;
+  materials.pocket.bumpScale = 0.05;
+  materials.trim.bumpMap = surfaces.rib;
+  materials.trim.bumpScale = 0.038;
+  materials.lining.bumpMap = surfaces.quilt;
+  materials.lining.bumpScale = 0.022;
+  applyLeatherType(materials, colors.leatherType, colors.bodyMaterial);
+  Object.values(materials).forEach((material) => {
+    material.needsUpdate = true;
+  });
+}
+
+function makeMaterials(colors: VarsityJacketViewerProps, surfaces?: SurfaceTextures): PartMaterials {
   const materials = {
     body: new THREE.MeshPhysicalMaterial({
       color: colors.bodyColor,
@@ -491,16 +507,8 @@ function makeMaterials(colors: VarsityJacketViewerProps, surfaces: SurfaceTextur
       side: THREE.DoubleSide,
     }),
   };
-  materials.body.userData.surfaces = surfaces;
-  materials.sleeve.bumpMap = surfaces.leather;
-  materials.sleeve.bumpScale = 0.05;
-  materials.pocket.bumpMap = surfaces.leather;
-  materials.pocket.bumpScale = 0.05;
-  materials.trim.bumpMap = surfaces.rib;
-  materials.trim.bumpScale = 0.038;
-  materials.lining.bumpMap = surfaces.quilt;
-  materials.lining.bumpScale = 0.022;
-  applyBodyMaterial(materials.body, colors.bodyMaterial);
+  if (surfaces) applySurfaceTextures(materials, surfaces, colors);
+  else applyLeatherType(materials, colors.leatherType, colors.bodyMaterial);
   return materials;
 }
 
@@ -568,6 +576,28 @@ function makeEmbroideryEdgeMaterial(texture: THREE.CanvasTexture): THREE.MeshSta
   });
 }
 
+function disposeObjectResources(root: THREE.Object3D) {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+
+  root.traverse((node) => {
+    if (!(node instanceof THREE.Mesh)) return;
+    geometries.add(node.geometry);
+    const nodeMaterials = Array.isArray(node.material) ? node.material : [node.material];
+    for (const material of nodeMaterials) {
+      materials.add(material);
+      for (const value of Object.values(material)) {
+        if (value instanceof THREE.Texture) textures.add(value);
+      }
+    }
+  });
+
+  textures.forEach((texture) => texture.dispose());
+  materials.forEach((material) => material.dispose());
+  geometries.forEach((geometry) => geometry.dispose());
+}
+
 export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
   const { bodyColor, bodyMaterial, sleeveColor, leatherType, trimColor, snapColor, pocketColor, liningColor } = props;
 
@@ -620,12 +650,19 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const mount = mountRef.current;
     if (!mount) return;
 
+    const isMobile = window.matchMedia("(max-width: 767px)").matches;
+    const isConstrained = isMobile || navigator.hardwareConcurrency <= 4;
+    const textureAnisotropy = isConstrained ? 2 : 8;
     let disposed = false;
     let retryTimer = 0;
+    let loadTimeout = 0;
+    let detailTimer = 0;
+    let surfaceTimer = 0;
     let modelPrepared = false;
     let readyReported = false;
     const retrySilently = (message: string, error?: unknown) => {
       if (disposed) return;
+      window.clearTimeout(loadTimeout);
       if (error) console.warn(message, error);
 
       if (automaticRetryRef.current < 2) {
@@ -641,29 +678,37 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
 
     setViewerStatus("loading");
-    const isMobile = window.matchMedia("(max-width: 767px)").matches;
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
         antialias: !isMobile,
         alpha: true,
-        powerPreference: "high-performance",
+        powerPreference: isMobile ? "low-power" : "high-performance",
       });
     } catch (error) {
       retrySilently("Failed to create jacket renderer", error);
       return () => {
         disposed = true;
+        window.clearTimeout(loadTimeout);
         window.clearTimeout(retryTimer);
+        window.clearTimeout(detailTimer);
+        window.clearTimeout(surfaceTimer);
       };
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isConstrained ? 1.25 : 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
-    renderer.shadowMap.enabled = !isMobile;
+    renderer.shadowMap.enabled = !isConstrained;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     mount.appendChild(renderer.domElement);
+
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      retrySilently("Jacket renderer lost its WebGL context");
+    };
+    renderer.domElement.addEventListener("webglcontextlost", onContextLost);
 
     const scene = new THREE.Scene();
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -681,7 +726,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     scene.add(new THREE.HemisphereLight("#ffffff", "#9aa6b4", 0.3));
     const key = new THREE.DirectionalLight("#fff4e6", 1.7);
     key.position.set(2.6, 4, 3.4);
-    key.castShadow = true;
+    key.castShadow = !isConstrained;
     key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.left = key.shadow.camera.bottom = -3;
     key.shadow.camera.right = key.shadow.camera.top = 3;
@@ -699,30 +744,36 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const clock = new THREE.Clock();
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    const surfaces = makeSurfaceTextures();
-    const materials = makeMaterials(propsRef.current, surfaces);
-    applyLeatherType(materials, propsRef.current.leatherType, propsRef.current.bodyMaterial);
+    let surfaces: SurfaceTextures | null = null;
+    const materials = makeMaterials(propsRef.current);
 
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath("/draco/");
     const loader = new GLTFLoader();
     loader.setDRACOLoader(dracoLoader);
+    loadTimeout = window.setTimeout(() => {
+      retrySilently("Jacket preview timed out while loading");
+    }, 15000);
     loader.load(MODEL_PATH, (gltf) => {
-      if (disposed) return;
-      const root = gltf.scene;
-      const byName: Record<string, THREE.Mesh> = {};
-      root.traverse((node) => {
-        if (!(node instanceof THREE.Mesh)) return;
-        byName[node.name] = node;
-        const g = groupFor(node.name);
-        if (g === "logo") {
-          node.visible = false; // hide the stock VarsityBase logo
-          return;
-        }
-        node.material = materials[g];
-        node.castShadow = true;
-        node.receiveShadow = true;
-      });
+      if (disposed) {
+        disposeObjectResources(gltf.scene);
+        return;
+      }
+      try {
+        const root = gltf.scene;
+        const byName: Record<string, THREE.Mesh> = {};
+        root.traverse((node) => {
+          if (!(node instanceof THREE.Mesh)) return;
+          byName[node.name] = node;
+          const g = groupFor(node.name);
+          if (g === "logo") {
+            node.visible = false; // hide the stock VarsityBase logo
+            return;
+          }
+          node.material = materials[g];
+          node.castShadow = !isConstrained;
+          node.receiveShadow = !isConstrained;
+        });
 
       // Frame + center.
       const box = new THREE.Box3().setFromObject(root);
@@ -740,6 +791,13 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       // animation loop may already have applied a drag tilt).
       modelRoot.rotation.set(0, 0, 0);
       modelRoot.updateWorldMatrix(true, true);
+
+      // Let the browser paint the base jacket before generating embroidery
+      // geometry and fabric grain. On iPhone Safari the detail work can take
+      // long enough to leave the first screen looking completely empty.
+      detailTimer = window.setTimeout(() => {
+        if (disposed) return;
+        try {
 
       // Every piece of artwork is a DecalGeometry projection onto the actual
       // jacket mesh, so it hugs the fabric's curvature exactly — like a patch
@@ -821,7 +879,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         // small connected steps. The lower layers form the embroidered edge;
         // because they share the projected curvature, nothing hovers away
         // from the jacket around the shoulders or sleeves.
-        const top = addEmbroideryStack(geometry, texture, outward, [0.0022, 0.0038, 0.0054, 0.007], 0.0086, 3);
+        const edgeOffsets = isConstrained ? [0.0054] : [0.0022, 0.0038, 0.0054, 0.007];
+        const top = addEmbroideryStack(geometry, texture, outward, edgeOffsets, 0.0086, 3);
         top.userData.addEmbroideryStack = addEmbroideryStack;
         return top;
       };
@@ -832,7 +891,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       backCanvas.height = 720;
       const backTexture = new THREE.CanvasTexture(backCanvas);
       backTexture.colorSpace = THREE.SRGBColorSpace;
-      backTexture.anisotropy = 8;
+      backTexture.anisotropy = textureAnisotropy;
       const backMesh = byName["front_body_button_back"];
       if (backMesh) {
         const wb = new THREE.Box3().setFromObject(backMesh);
@@ -869,7 +928,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           c.height = 170;
           const t = new THREE.CanvasTexture(c);
           t.colorSpace = THREE.SRGBColorSpace;
-          t.anisotropy = 8;
+          t.anisotropy = textureAnisotropy;
           canvases.push(c);
           textures.push(t);
         }
@@ -982,7 +1041,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const z = zC > -Infinity ? zC : pb.max.z;
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
-        texture.anisotropy = 8;
+        texture.anisotropy = textureAnisotropy;
         // Yaw the projection to follow the chest's curve at this spot.
         let yaw = 0;
         if (zL > -Infinity && zR > -Infinity) {
@@ -1006,7 +1065,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       badgeCanvas.height = 360;
       const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.336, -0.02, 0.2);
       void loadCrest().then((crest) => {
-        if (!crest) return;
+        if (!crest || disposed || !loadedRef.current) return;
         const bctx = badgeCanvas.getContext("2d")!;
         bctx.clearRect(0, 0, badgeCanvas.width, badgeCanvas.height);
         const cw = badgeCanvas.width * 0.9;
@@ -1022,7 +1081,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           const threadCanvas = extractCrestThreadwork(badgeCanvas);
           const threadTexture = new THREE.CanvasTexture(threadCanvas);
           threadTexture.colorSpace = THREE.SRGBColorSpace;
-          threadTexture.anisotropy = 8;
+          threadTexture.anisotropy = textureAnisotropy;
           const addStack = badgeArt.decal.userData.addEmbroideryStack as (
             geometry: THREE.BufferGeometry,
             texture: THREE.CanvasTexture,
@@ -1035,7 +1094,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             badgeArt.decal.geometry,
             threadTexture,
             new THREE.Vector3(0, 0, 1),
-            [0.0092, 0.0103, 0.0114, 0.0125, 0.0136, 0.0147],
+            isConstrained ? [0.0114] : [0.0092, 0.0103, 0.0114, 0.0125, 0.0136, 0.0147],
             0.0158,
             9,
           );
@@ -1065,6 +1124,24 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         sleeves: sleeveSets,
       };
       redrawDesign();
+      surfaceTimer = window.setTimeout(() => {
+        if (disposed) return;
+        try {
+          surfaces = makeSurfaceTextures();
+          applySurfaceTextures(materials, surfaces, propsRef.current);
+        } catch (error) {
+          console.warn("Failed to add jacket surface detail", error);
+        }
+      }, 100);
+        } catch (error) {
+          // The base jacket is already usable. Decorative-detail failures
+          // must not replace it with an empty or paused preview.
+          console.warn("Failed to add jacket design detail", error);
+        }
+      }, isConstrained ? 350 : 100);
+      } catch (error) {
+        retrySilently("Failed to prepare jacket preview", error);
+      }
     }, undefined, (error) => {
       retrySilently("Failed to load jacket model", error);
     });
@@ -1119,11 +1196,15 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         clock.getDelta();
       }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
-      renderer.render(scene, camera);
-      if (modelPrepared && !readyReported && renderer.info.render.triangles > 0) {
-        readyReported = true;
-        automaticRetryRef.current = 0;
-        setViewerStatus("ready");
+      if (!document.hidden && !renderer.getContext().isContextLost()) {
+        renderer.render(scene, camera);
+        if (modelPrepared && !readyReported && renderer.info.render.triangles > 0) {
+          readyReported = true;
+          window.clearTimeout(loadTimeout);
+          window.clearTimeout(retryTimer);
+          automaticRetryRef.current = 0;
+          setViewerStatus("ready");
+        }
       }
       frameRef.current = requestAnimationFrame(animate);
     };
@@ -1131,7 +1212,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     return () => {
       disposed = true;
+      window.clearTimeout(loadTimeout);
       window.clearTimeout(retryTimer);
+      window.clearTimeout(detailTimer);
+      window.clearTimeout(surfaceTimer);
       cancelAnimationFrame(frameRef.current);
       window.removeEventListener("resize", onResize);
       resizeObserver.disconnect();
@@ -1139,8 +1223,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       mount.removeEventListener("pointermove", onPointerMove);
       mount.removeEventListener("pointerup", onPointerUp);
       mount.removeEventListener("wheel", onWheel);
+      renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
+      disposeObjectResources(scene);
       envTexture.dispose();
-      Object.values(surfaces).forEach((surface) => surface.dispose());
+      if (surfaces) Object.values(surfaces).forEach((surface) => surface.dispose());
       dracoLoader.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);

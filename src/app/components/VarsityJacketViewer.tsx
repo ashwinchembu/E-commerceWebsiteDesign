@@ -10,6 +10,10 @@ const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#c9a24a";
 const CHEST_FILL = "#f2ede2";
 
+// Reuse successfully decoded files if Safari has to restart the viewer after
+// a transient first-load failure.
+THREE.Cache.enabled = true;
+
 let crestElement: HTMLCanvasElement | null = null;
 let crestLoading: Promise<HTMLCanvasElement | null> | null = null;
 
@@ -569,6 +573,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
   const mountRef = useRef<HTMLDivElement>(null);
   const [viewerStatus, setViewerStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [retryKey, setRetryKey] = useState(0);
+  const automaticRetryRef = useRef(0);
   const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.0, rotX: -0.05, lastInteraction: 0 });
   const loadedRef = useRef<Loaded | null>(null);
   const frameRef = useRef(0);
@@ -614,6 +620,25 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const mount = mountRef.current;
     if (!mount) return;
 
+    let disposed = false;
+    let retryTimer = 0;
+    const retrySilently = (message: string, error?: unknown) => {
+      if (disposed) return;
+      if (error) console.warn(message, error);
+
+      if (automaticRetryRef.current < 2) {
+        automaticRetryRef.current += 1;
+        setViewerStatus("loading");
+        retryTimer = window.setTimeout(() => {
+          if (!disposed) setRetryKey((key) => key + 1);
+        }, automaticRetryRef.current * 1200);
+        return;
+      }
+
+      setViewerStatus("error");
+    };
+
+    setViewerStatus("loading");
     const isMobile = window.matchMedia("(max-width: 767px)").matches;
     let renderer: THREE.WebGLRenderer;
     try {
@@ -622,9 +647,12 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         alpha: true,
         powerPreference: "high-performance",
       });
-    } catch {
-      setViewerStatus("error");
-      return;
+    } catch (error) {
+      retrySilently("Failed to create jacket renderer", error);
+      return () => {
+        disposed = true;
+        window.clearTimeout(retryTimer);
+      };
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
@@ -673,7 +701,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const materials = makeMaterials(propsRef.current, surfaces);
     applyLeatherType(materials, propsRef.current.leatherType, propsRef.current.bodyMaterial);
 
-    let disposed = false;
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath("/draco/");
     const loader = new GLTFLoader();
@@ -1035,9 +1062,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         sleeves: sleeveSets,
       };
       redrawDesign();
+      automaticRetryRef.current = 0;
       setViewerStatus("ready");
-    }, undefined, () => {
-      if (!disposed) setViewerStatus("error");
+    }, undefined, (error) => {
+      retrySilently("Failed to load jacket model", error);
     });
 
     const onPointerDown = (e: PointerEvent) => {
@@ -1097,6 +1125,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     return () => {
       disposed = true;
+      window.clearTimeout(retryTimer);
       cancelAnimationFrame(frameRef.current);
       window.removeEventListener("resize", onResize);
       resizeObserver.disconnect();
@@ -1111,16 +1140,29 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       loadedRef.current = null;
     };
-  }, []);
+  }, [retryKey]);
+
+  const retryPreview = () => {
+    automaticRetryRef.current = 0;
+    setViewerStatus("loading");
+    setRetryKey((key) => key + 1);
+  };
 
   return (
-    <div className="relative h-full min-h-[260px] w-full">
+    <div className="relative h-full min-h-[260px] w-full" data-viewer-status={viewerStatus}>
       <div ref={mountRef} className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing" />
-      {viewerStatus !== "ready" && (
-        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
-          <p className="bg-white/85 px-4 py-2 text-[10px] uppercase tracking-[0.18em] text-gray-600 backdrop-blur">
-            {viewerStatus === "error" ? "Jacket preview could not load · Refresh to retry" : "Loading jacket preview"}
-          </p>
+      <span className="sr-only" role="status" aria-live="polite">
+        {viewerStatus === "ready" ? "Jacket preview ready" : "Loading jacket preview"}
+      </span>
+      {viewerStatus === "error" && (
+        <div className="absolute inset-0 z-10 grid place-items-center">
+          <button
+            type="button"
+            onClick={retryPreview}
+            className="border border-gray-300 bg-white/90 px-4 py-3 text-[10px] uppercase tracking-[0.18em] text-gray-700 shadow-sm backdrop-blur transition-colors hover:border-black"
+          >
+            Preview paused · Tap to retry
+          </button>
         </div>
       )}
     </div>

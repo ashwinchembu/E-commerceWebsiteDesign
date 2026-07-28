@@ -430,8 +430,16 @@ function serveWebsite(request, response, url, grant) {
   const requestedPath = url.pathname === "/" ? "/index.html" : url.pathname;
   const filePath = safeStaticPath(distDirectory, requestedPath);
   if (filePath && existsSync(filePath) && statSync(filePath).isFile()) {
-    const immutable = requestedPath.startsWith("/assets/") ? "private, max-age=31536000, immutable" : "private, no-store";
-    serveFile(response, filePath, mimeType(filePath), immutable);
+    let cacheControl = "private, no-store";
+    if (requestedPath.startsWith("/assets/")) {
+      cacheControl = "private, max-age=31536000, immutable";
+    } else if (requestedPath.startsWith("/models/") || requestedPath.startsWith("/draco/")) {
+      // These stable binary assets are preloaded by index.html. A short-lived
+      // private cache lets Safari reuse that request when Three.js asks for
+      // the same file instead of downloading it twice.
+      cacheControl = "private, max-age=3600";
+    }
+    serveFile(response, filePath, mimeType(filePath), cacheControl);
     return;
   }
 

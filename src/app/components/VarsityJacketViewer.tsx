@@ -1082,8 +1082,24 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       if (points.length < 2) return 0;
       return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
     };
+    const distanceBetweenTouches = (touches: TouchList) => {
+      const first = touches.item(0);
+      const second = touches.item(1);
+      if (!first || !second) return 0;
+      return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+    };
+    const applyPinchZoom = (previousDistance: number, nextDistance: number) => {
+      if (previousDistance <= 0 || nextDistance <= 0) return;
+      camera.position.z = THREE.MathUtils.clamp(
+        camera.position.z * (previousDistance / nextDistance),
+        3.2,
+        9,
+      );
+    };
 
     const onPointerDown = (e: PointerEvent) => {
+      // iPhone/iPad Safari is more reliable with its native Touch Events.
+      if (e.pointerType === "touch") return;
       if (e.pointerType === "mouse" && e.button !== 0) return;
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -1101,6 +1117,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       mount.setPointerCapture(e.pointerId);
     };
     const onPointerMove = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
       if (!activePointers.has(e.pointerId)) return;
       activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -1108,13 +1125,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       if (activePointers.size >= 2) {
         e.preventDefault();
         const nextDistance = distanceBetweenPointers();
-        if (pinchDistance > 0 && nextDistance > 0) {
-          camera.position.z = THREE.MathUtils.clamp(
-            camera.position.z * (pinchDistance / nextDistance),
-            3.2,
-            9,
-          );
-        }
+        applyPinchZoom(pinchDistance, nextDistance);
         pinchDistance = nextDistance;
         d.lastInteraction = performance.now();
         return;
@@ -1129,6 +1140,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       d.lastInteraction = performance.now();
     };
     const onPointerEnd = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
       activePointers.delete(e.pointerId);
 
       const d = dragRef.current;
@@ -1143,6 +1155,58 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         d.active = false;
       }
     };
+    const onTouchStart = (e: TouchEvent) => {
+      const d = dragRef.current;
+      d.lastInteraction = performance.now();
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+        d.active = false;
+        pinchDistance = distanceBetweenTouches(e.touches);
+        return;
+      }
+
+      const touch = e.touches.item(0);
+      if (!touch) return;
+      pinchDistance = 0;
+      d.active = true;
+      d.x = touch.clientX;
+      d.y = touch.clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const d = dragRef.current;
+      e.preventDefault();
+      if (e.touches.length >= 2) {
+        const nextDistance = distanceBetweenTouches(e.touches);
+        applyPinchZoom(pinchDistance, nextDistance);
+        pinchDistance = nextDistance;
+        d.active = false;
+        d.lastInteraction = performance.now();
+        return;
+      }
+
+      const touch = e.touches.item(0);
+      if (!touch || !d.active) return;
+      d.rotY += (touch.clientX - d.x) * 0.006;
+      d.rotX += (touch.clientY - d.y) * 0.004;
+      d.rotX = THREE.MathUtils.clamp(d.rotX, -0.45, 0.35);
+      d.x = touch.clientX;
+      d.y = touch.clientY;
+      d.lastInteraction = performance.now();
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      const d = dragRef.current;
+      d.lastInteraction = performance.now();
+      pinchDistance = 0;
+
+      const remaining = e.touches.item(0);
+      if (remaining && e.touches.length === 1) {
+        d.active = true;
+        d.x = remaining.clientX;
+        d.y = remaining.clientY;
+      } else {
+        d.active = false;
+      }
+    };
     const onWheel = (e: WheelEvent) => {
       camera.position.z = THREE.MathUtils.clamp(camera.position.z + e.deltaY * 0.003, 3.2, 9);
       dragRef.current.lastInteraction = performance.now();
@@ -1151,6 +1215,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     mount.addEventListener("pointermove", onPointerMove);
     mount.addEventListener("pointerup", onPointerEnd);
     mount.addEventListener("pointercancel", onPointerEnd);
+    mount.addEventListener("touchstart", onTouchStart, { passive: false });
+    mount.addEventListener("touchmove", onTouchMove, { passive: false });
+    mount.addEventListener("touchend", onTouchEnd);
+    mount.addEventListener("touchcancel", onTouchEnd);
     mount.addEventListener("wheel", onWheel, { passive: true });
 
     const onResize = () => {
@@ -1233,6 +1301,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       mount.removeEventListener("pointermove", onPointerMove);
       mount.removeEventListener("pointerup", onPointerEnd);
       mount.removeEventListener("pointercancel", onPointerEnd);
+      mount.removeEventListener("touchstart", onTouchStart);
+      mount.removeEventListener("touchmove", onTouchMove);
+      mount.removeEventListener("touchend", onTouchEnd);
+      mount.removeEventListener("touchcancel", onTouchEnd);
       mount.removeEventListener("wheel", onWheel);
       renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
       envTexture.dispose();

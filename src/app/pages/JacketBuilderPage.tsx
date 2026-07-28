@@ -896,7 +896,7 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
           {/* Interior details card */}
           <button
             onClick={() => setShowInterior((v) => !v)}
-            className={`absolute top-3 right-3 px-3 py-2 text-[10px] tracking-widest uppercase border transition-colors sm:top-4 sm:right-4 sm:px-4 ${
+            className={`absolute top-3 right-3 z-20 px-3 py-2 text-[10px] tracking-widest uppercase border transition-colors sm:top-4 sm:right-4 sm:px-4 ${
               showInterior
                 ? "bg-black text-white border-black"
                 : "bg-white text-gray-700 border-gray-300 hover:border-black"
@@ -905,7 +905,7 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
             {showInterior ? "Close Details" : "Interior Details"}
           </button>
           {showInterior && (
-            <div className="absolute top-14 left-3 right-3 max-h-[calc(100%-4.5rem)] overflow-y-auto bg-white border border-gray-200 shadow-xl p-4 space-y-4 z-10 sm:left-auto sm:right-4 sm:w-60">
+            <div className="absolute top-14 left-3 right-3 z-30 max-h-[calc(100%-4.5rem)] overflow-y-auto bg-white border border-gray-200 shadow-xl p-4 space-y-4 sm:left-auto sm:right-4 sm:w-60">
               <p className="text-[10px] tracking-widest uppercase text-gray-400">Sewn inside every jacket</p>
               <div>
                 <div className="bg-[#1a1a1a] p-3 flex items-center justify-center rounded-sm">

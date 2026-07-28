@@ -57,7 +57,7 @@ export function SecurityWatermark({ name, email, accessId, onLogout }: SecurityW
         </div>
       </div>
 
-      <aside className="fixed right-3 top-[calc(5.5rem+env(safe-area-inset-top))] z-[9999] w-fit max-w-[calc(100vw-1.5rem)] border border-white/20 bg-black/90 px-3 py-2 text-[9px] uppercase tracking-[0.1em] text-white shadow-2xl backdrop-blur sm:bottom-4 sm:right-4 sm:top-auto sm:max-w-[min(22rem,calc(100vw-2rem))] sm:text-[10px] sm:tracking-[0.14em]">
+      <aside className="fixed left-3 top-[calc(5.5rem+env(safe-area-inset-top))] z-[9] w-fit max-w-[calc(100vw-1.5rem)] border border-white/20 bg-black/90 px-3 py-2 text-[9px] uppercase tracking-[0.1em] text-white shadow-2xl backdrop-blur sm:bottom-4 sm:left-auto sm:right-4 sm:top-auto sm:z-[9999] sm:max-w-[min(22rem,calc(100vw-2rem))] sm:text-[10px] sm:tracking-[0.14em]">
         <div className="flex items-center gap-3">
           <span className="min-w-0 truncate" title={identity}>
             Private · <span className="sm:hidden">{mobileName}</span><span className="hidden sm:inline">{name}</span>

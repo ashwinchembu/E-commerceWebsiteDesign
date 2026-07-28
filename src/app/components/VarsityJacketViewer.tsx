@@ -599,10 +599,13 @@ function makeDecalMaterial(texture: THREE.CanvasTexture): THREE.MeshStandardMate
  * profile and visible parallax at grazing angles — actual geometry rather
  * than a lighting-only bump illusion.
  */
-function makeEmbroideryEdgeMaterial(texture: THREE.CanvasTexture): THREE.MeshStandardMaterial {
+function makeEmbroideryEdgeMaterial(
+  texture: THREE.CanvasTexture,
+  color: THREE.ColorRepresentation = "#8f7440",
+): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     map: texture,
-    color: new THREE.Color("#8f7440"),
+    color: new THREE.Color(color),
     transparent: true,
     alphaTest: 0.06,
     depthWrite: true,
@@ -839,6 +842,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         orientation: THREE.Euler,
         size: THREE.Vector3,
         outward: THREE.Vector3,
+        edgeColor: THREE.ColorRepresentation = "#8f7440",
       ) => {
         const geometry = cullAwayFacing(new DecalGeometry(mesh, position, orientation, size), outward);
         const addEmbroideryStack = (
@@ -848,8 +852,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           edgeOffsets: number[],
           topOffset: number,
           renderOrder: number,
+          stackEdgeColor: THREE.ColorRepresentation = edgeColor,
         ) => {
-          const edgeMaterial = makeEmbroideryEdgeMaterial(stackTexture);
+          const edgeMaterial = makeEmbroideryEdgeMaterial(stackTexture, stackEdgeColor);
           edgeOffsets.forEach((offset, index) => {
             const edge = new THREE.Mesh(stackGeometry, edgeMaterial);
             edge.position.copy(stackOutward).multiplyScalar(offset);
@@ -1003,7 +1008,14 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
       // Front chest artwork projected onto the panel surface (facing +z). The
       // panel curves, so sample the surface depth at the exact target spot.
-      const addFrontDecal = (panelName: string, canvas: HTMLCanvasElement, wFrac: number, xFrac: number, yFrac: number) => {
+      const addFrontDecal = (
+        panelName: string,
+        canvas: HTMLCanvasElement,
+        wFrac: number,
+        xFrac: number,
+        yFrac: number,
+        edgeColor?: THREE.ColorRepresentation,
+      ) => {
         const panel = byName[panelName];
         if (!panel) return null;
         const pb = new THREE.Box3().setFromObject(panel);
@@ -1045,6 +1057,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           new THREE.Euler(0, yaw, 0),
           new THREE.Vector3(w, w * (canvas.height / canvas.width), Math.max(w * 0.8, ps.z * 0.3)),
           new THREE.Vector3(0, 0, 1),
+          edgeColor,
         );
         return { decal, texture };
       };
@@ -1053,18 +1066,13 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const badgeCanvas = document.createElement("canvas");
       badgeCanvas.width = 320;
       badgeCanvas.height = 360;
-      const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.336, -0.02, 0.2);
+      const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.336, -0.02, 0.2, BRAND_GOLD);
       void loadCrest().then((crest) => {
         if (!crest) return;
         const bctx = badgeCanvas.getContext("2d")!;
         bctx.clearRect(0, 0, badgeCanvas.width, badgeCanvas.height);
         const cw = badgeCanvas.width * 0.9;
         const chh = cw * (crest.height / crest.width);
-        bctx.globalAlpha = 0.4;
-        bctx.filter = "brightness(0) blur(6px)";
-        bctx.drawImage(crest, (badgeCanvas.width - cw) / 2, (badgeCanvas.height - chh) / 2 + 6, cw, chh);
-        bctx.filter = "none";
-        bctx.globalAlpha = 1;
         bctx.drawImage(crest, (badgeCanvas.width - cw) / 2, (badgeCanvas.height - chh) / 2, cw, chh);
         if (badgeArt) {
           badgeArt.texture.needsUpdate = true;
@@ -1079,6 +1087,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             edgeOffsets: number[],
             topOffset: number,
             renderOrder: number,
+            stackEdgeColor?: THREE.ColorRepresentation,
           ) => THREE.Mesh;
           const threadTop = addStack(
             badgeArt.decal.geometry,
@@ -1087,6 +1096,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             [0.0092, 0.0103, 0.0114, 0.0125, 0.0136, 0.0147],
             0.0158,
             9,
+            "#e0cb8e",
           );
           const threadMaterial = threadTop.material as THREE.MeshStandardMaterial;
           threadMaterial.bumpScale = 0.07;

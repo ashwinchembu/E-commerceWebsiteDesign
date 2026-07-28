@@ -1075,15 +1075,51 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       retrySilently("Failed to load jacket model", error);
     });
 
+    const activePointers = new Map<number, { x: number; y: number }>();
+    let pinchDistance = 0;
+    const distanceBetweenPointers = () => {
+      const points = Array.from(activePointers.values());
+      if (points.length < 2) return 0;
+      return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+    };
+
     const onPointerDown = (e: PointerEvent) => {
-      dragRef.current.active = true;
-      dragRef.current.lastInteraction = performance.now();
-      dragRef.current.x = e.clientX;
-      dragRef.current.y = e.clientY;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      const d = dragRef.current;
+      d.lastInteraction = performance.now();
+      if (activePointers.size === 1) {
+        d.active = true;
+        d.x = e.clientX;
+        d.y = e.clientY;
+      } else {
+        d.active = false;
+        pinchDistance = distanceBetweenPointers();
+      }
+
       mount.setPointerCapture(e.pointerId);
     };
     const onPointerMove = (e: PointerEvent) => {
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
       const d = dragRef.current;
+      if (activePointers.size >= 2) {
+        e.preventDefault();
+        const nextDistance = distanceBetweenPointers();
+        if (pinchDistance > 0 && nextDistance > 0) {
+          camera.position.z = THREE.MathUtils.clamp(
+            camera.position.z * (pinchDistance / nextDistance),
+            3.2,
+            9,
+          );
+        }
+        pinchDistance = nextDistance;
+        d.lastInteraction = performance.now();
+        return;
+      }
+
       if (!d.active) return;
       d.rotY += (e.clientX - d.x) * 0.006;
       d.rotX += (e.clientY - d.y) * 0.004;
@@ -1092,9 +1128,20 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       d.y = e.clientY;
       d.lastInteraction = performance.now();
     };
-    const onPointerUp = () => {
-      dragRef.current.active = false;
-      dragRef.current.lastInteraction = performance.now();
+    const onPointerEnd = (e: PointerEvent) => {
+      activePointers.delete(e.pointerId);
+
+      const d = dragRef.current;
+      d.lastInteraction = performance.now();
+      pinchDistance = 0;
+      if (activePointers.size === 1) {
+        const remaining = activePointers.values().next().value as { x: number; y: number };
+        d.active = true;
+        d.x = remaining.x;
+        d.y = remaining.y;
+      } else {
+        d.active = false;
+      }
     };
     const onWheel = (e: WheelEvent) => {
       camera.position.z = THREE.MathUtils.clamp(camera.position.z + e.deltaY * 0.003, 3.2, 9);
@@ -1102,7 +1149,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
     mount.addEventListener("pointerdown", onPointerDown);
     mount.addEventListener("pointermove", onPointerMove);
-    mount.addEventListener("pointerup", onPointerUp);
+    mount.addEventListener("pointerup", onPointerEnd);
+    mount.addEventListener("pointercancel", onPointerEnd);
     mount.addEventListener("wheel", onWheel, { passive: true });
 
     const onResize = () => {
@@ -1183,7 +1231,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       resizeObserver.disconnect();
       mount.removeEventListener("pointerdown", onPointerDown);
       mount.removeEventListener("pointermove", onPointerMove);
-      mount.removeEventListener("pointerup", onPointerUp);
+      mount.removeEventListener("pointerup", onPointerEnd);
+      mount.removeEventListener("pointercancel", onPointerEnd);
       mount.removeEventListener("wheel", onWheel);
       renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
       envTexture.dispose();

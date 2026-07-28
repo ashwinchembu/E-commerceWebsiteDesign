@@ -289,6 +289,7 @@ function mimeType(filePath) {
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
+    ".pdf": "application/pdf",
     ".ico": "image/x-icon",
     ".woff": "font/woff",
     ".woff2": "font/woff2",
@@ -524,6 +525,22 @@ const server = createServer(async (request, response) => {
     if (pathname.startsWith("/api/admin/")) {
       if (!isAdminRequest(request)) {
         sendJson(response, 401, { error: "Administrator key is required." });
+        return;
+      }
+      if (request.method === "GET" && pathname === "/api/admin/guides/access-key") {
+        serveFile(
+          response,
+          path.join(publicDirectory, "guides", "Manoir-Kits-Access-Key-Guide.pdf"),
+          "application/pdf",
+        );
+        return;
+      }
+      if (request.method === "GET" && pathname === "/api/admin/guides/shopify-orders") {
+        serveFile(
+          response,
+          path.join(publicDirectory, "guides", "Manoir-Kits-Shopify-Order-Guide.pdf"),
+          "application/pdf",
+        );
         return;
       }
       if (request.method === "GET" && pathname === "/api/admin/grants") {

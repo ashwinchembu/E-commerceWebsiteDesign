@@ -6,11 +6,17 @@ import "./styles/index.css";
 // fetch with same-origin credentials matches Three.js exactly, so Safari
 // coalesces/reuses the requests instead of downloading unused preloads.
 [
+  "/images/jacket-preview-poster.jpg",
   "/models/varsitybase/VarsityBase.glb",
   "/draco/draco_wasm_wrapper.js",
   "/draco/draco_decoder.wasm",
 ].forEach((asset) => {
-  void fetch(asset, { credentials: "same-origin", cache: "force-cache" }).catch(() => undefined);
+  void fetch(asset, { credentials: "same-origin", cache: "force-cache" })
+    .then((response) => {
+      if (!response.ok) throw new Error(`Could not prepare ${asset}`);
+      return response.arrayBuffer();
+    })
+    .catch(() => undefined);
 });
 
 createRoot(document.getElementById("root")!).render(<App />);

@@ -1,6 +1,30 @@
 const form = document.querySelector("#access-form");
 const input = document.querySelector("#access-code");
 const status = document.querySelector("#access-status");
+const jacketAssets = [
+  "/images/jacket-preview-poster.jpg",
+  "/models/varsitybase/VarsityBase.glb",
+  "/draco/draco_wasm_wrapper.js",
+  "/draco/draco_decoder.wasm",
+];
+
+async function warmJacketAssets() {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20000);
+  const results = await Promise.allSettled(
+    jacketAssets.map(async (asset) => {
+      const response = await fetch(asset, {
+        credentials: "same-origin",
+        cache: "force-cache",
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`Could not prepare ${asset}`);
+      await response.arrayBuffer();
+    }),
+  );
+  window.clearTimeout(timeout);
+  return results.every((result) => result.status === "fulfilled");
+}
 
 function safeNextPath() {
   const requested = new URLSearchParams(window.location.search).get("next") || "/";
@@ -45,7 +69,11 @@ form.addEventListener("submit", async (event) => {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || "Access could not be verified.");
-    status.textContent = "Access confirmed. Opening the private site…";
+    status.textContent = "Access confirmed. Preparing your jacket preview…";
+    const jacketPrepared = await warmJacketAssets();
+    status.textContent = jacketPrepared
+      ? "Jacket ready. Opening the private site…"
+      : "Opening the private site…";
     window.location.assign(safeNextPath());
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : "Access could not be verified.";

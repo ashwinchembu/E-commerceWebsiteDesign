@@ -2,7 +2,6 @@ const form = document.querySelector("#access-form");
 const input = document.querySelector("#access-code");
 const status = document.querySelector("#access-status");
 const jacketAssets = [
-  "/images/jacket-preview-poster.jpg",
   "/models/varsitybase/VarsityBase.glb",
   "/draco/draco_wasm_wrapper.js",
   "/draco/draco_decoder.wasm",

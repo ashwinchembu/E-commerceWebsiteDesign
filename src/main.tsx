@@ -6,7 +6,6 @@ import "./styles/index.css";
 // fetch with same-origin credentials matches Three.js exactly, so Safari
 // coalesces/reuses the requests instead of downloading unused preloads.
 [
-  "/images/jacket-preview-poster.jpg",
   "/models/varsitybase/VarsityBase.glb",
   "/draco/draco_wasm_wrapper.js",
   "/draco/draco_decoder.wasm",

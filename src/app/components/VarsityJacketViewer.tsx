@@ -641,11 +641,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     };
 
     setViewerStatus("loading");
-    const isMobile = window.matchMedia("(max-width: 767px)").matches;
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: !isMobile,
+        antialias: true,
         alpha: true,
         powerPreference: "high-performance",
       });
@@ -656,12 +655,12 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         window.clearTimeout(retryTimer);
       };
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
-    renderer.shadowMap.enabled = !isMobile;
+    renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     mount.appendChild(renderer.domElement);
     const onContextLost = (event: Event) => {
@@ -682,7 +681,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     // at some rotation angles.
     const initialAspect = (mount.clientWidth || 1) / (mount.clientHeight || 1);
     const camera = new THREE.PerspectiveCamera(28, initialAspect, 0.5, 50);
-    camera.position.set(0, 0, initialAspect < 0.85 ? 6.35 : 5.6);
+    camera.position.set(0, 0, initialAspect < 1.1 ? 6.35 : 5.6);
 
     scene.add(new THREE.HemisphereLight("#ffffff", "#9aa6b4", 0.3));
     const key = new THREE.DirectionalLight("#fff4e6", 1.7);
@@ -1232,41 +1231,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const resizeObserver = new ResizeObserver(onResize);
     resizeObserver.observe(mount);
 
-    const hasRenderedJacketPixels = () => {
-      const gl = renderer.getContext();
-      const width = gl.drawingBufferWidth;
-      const height = gl.drawingBufferHeight;
-      if (width < 1 || height < 1) return false;
-
-      const pixel = new Uint8Array(4);
-      const samplePoints = [
-        [0.5, 0.5],
-        [0.5, 0.35],
-        [0.4, 0.52],
-        [0.6, 0.52],
-        [0.5, 0.68],
-      ];
-
-      try {
-        for (const [x, y] of samplePoints) {
-          gl.readPixels(
-            Math.min(width - 1, Math.max(0, Math.floor(width * x))),
-            Math.min(height - 1, Math.max(0, Math.floor(height * y))),
-            1,
-            1,
-            gl.RGBA,
-            gl.UNSIGNED_BYTE,
-            pixel,
-          );
-          if (pixel[3] > 0) return true;
-        }
-      } catch {
-        return false;
-      }
-
-      return false;
-    };
-
     const animate = () => {
       const d = dragRef.current;
       const elapsedSinceInteraction = performance.now() - d.lastInteraction;
@@ -1281,7 +1245,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         modelPrepared
         && !readyReported
         && renderer.info.render.triangles > 0
-        && hasRenderedJacketPixels()
       ) {
         readyReported = true;
         automaticRetryRef.current = 0;
@@ -1324,23 +1287,20 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
   return (
     <div className="relative h-full min-h-[260px] w-full" data-viewer-status={viewerStatus}>
-      <img
-        src="/images/jacket-preview-poster.jpg"
-        alt=""
-        aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${
-          viewerStatus === "ready" ? "opacity-0" : "opacity-100"
-        }`}
-      />
       <div
         ref={mountRef}
-        className={`absolute inset-0 touch-none cursor-grab transition-opacity duration-300 active:cursor-grabbing ${
-          viewerStatus === "ready" ? "opacity-100" : "opacity-0"
-        }`}
+        className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing"
       />
       <span className="sr-only" role="status" aria-live="polite">
         {viewerStatus === "ready" ? "Jacket preview ready" : "Loading jacket preview"}
       </span>
+      {viewerStatus === "loading" && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-16 z-10 flex justify-center">
+          <span className="border border-gray-300 bg-white/90 px-3 py-2 text-[9px] uppercase tracking-[0.16em] text-gray-500 shadow-sm backdrop-blur">
+            Loading full-quality preview…
+          </span>
+        </div>
+      )}
       {viewerStatus === "error" && (
         <div className="absolute inset-0 z-10 grid place-items-center">
           <button

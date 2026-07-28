@@ -622,6 +622,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     let disposed = false;
     let retryTimer = 0;
+    let modelPrepared = false;
+    let readyReported = false;
     const retrySilently = (message: string, error?: unknown) => {
       if (disposed) return;
       if (error) console.warn(message, error);
@@ -732,6 +734,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       root.position.multiplyScalar(scale);
       root.scale.setScalar(scale);
       modelRoot.add(root);
+      modelPrepared = true;
       // Decal geometry below is generated in world space and parented to
       // modelRoot, so the root must sit at identity while we build it (the
       // animation loop may already have applied a drag tilt).
@@ -1062,8 +1065,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         sleeves: sleeveSets,
       };
       redrawDesign();
-      automaticRetryRef.current = 0;
-      setViewerStatus("ready");
     }, undefined, (error) => {
       retrySilently("Failed to load jacket model", error);
     });
@@ -1119,6 +1120,11 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
       renderer.render(scene, camera);
+      if (modelPrepared && !readyReported && renderer.info.render.triangles > 0) {
+        readyReported = true;
+        automaticRetryRef.current = 0;
+        setViewerStatus("ready");
+      }
       frameRef.current = requestAnimationFrame(animate);
     };
     frameRef.current = requestAnimationFrame(animate);

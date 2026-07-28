@@ -7,52 +7,8 @@ import { DecalGeometry } from "three/examples/jsm/geometries/DecalGeometry.js";
 import crestImage from "figma:asset/49db8db3192aa070a09b2e638fd91cfc6cf1ca1e.png";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
-
-// Sampled once from the fixed production model while it is at identity.
-// Keeping this compact depth profile avoids expensive runtime ray-casting and
-// lets the large back embroidery follow the actual fabric instead of hovering
-// behind it at side angles.
-const BACK_SURFACE_DEPTHS = [
-  -0.354713, -0.354713, -0.349627, -0.402167, -0.428175, -0.436504, -0.437818, -0.437374, -0.440266, -0.414397,
-  -0.362182, -0.362182, -0.362182, -0.354713, -0.405785, -0.438366, -0.463125, -0.480331, -0.484477, -0.484632,
-  -0.485055, -0.489219, -0.473265, -0.446403, -0.412563, -0.366219, -0.446655, -0.478886, -0.499754, -0.51512,
-  -0.526512, -0.531964, -0.530789, -0.530354, -0.529189, -0.52051, -0.504213, -0.483131, -0.453803, -0.501779,
-  -0.534578, -0.552715, -0.560646, -0.566622, -0.570012, -0.568364, -0.56727, -0.56536, -0.561019, -0.554261,
-  -0.53827, -0.509087, -0.530143, -0.570249, -0.5912, -0.59368, -0.592802, -0.593573, -0.593266, -0.592881,
-  -0.592626, -0.591966, -0.591506, -0.574639, -0.535232, -0.524329, -0.582335, -0.60676, -0.610589, -0.605529,
-  -0.606603, -0.609466, -0.611206, -0.610541, -0.608993, -0.607039, -0.588484, -0.533242, -0.48575, -0.570243,
-  -0.608262, -0.613232, -0.607679, -0.612201, -0.61758, -0.622498, -0.616688, -0.612661, -0.611377, -0.578075,
-  -0.504055, -0.433004, -0.543432, -0.597996, -0.608151, -0.606717, -0.610456, -0.617488, -0.62365, -0.617,
-  -0.609157, -0.605612, -0.557005, -0.478283, -0.392629, -0.519268, -0.583637, -0.599096, -0.600824, -0.603619,
-  -0.610871, -0.616925, -0.613294, -0.603799, -0.59407, -0.534355, -0.445325, -0.347339, -0.498721, -0.576289,
-  -0.591365, -0.591047, -0.592585, -0.60401, -0.611998, -0.609776, -0.598094, -0.583349, -0.516108, -0.392644,
-  -0.312153, -0.492905, -0.578608, -0.585091, -0.578244, -0.579144, -0.597863, -0.611032, -0.608876, -0.591878,
-  -0.573698, -0.543325, -0.392644, -0.312153, -0.52545, -0.583963, -0.578419, -0.563409, -0.562552, -0.594013,
-  -0.613622, -0.611901, -0.585869, -0.559224, -0.545239, -0.392644, -0.312153, -0.53572, -0.579275, -0.569901,
-  -0.550441, -0.54915, -0.593584, -0.619197, -0.617869, -0.582496, -0.545444, -0.530022, -0.392644, -0.296188,
-  -0.531, -0.567407, -0.560302, -0.538825, -0.541068, -0.594363, -0.622349, -0.621348, -0.581488, -0.533622,
-  -0.507347, -0.392644, -0.357122, -0.518245, -0.555943, -0.550543, -0.527541, -0.533401, -0.59419, -0.62196,
-  -0.620611, -0.581276, -0.519466, -0.480804, -0.392644, -0.305152, -0.503997, -0.54374, -0.540501, -0.515885,
-  -0.526621, -0.593631, -0.619772, -0.616188, -0.580789, -0.505209, -0.454078, -0.38013, -0.326565, -0.487615,
-  -0.530827, -0.531051, -0.50392, -0.523913, -0.593938, -0.616859, -0.611415, -0.576965, -0.496845, -0.428407,
-  -0.364074, -0.329215, -0.468311, -0.517665, -0.5211, -0.491392, -0.524118, -0.594166, -0.613052, -0.604776,
-  -0.571391, -0.500602, -0.403166, -0.338831, -0.308007, -0.446943, -0.503507, -0.510744, -0.478776, -0.532267,
-  -0.590828, -0.608183, -0.596103, -0.563719, -0.50617, -0.374878, -0.311611,
-] as const;
 const BRAND_GOLD = "#c9a24a";
 const CHEST_FILL = "#f2ede2";
-// Sew the patches flush to the fabric: the layers sit right on the projected
-// surface (zero physical lift) and the material's polygonOffset keeps them in
-// front of the coincident jacket without any air gap, while the artwork bump
-// map supplies the visible thread height. Any nonzero lift here reads as the
-// patch floating off the surface at grazing camera angles.
-const PATCH_TOP_OFFSET = 0;
-const PATCH_EDGE_OFFSETS = [0, 0, 0];
-const PATCH_EDGE_OFFSETS_CONSTRAINED = [0];
-
-// Keep the small compressed model in memory so an automatic retry never has
-// to wait for a second network request.
-THREE.Cache.enabled = true;
 
 let crestElement: HTMLCanvasElement | null = null;
 let crestLoading: Promise<HTMLCanvasElement | null> | null = null;
@@ -206,22 +162,14 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
     ctx.restore();
   }
 
-}
-
-/** Draw the central number and footer on their own clean surface layer. */
-function drawBackFooter(canvas: HTMLCanvasElement, design: BackDesign) {
-  const ctx = canvas.getContext("2d")!;
-  const w = canvas.width;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
   const number = design.backNumber.trim();
   if (number) {
     ctx.font = "400 390px 'League Spartan', sans-serif";
     outlinedText(ctx, number, w / 2, 452, 390, design.backPrintColor, w * 0.92);
   }
-  ctx.font = "400 92px 'League Spartan', sans-serif";
-  outlinedText(ctx, "EST. 2026", w / 2, 646, 92, design.backPrintColor, w * 0.9);
+
+  ctx.font = "400 104px 'League Spartan', sans-serif";
+  outlinedText(ctx, "EST. 2026", w / 2, 652, 104, design.backPrintColor, w * 0.96);
 }
 
 /**
@@ -357,7 +305,6 @@ type SleeveSet = { canvases: HTMLCanvasElement[]; textures: THREE.CanvasTexture[
 type Loaded = {
   materials: PartMaterials;
   back: Decal;
-  backFooter: Decal;
   sleeves: { left: SleeveSet; right: SleeveSet };
 };
 
@@ -491,23 +438,7 @@ function groupFor(name: string): keyof PartMaterials | "logo" {
   return "body";
 }
 
-function applySurfaceTextures(materials: PartMaterials, surfaces: SurfaceTextures, colors: VarsityJacketViewerProps) {
-  materials.body.userData.surfaces = surfaces;
-  materials.sleeve.bumpMap = surfaces.leather;
-  materials.sleeve.bumpScale = 0.05;
-  materials.pocket.bumpMap = surfaces.leather;
-  materials.pocket.bumpScale = 0.05;
-  materials.trim.bumpMap = surfaces.rib;
-  materials.trim.bumpScale = 0.038;
-  materials.lining.bumpMap = surfaces.quilt;
-  materials.lining.bumpScale = 0.022;
-  applyLeatherType(materials, colors.leatherType, colors.bodyMaterial);
-  Object.values(materials).forEach((material) => {
-    material.needsUpdate = true;
-  });
-}
-
-function makeMaterials(colors: VarsityJacketViewerProps, surfaces?: SurfaceTextures): PartMaterials {
+function makeMaterials(colors: VarsityJacketViewerProps, surfaces: SurfaceTextures): PartMaterials {
   const materials = {
     body: new THREE.MeshPhysicalMaterial({
       color: colors.bodyColor,
@@ -556,8 +487,16 @@ function makeMaterials(colors: VarsityJacketViewerProps, surfaces?: SurfaceTextu
       side: THREE.DoubleSide,
     }),
   };
-  if (surfaces) applySurfaceTextures(materials, surfaces, colors);
-  else applyLeatherType(materials, colors.leatherType, colors.bodyMaterial);
+  materials.body.userData.surfaces = surfaces;
+  materials.sleeve.bumpMap = surfaces.leather;
+  materials.sleeve.bumpScale = 0.05;
+  materials.pocket.bumpMap = surfaces.leather;
+  materials.pocket.bumpScale = 0.05;
+  materials.trim.bumpMap = surfaces.rib;
+  materials.trim.bumpScale = 0.038;
+  materials.lining.bumpMap = surfaces.quilt;
+  materials.lining.bumpScale = 0.022;
+  applyBodyMaterial(materials.body, colors.bodyMaterial);
   return materials;
 }
 
@@ -596,18 +535,10 @@ function makeDecalMaterial(texture: THREE.CanvasTexture): THREE.MeshStandardMate
     bumpScale: 0.035,
     transparent: true,
     alphaTest: 0.035,
-    // DecalGeometry follows the jacket's triangulation. On the curved chest
-    // and back, adjacent projected triangles can overlap by a fraction of a
-    // pixel; writing depth lets one triangle punch holes through the next.
-    // Keep normal depth testing so the curved jacket correctly occludes a
-    // patch at grazing angles. With depth writes disabled, adjacent patch
-    // triangles cannot punch holes through each other.
-    depthWrite: false,
-    depthTest: true,
-    side: THREE.DoubleSide,
+    depthWrite: true,
     polygonOffset: true,
-    polygonOffsetFactor: -12,
-    polygonOffsetUnits: -12,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
     roughness: 0.78,
     metalness: 0,
     envMapIntensity: 0.42,
@@ -626,50 +557,19 @@ function makeEmbroideryEdgeMaterial(texture: THREE.CanvasTexture): THREE.MeshSta
     color: new THREE.Color("#8f7440"),
     transparent: true,
     alphaTest: 0.06,
-    depthWrite: false,
-    depthTest: true,
-    side: THREE.DoubleSide,
-    polygonOffset: true,
-    polygonOffsetFactor: -8,
-    polygonOffsetUnits: -8,
+    depthWrite: true,
     roughness: 0.94,
     metalness: 0,
     envMapIntensity: 0.18,
   });
 }
 
-function disposeObjectResources(root: THREE.Object3D) {
-  const geometries = new Set<THREE.BufferGeometry>();
-  const materials = new Set<THREE.Material>();
-  const textures = new Set<THREE.Texture>();
-
-  root.traverse((node) => {
-    if (!(node instanceof THREE.Mesh)) return;
-    geometries.add(node.geometry);
-    const nodeMaterials = Array.isArray(node.material) ? node.material : [node.material];
-    for (const material of nodeMaterials) {
-      materials.add(material);
-      for (const value of Object.values(material)) {
-        if (value instanceof THREE.Texture) textures.add(value);
-      }
-    }
-  });
-
-  textures.forEach((texture) => texture.dispose());
-  materials.forEach((material) => material.dispose());
-  geometries.forEach((geometry) => geometry.dispose());
-}
-
-type ViewerStatus = "loading" | "recovering" | "ready" | "error";
-
 export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
   const { bodyColor, bodyMaterial, sleeveColor, leatherType, trimColor, snapColor, pocketColor, liningColor } = props;
 
   const mountRef = useRef<HTMLDivElement>(null);
-  const [viewerStatus, setViewerStatus] = useState<ViewerStatus>("loading");
-  const [retryKey, setRetryKey] = useState(0);
-  const automaticRetryRef = useRef(0);
-  const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0, rotX: -0.05, lastInteraction: 0 });
+  const [viewerStatus, setViewerStatus] = useState<"loading" | "ready" | "error">("loading");
+  const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.0, rotX: -0.05, lastInteraction: 0 });
   const loadedRef = useRef<Loaded | null>(null);
   const frameRef = useRef(0);
   const propsRef = useRef(props);
@@ -699,8 +599,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const design = propsRef.current.backDesign;
     drawBackDesign(loaded.back.canvas, design);
     loaded.back.texture.needsUpdate = true;
-    drawBackFooter(loaded.backFooter.canvas, design);
-    loaded.backFooter.texture.needsUpdate = true;
     drawSleeveNumbers(loaded.sleeves.left.canvases, design.leftSleeveNumbers, design.sleevePrintColor);
     drawSleeveNumbers(loaded.sleeves.right.canvases, design.rightSleeveNumbers, design.sleevePrintColor);
     for (const t of loaded.sleeves.left.textures) t.needsUpdate = true;
@@ -717,66 +615,25 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     if (!mount) return;
 
     const isMobile = window.matchMedia("(max-width: 767px)").matches;
-    const isConstrained = isMobile || navigator.hardwareConcurrency <= 4;
-    const textureAnisotropy = isConstrained ? 2 : 8;
-    let disposed = false;
-    let retryTimer = 0;
-    let loadTimeout = 0;
-    let detailTimer = 0;
-    let surfaceTimer = 0;
-    let modelPrepared = false;
-    let readyReported = false;
-
-    const failPreview = (message: string, error?: unknown) => {
-      if (disposed) return;
-      window.clearTimeout(loadTimeout);
-      if (error) console.error(message, error);
-
-      if (automaticRetryRef.current < 2) {
-        const attempt = automaticRetryRef.current + 1;
-        automaticRetryRef.current = attempt;
-        setViewerStatus("recovering");
-        retryTimer = window.setTimeout(() => {
-          if (!disposed) setRetryKey((key) => key + 1);
-        }, attempt * 1500);
-        return;
-      }
-
-      setViewerStatus("error");
-    };
-
-    setViewerStatus("loading");
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
         antialias: !isMobile,
         alpha: true,
-        powerPreference: isMobile ? "low-power" : "high-performance",
+        powerPreference: "high-performance",
       });
-    } catch (error) {
-      failPreview("Failed to create jacket renderer", error);
-      return () => {
-        disposed = true;
-        window.clearTimeout(loadTimeout);
-        window.clearTimeout(retryTimer);
-        window.clearTimeout(detailTimer);
-        window.clearTimeout(surfaceTimer);
-      };
+    } catch {
+      setViewerStatus("error");
+      return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isConstrained ? 1.25 : 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.25 : 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
-    renderer.shadowMap.enabled = !isConstrained;
+    renderer.shadowMap.enabled = !isMobile;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     mount.appendChild(renderer.domElement);
-
-    const onContextLost = (event: Event) => {
-      event.preventDefault();
-      failPreview("Jacket renderer lost its WebGL context");
-    };
-    renderer.domElement.addEventListener("webglcontextlost", onContextLost);
 
     const scene = new THREE.Scene();
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -789,12 +646,12 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     // at some rotation angles.
     const initialAspect = (mount.clientWidth || 1) / (mount.clientHeight || 1);
     const camera = new THREE.PerspectiveCamera(28, initialAspect, 0.5, 50);
-    camera.position.set(0, 0, initialAspect < 0.85 ? 8.1 : 5.6);
+    camera.position.set(0, 0, initialAspect < 0.85 ? 6.35 : 5.6);
 
     scene.add(new THREE.HemisphereLight("#ffffff", "#9aa6b4", 0.3));
     const key = new THREE.DirectionalLight("#fff4e6", 1.7);
     key.position.set(2.6, 4, 3.4);
-    key.castShadow = !isConstrained;
+    key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.left = key.shadow.camera.bottom = -3;
     key.shadow.camera.right = key.shadow.camera.top = 3;
@@ -809,41 +666,34 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     const modelRoot = new THREE.Group();
     scene.add(modelRoot);
-    const patchMeshes: THREE.Mesh[] = [];
-    const patchFacing = new THREE.Vector3();
     const clock = new THREE.Clock();
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    let surfaces: SurfaceTextures | null = null;
-    const materials = makeMaterials(propsRef.current);
+    const surfaces = makeSurfaceTextures();
+    const materials = makeMaterials(propsRef.current, surfaces);
+    applyLeatherType(materials, propsRef.current.leatherType, propsRef.current.bodyMaterial);
 
+    let disposed = false;
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath("/draco/");
     const loader = new GLTFLoader();
     loader.setDRACOLoader(dracoLoader);
-    loadTimeout = window.setTimeout(() => {
-      failPreview("Jacket preview timed out while loading");
-    }, 12000);
     loader.load(MODEL_PATH, (gltf) => {
-      if (disposed) {
-        disposeObjectResources(gltf.scene);
-        return;
-      }
-      try {
-        const root = gltf.scene;
-        const byName: Record<string, THREE.Mesh> = {};
-        root.traverse((node) => {
-          if (!(node instanceof THREE.Mesh)) return;
-          byName[node.name] = node;
-          const g = groupFor(node.name);
-          if (g === "logo") {
-            node.visible = false; // hide the stock VarsityBase logo
-            return;
-          }
-          node.material = materials[g];
-          node.castShadow = !isConstrained;
-          node.receiveShadow = !isConstrained;
-        });
+      if (disposed) return;
+      const root = gltf.scene;
+      const byName: Record<string, THREE.Mesh> = {};
+      root.traverse((node) => {
+        if (!(node instanceof THREE.Mesh)) return;
+        byName[node.name] = node;
+        const g = groupFor(node.name);
+        if (g === "logo") {
+          node.visible = false; // hide the stock VarsityBase logo
+          return;
+        }
+        node.material = materials[g];
+        node.castShadow = true;
+        node.receiveShadow = true;
+      });
 
       // Frame + center.
       const box = new THREE.Box3().setFromObject(root);
@@ -860,20 +710,14 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       // animation loop may already have applied a drag tilt).
       modelRoot.rotation.set(0, 0, 0);
       modelRoot.updateWorldMatrix(true, true);
-      modelPrepared = true;
 
-      // Paint the base jacket first. Fine embroidery and fabric grain are
-      // added shortly after the first visible frame instead of blocking it.
-      detailTimer = window.setTimeout(() => {
-        if (disposed) return;
-        try {
       // Every piece of artwork is a DecalGeometry projection onto the actual
       // jacket mesh, so it hugs the fabric's curvature exactly — like a patch
       // sewn flush onto the wool/leather — instead of floating on a flat
       // plane in front of it. Triangles whose surface faces away from the
       // projection are dropped: on a closed shape like an arm, the far side
       // would otherwise catch a mirrored copy of the art.
-      const cullAwayFacing = (g: THREE.BufferGeometry, outward: THREE.Vector3, minFacing = -0.3) => {
+      const cullAwayFacing = (g: THREE.BufferGeometry, outward: THREE.Vector3) => {
         const pos = g.attributes.position;
         const nor = g.attributes.normal;
         const uv = g.attributes.uv;
@@ -896,7 +740,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           pb.fromBufferAttribute(pos, t + 1);
           pc.fromBufferAttribute(pos, t + 2);
           fn.crossVectors(e1.subVectors(pb, pa), e2.subVectors(pc, pa)).normalize();
-          if (fn.dot(outward) <= minFacing) continue;
+          if (fn.dot(outward) <= -0.3) continue;
           for (let k = 0; k < 3; k++) {
             p.push(pos.getX(t + k), pos.getY(t + k), pos.getZ(t + k));
             n.push(nor.getX(t + k), nor.getY(t + k), nor.getZ(t + k));
@@ -909,323 +753,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         out.setAttribute("uv", new THREE.Float32BufferAttribute(u, 2));
         return out;
       };
-
-      const addEmbroideryStack = (
-        stackGeometry: THREE.BufferGeometry,
-        stackTexture: THREE.CanvasTexture,
-        stackOutward: THREE.Vector3,
-        edgeOffsets: number[],
-        topOffset: number,
-        renderOrder: number,
-        depthTest = true,
-        side: THREE.Side = THREE.DoubleSide,
-      ) => {
-        const offsetAlongSurface = (source: THREE.BufferGeometry, distance: number) => {
-          const geometry = source.clone();
-          const positions = geometry.attributes.position;
-          const normals = geometry.attributes.normal;
-          const point = new THREE.Vector3();
-          const normal = new THREE.Vector3();
-          for (let index = 0; index < positions.count; index += 1) {
-            point.fromBufferAttribute(positions, index);
-            normal.fromBufferAttribute(normals, index).normalize();
-            if (normal.dot(stackOutward) < 0) normal.negate();
-            point.addScaledVector(normal, distance);
-            positions.setXYZ(index, point.x, point.y, point.z);
-          }
-          positions.needsUpdate = true;
-          return geometry;
-        };
-
-        const edgeMaterial = makeEmbroideryEdgeMaterial(stackTexture);
-        edgeMaterial.depthTest = depthTest;
-        edgeMaterial.side = side;
-        edgeOffsets.forEach((offset, index) => {
-          const edge = new THREE.Mesh(offsetAlongSurface(stackGeometry, offset), edgeMaterial);
-        edge.renderOrder = renderOrder + index;
-        edge.receiveShadow = true;
-        edge.userData.patchOutward = stackOutward.clone();
-        edge.userData.patchFadeStart = depthTest ? 0.07 : 0.16;
-        edge.userData.patchFadeEnd = depthTest ? 0.2 : 0.32;
-        patchMeshes.push(edge);
-        modelRoot.add(edge);
-      });
-
-      const topMaterial = makeDecalMaterial(stackTexture);
-      topMaterial.depthTest = depthTest;
-      topMaterial.side = side;
-      const top = new THREE.Mesh(offsetAlongSurface(stackGeometry, topOffset), topMaterial);
-      top.renderOrder = renderOrder + edgeOffsets.length + 1;
-      top.castShadow = true;
-      top.userData.addEmbroideryStack = addEmbroideryStack;
-      top.userData.patchBaseGeometry = stackGeometry;
-      top.userData.patchOutward = stackOutward.clone();
-      top.userData.patchFadeStart = depthTest ? 0.07 : 0.16;
-      top.userData.patchFadeEnd = depthTest ? 0.2 : 0.32;
-      patchMeshes.push(top);
-      modelRoot.add(top);
-        return top;
-      };
-
-      /**
-       * Build one continuous UV grid from the garment's outer surface.
-       * DecalGeometry clips each source triangle independently; on the torso
-       * that made transparent artwork overlap itself and lose pieces of
-       * letters. Exact ray hits keep the chest artwork sewn to the panel
-       * instead of hovering at the depth of a nearby seam vertex.
-       */
-      const makeSurfacePatchGeometry = (
-        mesh: THREE.Mesh,
-        center: THREE.Vector2,
-        width: number,
-        height: number,
-        outward: THREE.Vector3,
-        segmentsX: number,
-        segmentsY: number,
-        flipU = false,
-      ) => {
-        type SurfaceSample = {
-          point: THREE.Vector3;
-          normal: THREE.Vector3;
-          uv: THREE.Vector2;
-          valid: boolean;
-          outwardDepth: number;
-        };
-        const grid: SurfaceSample[] = [];
-        const left = center.x - width / 2;
-        const top = center.y + height / 2;
-        for (let iy = 0; iy <= segmentsY; iy += 1) {
-          const v = iy / segmentsY;
-          const y = center.y + height * (0.5 - v);
-          for (let ix = 0; ix <= segmentsX; ix += 1) {
-            const u = ix / segmentsX;
-            const x = center.x + width * (u - 0.5);
-            grid.push({
-              point: new THREE.Vector3(x, y, 0),
-              normal: outward.clone(),
-              uv: new THREE.Vector2(flipU ? 1 - u : u, 1 - v),
-              valid: false,
-              outwardDepth: -Infinity,
-            });
-          }
-        }
-
-        // Rasterize the garment triangles into the tiny patch grid. This is
-        // exact like raycasting, but visits each source triangle only once.
-        const sourcePositions = mesh.geometry.attributes.position;
-        const sourceNormals = mesh.geometry.attributes.normal;
-        const sourceIndex = mesh.geometry.index;
-        const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
-        const a = new THREE.Vector3();
-        const b = new THREE.Vector3();
-        const c = new THREE.Vector3();
-        const na = new THREE.Vector3();
-        const nb = new THREE.Vector3();
-        const nc = new THREE.Vector3();
-        const faceNormal = new THREE.Vector3();
-        const ab = new THREE.Vector3();
-        const ac = new THREE.Vector3();
-        const triangleCount = sourceIndex ? sourceIndex.count / 3 : sourcePositions.count / 3;
-        const row = segmentsX + 1;
-        const clampX = (value: number) => Math.max(0, Math.min(segmentsX, value));
-        const clampY = (value: number) => Math.max(0, Math.min(segmentsY, value));
-
-        for (let triangle = 0; triangle < triangleCount; triangle += 1) {
-          const ia = sourceIndex ? sourceIndex.getX(triangle * 3) : triangle * 3;
-          const ib = sourceIndex ? sourceIndex.getX(triangle * 3 + 1) : triangle * 3 + 1;
-          const ic = sourceIndex ? sourceIndex.getX(triangle * 3 + 2) : triangle * 3 + 2;
-          a.fromBufferAttribute(sourcePositions, ia).applyMatrix4(mesh.matrixWorld);
-          b.fromBufferAttribute(sourcePositions, ib).applyMatrix4(mesh.matrixWorld);
-          c.fromBufferAttribute(sourcePositions, ic).applyMatrix4(mesh.matrixWorld);
-
-          const minX = Math.min(a.x, b.x, c.x);
-          const maxX = Math.max(a.x, b.x, c.x);
-          const minY = Math.min(a.y, b.y, c.y);
-          const maxY = Math.max(a.y, b.y, c.y);
-          if (maxX < left || minX > left + width || maxY < top - height || minY > top) continue;
-
-          const denominator = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
-          if (Math.abs(denominator) < 1e-10) continue;
-
-          const minIx = clampX(Math.floor(((minX - left) / width) * segmentsX));
-          const maxIx = clampX(Math.ceil(((maxX - left) / width) * segmentsX));
-          const minIy = clampY(Math.floor(((top - maxY) / height) * segmentsY));
-          const maxIy = clampY(Math.ceil(((top - minY) / height) * segmentsY));
-
-          if (sourceNormals) {
-            na.fromBufferAttribute(sourceNormals, ia).applyMatrix3(normalMatrix).normalize();
-            nb.fromBufferAttribute(sourceNormals, ib).applyMatrix3(normalMatrix).normalize();
-            nc.fromBufferAttribute(sourceNormals, ic).applyMatrix3(normalMatrix).normalize();
-          } else {
-            ab.subVectors(b, a);
-            ac.subVectors(c, a);
-            faceNormal.crossVectors(ab, ac).normalize();
-            na.copy(faceNormal);
-            nb.copy(faceNormal);
-            nc.copy(faceNormal);
-          }
-
-          for (let iy = minIy; iy <= maxIy; iy += 1) {
-            for (let ix = minIx; ix <= maxIx; ix += 1) {
-              const sample = grid[iy * row + ix];
-              const x = sample.point.x;
-              const y = sample.point.y;
-              const wa = ((b.y - c.y) * (x - c.x) + (c.x - b.x) * (y - c.y)) / denominator;
-              const wb = ((c.y - a.y) * (x - c.x) + (a.x - c.x) * (y - c.y)) / denominator;
-              const wc = 1 - wa - wb;
-              if (wa < -1e-5 || wb < -1e-5 || wc < -1e-5) continue;
-
-              const z = wa * a.z + wb * b.z + wc * c.z;
-              const outwardDepth = x * outward.x + y * outward.y + z * outward.z;
-              if (outwardDepth <= sample.outwardDepth) continue;
-
-              sample.point.z = z;
-              sample.normal
-                .set(
-                  wa * na.x + wb * nb.x + wc * nc.x,
-                  wa * na.y + wb * nb.y + wc * nc.y,
-                  wa * na.z + wb * nb.z + wc * nc.z,
-                )
-                .normalize();
-              if (sample.normal.dot(outward) < 0) sample.normal.negate();
-              sample.valid = true;
-              sample.outwardDepth = outwardDepth;
-            }
-          }
-        }
-
-        // Vertices that land exactly on a source-mesh seam can miss both
-        // adjacent triangles because of floating-point tolerances. One missed
-        // grid vertex removes its neighboring patch triangles, which shows up
-        // as a narrow slice through letters when the jacket rotates. Bridge
-        // only enclosed misses from their valid neighbors so the outer patch
-        // boundary still follows the garment silhouette.
-        const bridgeSample = (sample: SurfaceSample, first: SurfaceSample, second: SurfaceSample) => {
-          sample.point.lerpVectors(first.point, second.point, 0.5);
-          sample.normal.lerpVectors(first.normal, second.normal, 0.5).normalize();
-          sample.valid = true;
-          sample.outwardDepth = sample.point.dot(outward);
-        };
-        for (let pass = 0; pass < 2; pass += 1) {
-          for (let iy = 1; iy < segmentsY; iy += 1) {
-            for (let ix = 1; ix < segmentsX; ix += 1) {
-              const sample = grid[iy * row + ix];
-              if (sample.valid) continue;
-              const leftSample = grid[iy * row + ix - 1];
-              const rightSample = grid[iy * row + ix + 1];
-              if (leftSample.valid && rightSample.valid) {
-                bridgeSample(sample, leftSample, rightSample);
-                continue;
-              }
-              const topSample = grid[(iy - 1) * row + ix];
-              const bottomSample = grid[(iy + 1) * row + ix];
-              if (topSample.valid && bottomSample.valid) {
-                bridgeSample(sample, topSample, bottomSample);
-              }
-            }
-          }
-        }
-
-        // The back mesh contains deep sculpted wrinkles and overlapping seam
-        // triangles. Mapping every one of those depth spikes literally makes
-        // neighboring artwork cells cross over each other at a three-quarter
-        // view. Smooth only the hidden projection depth; the stencil above
-        // still clips the result to the jacket's exact visible silhouette.
-        for (let pass = 0; pass < 6; pass += 1) {
-          const nextDepths = grid.map((sample) => sample.point.z);
-          for (let iy = 1; iy < segmentsY; iy += 1) {
-            for (let ix = 1; ix < segmentsX; ix += 1) {
-              const index = iy * row + ix;
-              const sample = grid[index];
-              if (!sample.valid) continue;
-              let total = sample.point.z * 4;
-              let weight = 4;
-              for (const neighbor of [
-                grid[index - 1],
-                grid[index + 1],
-                grid[index - row],
-                grid[index + row],
-              ]) {
-                if (!neighbor.valid) continue;
-                total += neighbor.point.z;
-                weight += 1;
-              }
-              nextDepths[index] = total / weight;
-            }
-          }
-          for (let index = 0; index < grid.length; index += 1) {
-            if (!grid[index].valid) continue;
-            grid[index].point.z = nextDepths[index];
-            grid[index].normal.copy(outward);
-          }
-        }
-
-        const positions: number[] = [];
-        const normals: number[] = [];
-        const uvs: number[] = [];
-        const pushTriangle = (
-          a: SurfaceSample,
-          b: SurfaceSample,
-          c: SurfaceSample,
-        ) => {
-          if (!a.valid || !b.valid || !c.valid) return;
-          const faceNormal = new THREE.Vector3()
-            .crossVectors(b.point.clone().sub(a.point), c.point.clone().sub(a.point))
-            .normalize();
-          const vertices = faceNormal.dot(outward) >= 0 ? [a, b, c] : [a, c, b];
-          for (const vertex of vertices) {
-            positions.push(vertex.point.x, vertex.point.y, vertex.point.z);
-            normals.push(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-            uvs.push(vertex.uv.x, vertex.uv.y);
-          }
-        };
-
-        for (let iy = 0; iy < segmentsY; iy += 1) {
-          for (let ix = 0; ix < segmentsX; ix += 1) {
-            const topLeft = grid[iy * row + ix];
-            const topRight = grid[iy * row + ix + 1];
-            const bottomLeft = grid[(iy + 1) * row + ix];
-            const bottomRight = grid[(iy + 1) * row + ix + 1];
-            pushTriangle(topLeft, bottomLeft, topRight);
-            pushTriangle(topRight, bottomLeft, bottomRight);
-          }
-        }
-
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-        geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
-        geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-        return geometry;
-      };
-
-      const addSurfacePatch = (
-        mesh: THREE.Mesh,
-        texture: THREE.CanvasTexture,
-        center: THREE.Vector2,
-        width: number,
-        height: number,
-        outward: THREE.Vector3,
-        segmentsX: number,
-        segmentsY: number,
-        flipU = false,
-        topOffset = PATCH_TOP_OFFSET,
-        depthTest = true,
-        side: THREE.Side = THREE.DoubleSide,
-      ) => {
-        const geometry = makeSurfacePatchGeometry(
-          mesh,
-          center,
-          width,
-          height,
-          outward,
-          segmentsX,
-          segmentsY,
-          flipU,
-        );
-        const edgeOffsets = isConstrained ? PATCH_EDGE_OFFSETS_CONSTRAINED : PATCH_EDGE_OFFSETS;
-        return addEmbroideryStack(geometry, texture, outward, edgeOffsets, topOffset, 3, depthTest, side);
-      };
-
       const addDecal = (
         mesh: THREE.Mesh,
         texture: THREE.CanvasTexture,
@@ -1233,16 +760,40 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         orientation: THREE.Euler,
         size: THREE.Vector3,
         outward: THREE.Vector3,
-        depthTest = true,
-        minFacing = -0.3,
       ) => {
-        const geometry = cullAwayFacing(new DecalGeometry(mesh, position, orientation, size), outward, minFacing);
+        const geometry = cullAwayFacing(new DecalGeometry(mesh, position, orientation, size), outward);
+        const addEmbroideryStack = (
+          stackGeometry: THREE.BufferGeometry,
+          stackTexture: THREE.CanvasTexture,
+          stackOutward: THREE.Vector3,
+          edgeOffsets: number[],
+          topOffset: number,
+          renderOrder: number,
+        ) => {
+          const edgeMaterial = makeEmbroideryEdgeMaterial(stackTexture);
+          edgeOffsets.forEach((offset, index) => {
+            const edge = new THREE.Mesh(stackGeometry, edgeMaterial);
+            edge.position.copy(stackOutward).multiplyScalar(offset);
+            edge.renderOrder = renderOrder + index;
+            edge.receiveShadow = true;
+            modelRoot.add(edge);
+          });
+
+          const top = new THREE.Mesh(stackGeometry, makeDecalMaterial(stackTexture));
+          top.position.copy(stackOutward).multiplyScalar(topOffset);
+          top.renderOrder = renderOrder + edgeOffsets.length + 1;
+          top.castShadow = true;
+          modelRoot.add(top);
+          return top;
+        };
+
         // Start virtually flush with the garment and build outward in very
         // small connected steps. The lower layers form the embroidered edge;
         // because they share the projected curvature, nothing hovers away
         // from the jacket around the shoulders or sleeves.
-        const edgeOffsets = isConstrained ? PATCH_EDGE_OFFSETS_CONSTRAINED : PATCH_EDGE_OFFSETS;
-        return addEmbroideryStack(geometry, texture, outward, edgeOffsets, PATCH_TOP_OFFSET, 3, depthTest);
+        const top = addEmbroideryStack(geometry, texture, outward, [0.0022, 0.0038, 0.0054, 0.007], 0.0086, 3);
+        top.userData.addEmbroideryStack = addEmbroideryStack;
+        return top;
       };
 
       // Back design: projected straight onto the back panel.
@@ -1251,99 +802,26 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       backCanvas.height = 720;
       const backTexture = new THREE.CanvasTexture(backCanvas);
       backTexture.colorSpace = THREE.SRGBColorSpace;
-      backTexture.anisotropy = textureAnisotropy;
-      const backFooterCanvas = document.createElement("canvas");
-      backFooterCanvas.width = backCanvas.width;
-      backFooterCanvas.height = backCanvas.height;
-      const backFooterTexture = new THREE.CanvasTexture(backFooterCanvas);
-      backFooterTexture.colorSpace = THREE.SRGBColorSpace;
-      backFooterTexture.anisotropy = textureAnisotropy;
+      backTexture.anisotropy = 8;
       const backMesh = byName["front_body_button_back"];
       if (backMesh) {
-        // Draw a colorless stencil of only the currently visible back panel.
-        // Back artwork can then ignore tiny depth variations from the fabric
-        // grid while remaining clipped by the torso silhouette and sleeves.
-        const maskMaterial = new THREE.MeshBasicMaterial({
-          colorWrite: false,
-          depthWrite: false,
-          depthTest: true,
-          side: THREE.DoubleSide,
-          stencilWrite: true,
-          stencilRef: 1,
-          stencilFunc: THREE.AlwaysStencilFunc,
-          stencilFail: THREE.KeepStencilOp,
-          stencilZFail: THREE.KeepStencilOp,
-          stencilZPass: THREE.ReplaceStencilOp,
-        });
-        const backMask = new THREE.Mesh(backMesh.geometry, maskMaterial);
-        backMask.renderOrder = 2;
-        backMesh.add(backMask);
-        const sleeveMaskMaterial = maskMaterial.clone();
-        sleeveMaskMaterial.stencilRef = 0;
-        for (const sleeveName of ["sleeves_L", "sleeves_R"]) {
-          const sleeve = byName[sleeveName];
-          if (!sleeve) continue;
-          const sleeveMask = new THREE.Mesh(sleeve.geometry, sleeveMaskMaterial);
-          sleeveMask.renderOrder = 3;
-          sleeve.add(sleeveMask);
-        }
-        const clipBackStack = (startIndex: number) => {
-          for (const patch of patchMeshes.slice(startIndex)) {
-            patch.userData.patchFadeStart = 0.16;
-            patch.userData.patchFadeEnd = 0.32;
-            const patchMaterials = Array.isArray(patch.material) ? patch.material : [patch.material];
-            for (const material of patchMaterials) {
-              material.stencilWrite = true;
-              material.stencilRef = 1;
-              material.stencilFunc = THREE.EqualStencilFunc;
-              material.stencilFuncMask = 0xff;
-              material.stencilWriteMask = 0;
-              material.stencilFail = THREE.KeepStencilOp;
-              material.stencilZFail = THREE.KeepStencilOp;
-              material.stencilZPass = THREE.KeepStencilOp;
-            }
-          }
-        };
         const wb = new THREE.Box3().setFromObject(backMesh);
         const ws = wb.getSize(new THREE.Vector3());
         const wcB = wb.getCenter(new THREE.Vector3());
-        // Keep the artwork on the flatter center of the back panel. Extending
-        // farther around the side curvature makes the outer letters appear to
-        // float beyond the jacket silhouette during rotation.
-        const bw = ws.x * 0.66;
+        const bw = ws.x * 0.74;
         const bh = bw * (backCanvas.height / backCanvas.width);
-        const mainPatchStart = patchMeshes.length;
-        addSurfacePatch(
+        addDecal(
           backMesh,
           backTexture,
-          new THREE.Vector2(wcB.x, wcB.y + ws.y * 0.04),
-          bw,
-          bh,
+          new THREE.Vector3(wcB.x, wcB.y + ws.y * 0.04, wb.min.z),
+          new THREE.Euler(0, Math.PI, 0),
+          // Deep enough to span the whole back shell: the surface curves
+          // forward over the traps and at the side seams, and a shallow box
+          // clipped the star tops and letter edges there. The away-facing
+          // cull keeps the extra depth from catching anything else.
+          new THREE.Vector3(bw, bh, ws.z * 2),
           new THREE.Vector3(0, 0, -1),
-          48,
-          68,
-          true,
-          PATCH_TOP_OFFSET,
-          false,
-          THREE.DoubleSide,
         );
-        clipBackStack(mainPatchStart);
-        const footerPatchStart = patchMeshes.length;
-        addSurfacePatch(
-          backMesh,
-          backFooterTexture,
-          new THREE.Vector2(wcB.x, wcB.y + ws.y * 0.04),
-          bw,
-          bh,
-          new THREE.Vector3(0, 0, -1),
-          48,
-          68,
-          true,
-          PATCH_TOP_OFFSET,
-          false,
-          THREE.DoubleSide,
-        );
-        clipBackStack(footerPatchStart);
       }
 
       // Sleeve numbers: five small patches down the OUTER face of each arm,
@@ -1361,7 +839,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           c.height = 170;
           const t = new THREE.CanvasTexture(c);
           t.colorSpace = THREE.SRGBColorSpace;
-          t.anisotropy = textureAnisotropy;
+          t.anisotropy = 8;
           canvases.push(c);
           textures.push(t);
         }
@@ -1444,16 +922,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         }
       }
 
-      // Front chest artwork follows a sampled panel surface (facing +z)
-      // without projecting through its lining.
-      const addFrontDecal = (
-        panelName: string,
-        canvas: HTMLCanvasElement,
-        wFrac: number,
-        xFrac: number,
-        yFrac: number,
-        depthTest = true,
-      ) => {
+      // Front chest artwork projected onto the panel surface (facing +z). The
+      // panel curves, so sample the surface depth at the exact target spot.
+      const addFrontDecal = (panelName: string, canvas: HTMLCanvasElement, wFrac: number, xFrac: number, yFrac: number) => {
         const panel = byName[panelName];
         if (!panel) return null;
         const pb = new THREE.Box3().setFromObject(panel);
@@ -1461,48 +932,41 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const pc = pb.getCenter(new THREE.Vector3());
         const tx = pc.x + ps.x * xFrac;
         const ty = pc.y + ps.y * yFrac;
-        const positions = panel.geometry.attributes.position;
-        const vertex = new THREE.Vector3();
-        const surfaceZ = (x: number, y: number, radius: number) => {
+        const posA = panel.geometry.attributes.position;
+        const v = new THREE.Vector3();
+        // Frontmost surface z among vertices near a given (x, y) spot.
+        const surfZ = (x: number, y: number, rad: number) => {
           let maxZ = -Infinity;
-          for (let index = 0; index < positions.count; index += 1) {
-            vertex.fromBufferAttribute(positions, index).applyMatrix4(panel.matrixWorld);
-            if (Math.abs(vertex.x - x) > radius || Math.abs(vertex.y - y) > radius) continue;
-            if (vertex.z > maxZ) maxZ = vertex.z;
+          for (let i = 0; i < posA.count; i++) {
+            v.fromBufferAttribute(posA, i).applyMatrix4(panel.matrixWorld);
+            if (Math.abs(v.x - x) > rad || Math.abs(v.y - y) > rad) continue;
+            if (v.z > maxZ) maxZ = v.z;
           }
           return maxZ;
         };
         const w = ps.x * wFrac;
-        const h = w * (canvas.height / canvas.width);
-        const radius = w * 0.35;
-        const centerZ = surfaceZ(tx, ty, radius);
-        const leftZ = surfaceZ(tx - radius, ty, radius * 0.8);
-        const rightZ = surfaceZ(tx + radius, ty, radius * 0.8);
-        const z = centerZ > -Infinity ? centerZ : pb.max.z;
-        let yaw = 0;
-        if (leftZ > -Infinity && rightZ > -Infinity) {
-          const dzdx = (rightZ - leftZ) / (radius * 2);
-          yaw = Math.atan2(-dzdx, 1);
-        }
+        const rad = w * 0.35;
+        const zC = surfZ(tx, ty, rad);
+        const zL = surfZ(tx - rad, ty, rad * 0.8);
+        const zR = surfZ(tx + rad, ty, rad * 0.8);
+        const z = zC > -Infinity ? zC : pb.max.z;
         const texture = new THREE.CanvasTexture(canvas);
         texture.colorSpace = THREE.SRGBColorSpace;
-        texture.anisotropy = textureAnisotropy;
+        texture.anisotropy = 8;
+        // Yaw the projection to follow the chest's curve at this spot.
+        let yaw = 0;
+        if (zL > -Infinity && zR > -Infinity) {
+          const dzdx = (zR - zL) / (rad * 2);
+          yaw = Math.atan2(-dzdx, 1);
+        }
         const decal = addDecal(
           panel,
           texture,
           new THREE.Vector3(tx, ty, z),
           new THREE.Euler(0, yaw, 0),
-          new THREE.Vector3(w, h, Math.max(w * 0.8, ps.z * 0.3)),
+          new THREE.Vector3(w, w * (canvas.height / canvas.width), Math.max(w * 0.8, ps.z * 0.3)),
           new THREE.Vector3(0, 0, 1),
-          depthTest,
-          // Chest panels fold sharply beside the placket. Keep those
-          // near-tangent triangles; the late global fade handles the true
-          // profile view without cutting letters out of the wordmark.
-          -0.3,
         );
-        const decalMaterial = decal.material as THREE.MeshStandardMaterial;
-        decalMaterial.polygonOffsetFactor = -64;
-        decalMaterial.polygonOffsetUnits = -64;
         return { decal, texture };
       };
 
@@ -1512,14 +976,14 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       badgeCanvas.height = 360;
       const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.336, -0.02, 0.2);
       void loadCrest().then((crest) => {
-        if (!crest || disposed || !loadedRef.current) return;
+        if (!crest) return;
         const bctx = badgeCanvas.getContext("2d")!;
         bctx.clearRect(0, 0, badgeCanvas.width, badgeCanvas.height);
         const cw = badgeCanvas.width * 0.9;
         const chh = cw * (crest.height / crest.width);
-        bctx.globalAlpha = 0.18;
-        bctx.filter = "brightness(0) blur(3px)";
-        bctx.drawImage(crest, (badgeCanvas.width - cw) / 2, (badgeCanvas.height - chh) / 2 + 2, cw, chh);
+        bctx.globalAlpha = 0.4;
+        bctx.filter = "brightness(0) blur(6px)";
+        bctx.drawImage(crest, (badgeCanvas.width - cw) / 2, (badgeCanvas.height - chh) / 2 + 6, cw, chh);
         bctx.filter = "none";
         bctx.globalAlpha = 1;
         bctx.drawImage(crest, (badgeCanvas.width - cw) / 2, (badgeCanvas.height - chh) / 2, cw, chh);
@@ -1528,7 +992,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           const threadCanvas = extractCrestThreadwork(badgeCanvas);
           const threadTexture = new THREE.CanvasTexture(threadCanvas);
           threadTexture.colorSpace = THREE.SRGBColorSpace;
-          threadTexture.anisotropy = textureAnisotropy;
+          threadTexture.anisotropy = 8;
           const addStack = badgeArt.decal.userData.addEmbroideryStack as (
             geometry: THREE.BufferGeometry,
             texture: THREE.CanvasTexture,
@@ -1536,23 +1000,16 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             edgeOffsets: number[],
             topOffset: number,
             renderOrder: number,
-            depthTest?: boolean,
           ) => THREE.Mesh;
-          const baseGeometry = badgeArt.decal.userData.patchBaseGeometry as THREE.BufferGeometry;
           const threadTop = addStack(
-            baseGeometry,
+            badgeArt.decal.geometry,
             threadTexture,
             new THREE.Vector3(0, 0, 1),
-            // Flush to the chest panel; polygonOffset (-64 below) keeps the
-            // crest in front of the fabric and the bump map raises the thread.
-            isConstrained ? [0] : [0, 0],
-            0,
+            [0.0092, 0.0103, 0.0114, 0.0125, 0.0136, 0.0147],
+            0.0158,
             9,
-            true,
           );
           const threadMaterial = threadTop.material as THREE.MeshStandardMaterial;
-          threadMaterial.polygonOffsetFactor = -64;
-          threadMaterial.polygonOffsetUnits = -64;
           threadMaterial.bumpScale = 0.07;
           threadMaterial.roughness = 0.7;
           threadMaterial.envMapIntensity = 0.55;
@@ -1575,30 +1032,12 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       loadedRef.current = {
         materials,
         back: { canvas: backCanvas, texture: backTexture },
-        backFooter: { canvas: backFooterCanvas, texture: backFooterTexture },
         sleeves: sleeveSets,
       };
       redrawDesign();
-      surfaceTimer = window.setTimeout(() => {
-        if (disposed) return;
-        try {
-          surfaces = makeSurfaceTextures();
-          applySurfaceTextures(materials, surfaces, propsRef.current);
-        } catch (error) {
-          console.error("Failed to add jacket surface detail", error);
-        }
-      }, 100);
-        } catch (error) {
-          // The usable jacket is already on screen. A decorative-detail
-          // failure should never send the viewer back to a blank loader.
-          console.error("Failed to add jacket design detail", error);
-        }
-      }, 150);
-      } catch (error) {
-        failPreview("Failed to prepare jacket preview", error);
-      }
-    }, undefined, (error) => {
-      failPreview("Failed to load jacket model", error);
+      setViewerStatus("ready");
+    }, undefined, () => {
+      if (!disposed) setViewerStatus("error");
     });
 
     const onPointerDown = (e: PointerEvent) => {
@@ -1651,39 +1090,13 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         clock.getDelta();
       }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
-      for (const patch of patchMeshes) {
-        const outward = patch.userData.patchOutward as THREE.Vector3 | undefined;
-        if (!outward) continue;
-        const facing = patchFacing.copy(outward).applyQuaternion(modelRoot.quaternion).z;
-        // Stay fully visible through an ordinary three-quarter view, then
-        // fade only as the patch approaches a true profile. This prevents
-        // depth-independent torso art from peeking beyond the silhouette.
-        const fadeStart = (patch.userData.patchFadeStart as number | undefined) ?? 0.07;
-        const fadeEnd = (patch.userData.patchFadeEnd as number | undefined) ?? 0.2;
-        const opacity = THREE.MathUtils.smoothstep(facing, fadeStart, fadeEnd);
-        patch.visible = opacity > 0.01;
-        const patchMaterials = Array.isArray(patch.material) ? patch.material : [patch.material];
-        for (const material of patchMaterials) material.opacity = opacity;
-      }
-      if (!document.hidden && !renderer.getContext().isContextLost()) {
-        renderer.render(scene, camera);
-        if (modelPrepared && !readyReported && renderer.info.render.triangles > 0) {
-          readyReported = true;
-          window.clearTimeout(loadTimeout);
-          automaticRetryRef.current = 0;
-          setViewerStatus("ready");
-        }
-      }
+      renderer.render(scene, camera);
       frameRef.current = requestAnimationFrame(animate);
     };
     frameRef.current = requestAnimationFrame(animate);
 
     return () => {
       disposed = true;
-      window.clearTimeout(loadTimeout);
-      window.clearTimeout(retryTimer);
-      window.clearTimeout(detailTimer);
-      window.clearTimeout(surfaceTimer);
       cancelAnimationFrame(frameRef.current);
       window.removeEventListener("resize", onResize);
       resizeObserver.disconnect();
@@ -1691,44 +1104,23 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       mount.removeEventListener("pointermove", onPointerMove);
       mount.removeEventListener("pointerup", onPointerUp);
       mount.removeEventListener("wheel", onWheel);
-      renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
-      disposeObjectResources(scene);
       envTexture.dispose();
-      if (surfaces) Object.values(surfaces).forEach((surface) => surface.dispose());
+      Object.values(surfaces).forEach((surface) => surface.dispose());
       dracoLoader.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       loadedRef.current = null;
     };
-  }, [retryKey]);
-
-  const retryPreview = () => {
-    automaticRetryRef.current = 0;
-    setViewerStatus("loading");
-    setRetryKey((key) => key + 1);
-  };
+  }, []);
 
   return (
-    <div className="relative h-full min-h-[260px] w-full" data-viewer-status={viewerStatus}>
-      <div
-        ref={mountRef}
-        className="jacket-viewer-mount absolute inset-0 touch-none cursor-grab active:cursor-grabbing"
-      />
+    <div className="relative h-full min-h-[260px] w-full">
+      <div ref={mountRef} className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing" />
       {viewerStatus !== "ready" && (
-        <div className="jacket-viewer-overlay absolute inset-0 z-10 grid place-items-center">
-          {viewerStatus === "error" ? (
-            <button
-              type="button"
-              onClick={retryPreview}
-              className="border border-gray-300 bg-white/90 px-4 py-3 text-[10px] uppercase tracking-[0.18em] text-gray-700 shadow-sm backdrop-blur transition-colors hover:border-black"
-            >
-              Preview paused · Tap to retry
-            </button>
-          ) : (
-            <p className="pointer-events-none bg-white/85 px-4 py-2 text-[10px] uppercase tracking-[0.18em] text-gray-600 backdrop-blur">
-              {viewerStatus === "recovering" ? "Restarting jacket preview" : "Loading jacket preview"}
-            </p>
-          )}
+        <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
+          <p className="bg-white/85 px-4 py-2 text-[10px] uppercase tracking-[0.18em] text-gray-600 backdrop-blur">
+            {viewerStatus === "error" ? "Jacket preview could not load · Refresh to retry" : "Loading jacket preview"}
+          </p>
         </div>
       )}
     </div>

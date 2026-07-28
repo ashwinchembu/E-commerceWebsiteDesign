@@ -429,7 +429,7 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
   );
 
   return (
-    <div className="jacket-builder-shell fixed inset-0 h-[100dvh] bg-white flex flex-col z-50 font-['League_Spartan',sans-serif]">
+    <div className="fixed inset-0 h-[100dvh] bg-white flex flex-col z-50 font-['League_Spartan',sans-serif]">
       {/* Top bar */}
       <div className="border-b border-gray-200 bg-white z-10 shrink-0">
         <div className="grid h-12 grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 sm:h-14 sm:px-4">
@@ -475,7 +475,7 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
             </button>
           </div>
 
-          <div className="jacket-builder-actions flex min-w-0 items-center justify-end gap-2 sm:gap-3">
+          <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
             <button onClick={() => setWishlisted((w) => !w)} className="text-gray-400 hover:text-black transition-colors">
               <Star className={`w-4 h-4 ${wishlisted ? "fill-black text-black" : ""}`} />
             </button>
@@ -533,7 +533,7 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
         <div
           className={`order-2 w-full shrink-0 border-t border-gray-200 bg-white transition-[height,width] duration-200 md:order-1 md:border-r md:border-t-0 ${
             sidebarOpen
-              ? "jacket-builder-sidebar-open overflow-y-auto md:w-64"
+              ? "h-[44dvh] overflow-y-auto md:h-auto md:w-64"
               : "h-0 overflow-hidden border-t-0 md:h-auto md:w-0 md:border-r-0"
           }`}
           aria-hidden={!sidebarOpen}
@@ -878,9 +878,7 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
         {/* Jacket preview */}
         <div
           className={`order-1 relative bg-[#f0ede8] overflow-hidden transition-[height] duration-200 md:order-2 md:h-auto md:min-h-0 md:flex-1 ${
-            sidebarOpen
-              ? "jacket-builder-preview-open"
-              : "min-h-[320px] flex-1"
+            sidebarOpen ? "h-[46dvh] min-h-[260px] flex-none sm:min-h-[340px]" : "min-h-[320px] flex-1"
           }`}
         >
           <VarsityJacketViewer
@@ -933,7 +931,7 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
           )}
 
           {/* City picker + drag hint */}
-          <div className="jacket-builder-city-picker absolute bottom-3 left-1/2 flex w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col items-center gap-2 sm:bottom-4 sm:w-auto">
+          <div className="absolute bottom-3 left-1/2 flex w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col items-center gap-2 sm:bottom-4 sm:w-auto">
             <select
               value={backCity}
               onChange={(e) => setBackCity(e.target.value)}

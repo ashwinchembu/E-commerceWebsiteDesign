@@ -41,11 +41,14 @@ const BACK_SURFACE_DEPTHS = [
 ] as const;
 const BRAND_GOLD = "#c9a24a";
 const CHEST_FILL = "#f2ede2";
-// Keep the geometry almost flush; the bump map supplies the visible thread
-// height without creating an air gap at grazing camera angles.
-const PATCH_TOP_OFFSET = 0.0008;
-const PATCH_EDGE_OFFSETS = [0.0002, 0.0004, 0.0006];
-const PATCH_EDGE_OFFSETS_CONSTRAINED = [0.0005];
+// Sew the patches flush to the fabric: the layers sit right on the projected
+// surface (zero physical lift) and the material's polygonOffset keeps them in
+// front of the coincident jacket without any air gap, while the artwork bump
+// map supplies the visible thread height. Any nonzero lift here reads as the
+// patch floating off the surface at grazing camera angles.
+const PATCH_TOP_OFFSET = 0;
+const PATCH_EDGE_OFFSETS = [0, 0, 0];
+const PATCH_EDGE_OFFSETS_CONSTRAINED = [0];
 
 // Keep the small compressed model in memory so an automatic retry never has
 // to wait for a second network request.
@@ -1540,8 +1543,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             baseGeometry,
             threadTexture,
             new THREE.Vector3(0, 0, 1),
-            isConstrained ? [0.0028] : [0.0026, 0.0029],
-            0.0032,
+            // Flush to the chest panel; polygonOffset (-64 below) keeps the
+            // crest in front of the fabric and the bump map raises the thread.
+            isConstrained ? [0] : [0, 0],
+            0,
             9,
             true,
           );

@@ -955,7 +955,8 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
               ))}
             </select>
             <span className="text-center text-[9px] tracking-widest uppercase text-gray-400 pointer-events-none select-none sm:text-[10px]">
-              Drag to rotate · Scroll to zoom
+              <span className="sm:hidden">One finger to rotate · Pinch to zoom</span>
+              <span className="hidden sm:inline">Drag to rotate · Scroll to zoom</span>
             </span>
           </div>
         </div>

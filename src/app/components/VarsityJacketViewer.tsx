@@ -61,6 +61,72 @@ function addOpaqueCrestBacking(source: HTMLCanvasElement): HTMLCanvasElement {
   return backed;
 }
 
+/**
+ * Build a fully opaque outer merrowed border from the crest silhouette. The
+ * photographed thread at the artwork edge contains fine transparent gaps;
+ * those gaps are attractive on the face, but they cannot be used as the mask
+ * for the raised sidewall or the jacket shows through at grazing angles.
+ */
+function createSolidCrestBorder(source: HTMLCanvasElement): HTMLCanvasElement {
+  const width = source.width;
+  const height = source.height;
+  const sourcePixels = source.getContext("2d")!.getImageData(0, 0, width, height);
+  const solid = document.createElement("canvas");
+  solid.width = width;
+  solid.height = height;
+  const solidContext = solid.getContext("2d")!;
+  const border = solidContext.createImageData(width, height);
+  const opaque = new Uint8Array(width * height);
+  const outsidePrefix = new Uint32Array((width + 1) * (height + 1));
+  const radius = Math.max(5, Math.round(Math.min(width, height) * 0.024));
+
+  for (let y = 0; y < height; y += 1) {
+    let rowOutside = 0;
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      opaque[index] = sourcePixels.data[index * 4 + 3] >= 32 ? 1 : 0;
+      rowOutside += opaque[index] ? 0 : 1;
+      outsidePrefix[(y + 1) * (width + 1) + x + 1] =
+        outsidePrefix[y * (width + 1) + x + 1] + rowOutside;
+    }
+  }
+
+  const outsideCount = (left: number, top: number, right: number, bottom: number) => {
+    const stride = width + 1;
+    return (
+      outsidePrefix[(bottom + 1) * stride + right + 1]
+      - outsidePrefix[top * stride + right + 1]
+      - outsidePrefix[(bottom + 1) * stride + left]
+      + outsidePrefix[top * stride + left]
+    );
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      if (!opaque[index]) continue;
+      const left = Math.max(0, x - radius);
+      const right = Math.min(width - 1, x + radius);
+      const top = Math.max(0, y - radius);
+      const bottom = Math.min(height - 1, y + radius);
+      const windowTouchesCanvasEdge =
+        left !== x - radius
+        || right !== x + radius
+        || top !== y - radius
+        || bottom !== y + radius;
+      if (!windowTouchesCanvasEdge && outsideCount(left, top, right, bottom) === 0) continue;
+      const offset = index * 4;
+      border.data[offset] = 255;
+      border.data[offset + 1] = 255;
+      border.data[offset + 2] = 255;
+      border.data[offset + 3] = 255;
+    }
+  }
+
+  solidContext.putImageData(border, 0, 0);
+  return solid;
+}
+
 /** Load the embroidered MK crest, trimmed to its own opaque bounds. */
 function loadCrest(): Promise<HTMLCanvasElement | null> {
   if (crestElement) return Promise.resolve(crestElement);
@@ -107,15 +173,22 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
 /**
  * Isolate the cream/white threadwork from the gold crest field. The returned
  * transparent canvas becomes a second geometric embroidery layer containing
- * the merrowed border, laurels, MK monogram, and MANOIR KITS lettering.
+ * the laurels, MK monogram, and MANOIR KITS lettering. A supplied exclusion
+ * mask keeps the separately extruded solid border out of this upper layer.
  */
-function extractCrestThreadwork(source: HTMLCanvasElement): HTMLCanvasElement {
+function extractCrestThreadwork(
+  source: HTMLCanvasElement,
+  exclude?: HTMLCanvasElement,
+): HTMLCanvasElement {
   const detail = document.createElement("canvas");
   detail.width = source.width;
   detail.height = source.height;
   const ctx = detail.getContext("2d")!;
   ctx.drawImage(source, 0, 0);
   const image = ctx.getImageData(0, 0, detail.width, detail.height);
+  const excluded = exclude
+    ? exclude.getContext("2d")!.getImageData(0, 0, detail.width, detail.height).data
+    : null;
   const { data } = image;
 
   for (let i = 0; i < data.length; i += 4) {
@@ -127,7 +200,7 @@ function extractCrestThreadwork(source: HTMLCanvasElement): HTMLCanvasElement {
     // Neutral, bright fibres are the cream embroidery. Gold fibres have much
     // higher chroma and are intentionally left on the lower shield surface.
     const lightThread = brightness > 145 && chroma < 88;
-    if (!lightThread || sourceAlpha < 24) {
+    if (!lightThread || sourceAlpha < 24 || (excluded && excluded[i + 3] >= 24)) {
       data[i + 3] = 0;
       continue;
     }
@@ -1065,18 +1138,29 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       // Gold MK crest on the wearer-left chest (front_body_L, viewer-right).
       const badgeCanvas = document.createElement("canvas");
       badgeCanvas.width = 320;
-      badgeCanvas.height = 360;
+      // The crest is taller than the old 320×360 surface. The extra transparent
+      // height preserves its full pointed tip without changing its visible
+      // height on the jacket.
+      badgeCanvas.height = 400;
       const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.336, -0.02, 0.2, BRAND_GOLD);
       void loadCrest().then((crest) => {
         if (!crest) return;
         const bctx = badgeCanvas.getContext("2d")!;
         bctx.clearRect(0, 0, badgeCanvas.width, badgeCanvas.height);
-        const cw = badgeCanvas.width * 0.9;
-        const chh = cw * (crest.height / crest.width);
+        const crestScale = Math.min(
+          (badgeCanvas.width * 0.9) / crest.width,
+          (badgeCanvas.height * 0.9) / crest.height,
+        );
+        const cw = crest.width * crestScale;
+        const chh = crest.height * crestScale;
         bctx.drawImage(crest, (badgeCanvas.width - cw) / 2, (badgeCanvas.height - chh) / 2, cw, chh);
         if (badgeArt) {
           badgeArt.texture.needsUpdate = true;
-          const threadCanvas = extractCrestThreadwork(badgeCanvas);
+          const borderCanvas = createSolidCrestBorder(badgeCanvas);
+          const borderTexture = new THREE.CanvasTexture(borderCanvas);
+          borderTexture.colorSpace = THREE.SRGBColorSpace;
+          borderTexture.anisotropy = 8;
+          const threadCanvas = extractCrestThreadwork(badgeCanvas, borderCanvas);
           const threadTexture = new THREE.CanvasTexture(threadCanvas);
           threadTexture.colorSpace = THREE.SRGBColorSpace;
           threadTexture.anisotropy = 8;
@@ -1089,13 +1173,29 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             renderOrder: number,
             stackEdgeColor?: THREE.ColorRepresentation,
           ) => THREE.Mesh;
+          // Keep the solid white merrowed border almost flush with the gold
+          // shield. A taller offset lets the jacket become visible between
+          // the two masks at grazing angles, making the trim look detached.
+          const borderTop = addStack(
+            badgeArt.decal.geometry,
+            borderTexture,
+            new THREE.Vector3(0, 0, 1),
+            [0.00865, 0.00885, 0.00905, 0.00925],
+            0.00945,
+            9,
+            CHEST_FILL,
+          );
+          const borderMaterial = borderTop.material as THREE.MeshStandardMaterial;
+          borderMaterial.bumpScale = 0.045;
+          borderMaterial.roughness = 0.76;
+          borderMaterial.envMapIntensity = 0.46;
           const threadTop = addStack(
             badgeArt.decal.geometry,
             threadTexture,
             new THREE.Vector3(0, 0, 1),
             [0.0092, 0.0103, 0.0114, 0.0125, 0.0136, 0.0147],
-            0.0158,
-            9,
+            0.0162,
+            24,
             "#e0cb8e",
           );
           const threadMaterial = threadTop.material as THREE.MeshStandardMaterial;

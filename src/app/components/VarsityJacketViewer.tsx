@@ -17,6 +17,50 @@ THREE.Cache.enabled = true;
 let crestElement: HTMLCanvasElement | null = null;
 let crestLoading: Promise<HTMLCanvasElement | null> | null = null;
 
+/**
+ * Put an opaque gold shield underneath the crest artwork. The source image
+ * intentionally has transparent gaps between embroidered fibres, but on the
+ * 3D decal those gaps reveal the jacket and make the white merrowed border
+ * look perforated. Filling each scanline between the crest's outer alpha
+ * edges preserves the exact shield silhouette while closing every interior
+ * pinhole.
+ */
+function addOpaqueCrestBacking(source: HTMLCanvasElement): HTMLCanvasElement {
+  const width = source.width;
+  const height = source.height;
+  const sourcePixels = source.getContext("2d")!.getImageData(0, 0, width, height);
+  const backed = document.createElement("canvas");
+  backed.width = width;
+  backed.height = height;
+  const backedContext = backed.getContext("2d")!;
+  const mask = backedContext.createImageData(width, height);
+
+  for (let y = 0; y < height; y += 1) {
+    let left = width;
+    let right = -1;
+    for (let x = 0; x < width; x += 1) {
+      if (sourcePixels.data[(y * width + x) * 4 + 3] < 24) continue;
+      left = Math.min(left, x);
+      right = Math.max(right, x);
+    }
+    for (let x = left; x <= right; x += 1) {
+      const offset = (y * width + x) * 4;
+      mask.data[offset] = 255;
+      mask.data[offset + 1] = 255;
+      mask.data[offset + 2] = 255;
+      mask.data[offset + 3] = 255;
+    }
+  }
+
+  backedContext.putImageData(mask, 0, 0);
+  backedContext.globalCompositeOperation = "source-in";
+  backedContext.fillStyle = BRAND_GOLD;
+  backedContext.fillRect(0, 0, width, height);
+  backedContext.globalCompositeOperation = "source-over";
+  backedContext.drawImage(source, 0, 0);
+  return backed;
+}
+
 /** Load the embroidered MK crest, trimmed to its own opaque bounds. */
 function loadCrest(): Promise<HTMLCanvasElement | null> {
   if (crestElement) return Promise.resolve(crestElement);
@@ -51,8 +95,8 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
       cropped.width = maxX - minX + 1;
       cropped.height = maxY - minY + 1;
       cropped.getContext("2d")!.drawImage(image, -minX, -minY);
-      crestElement = cropped;
-      resolve(cropped);
+      crestElement = addOpaqueCrestBacking(cropped);
+      resolve(crestElement);
     };
     image.onerror = () => resolve(null);
     image.src = crestImage;

@@ -664,6 +664,12 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     renderer.shadowMap.enabled = !isMobile;
     renderer.shadowMap.type = THREE.PCFShadowMap;
     mount.appendChild(renderer.domElement);
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      readyReported = false;
+      retrySilently("Jacket renderer context was interrupted");
+    };
+    renderer.domElement.addEventListener("webglcontextlost", onContextLost);
 
     const scene = new THREE.Scene();
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -1110,6 +1116,41 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const resizeObserver = new ResizeObserver(onResize);
     resizeObserver.observe(mount);
 
+    const hasRenderedJacketPixels = () => {
+      const gl = renderer.getContext();
+      const width = gl.drawingBufferWidth;
+      const height = gl.drawingBufferHeight;
+      if (width < 1 || height < 1) return false;
+
+      const pixel = new Uint8Array(4);
+      const samplePoints = [
+        [0.5, 0.5],
+        [0.5, 0.35],
+        [0.4, 0.52],
+        [0.6, 0.52],
+        [0.5, 0.68],
+      ];
+
+      try {
+        for (const [x, y] of samplePoints) {
+          gl.readPixels(
+            Math.min(width - 1, Math.max(0, Math.floor(width * x))),
+            Math.min(height - 1, Math.max(0, Math.floor(height * y))),
+            1,
+            1,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            pixel,
+          );
+          if (pixel[3] > 0) return true;
+        }
+      } catch {
+        return false;
+      }
+
+      return false;
+    };
+
     const animate = () => {
       const d = dragRef.current;
       const elapsedSinceInteraction = performance.now() - d.lastInteraction;
@@ -1120,7 +1161,12 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
       renderer.render(scene, camera);
-      if (modelPrepared && !readyReported && renderer.info.render.triangles > 0) {
+      if (
+        modelPrepared
+        && !readyReported
+        && renderer.info.render.triangles > 0
+        && hasRenderedJacketPixels()
+      ) {
         readyReported = true;
         automaticRetryRef.current = 0;
         setViewerStatus("ready");
@@ -1139,6 +1185,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       mount.removeEventListener("pointermove", onPointerMove);
       mount.removeEventListener("pointerup", onPointerUp);
       mount.removeEventListener("wheel", onWheel);
+      renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
       envTexture.dispose();
       Object.values(surfaces).forEach((surface) => surface.dispose());
       dracoLoader.dispose();
@@ -1156,7 +1203,20 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
   return (
     <div className="relative h-full min-h-[260px] w-full" data-viewer-status={viewerStatus}>
-      <div ref={mountRef} className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing" />
+      <img
+        src="/images/jacket-preview-poster.jpg"
+        alt=""
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${
+          viewerStatus === "ready" ? "opacity-0" : "opacity-100"
+        }`}
+      />
+      <div
+        ref={mountRef}
+        className={`absolute inset-0 touch-none cursor-grab transition-opacity duration-300 active:cursor-grabbing ${
+          viewerStatus === "ready" ? "opacity-100" : "opacity-0"
+        }`}
+      />
       <span className="sr-only" role="status" aria-live="polite">
         {viewerStatus === "ready" ? "Jacket preview ready" : "Loading jacket preview"}
       </span>

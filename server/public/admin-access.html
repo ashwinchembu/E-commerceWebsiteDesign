@@ -19,6 +19,14 @@
 
     <main class="admin-shell">
       <section id="admin-unlock" class="panel compact-panel">
+        <div class="owner-only-notice" role="note">
+          <strong>OWNER-ONLY SITE ADMINISTRATION</strong>
+          <span>
+            This page manages private access to the Manoir Kits website only. Keep the administrator
+            key with the owner or an authorized operator. Shopify orders and fulfillment are managed
+            separately in Shopify Admin.
+          </span>
+        </div>
         <h2>Administrator verification</h2>
         <p>The administrator key stays in this browser tab and is never saved locally.</p>
         <form id="admin-form" class="inline-form">
@@ -50,7 +58,7 @@
               <select name="role">
                 <option value="visitor">Private visitor — site gate only</option>
                 <option value="footballer">Footballer — includes full-leather edition</option>
-                <option value="admin">Owner — all access</option>
+                <option value="admin">Owner — all website features (not this dashboard)</option>
               </select>
             </label>
             <label>

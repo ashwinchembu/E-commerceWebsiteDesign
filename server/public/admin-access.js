@@ -9,6 +9,7 @@ const grantsBody = document.querySelector("#grants-body");
 const eventsBody = document.querySelector("#events-body");
 const generatedCode = document.querySelector("#generated-code");
 const generatedCodeValue = document.querySelector("#generated-code-value");
+const guideStatus = document.querySelector("#guide-status");
 let adminKey = "";
 
 const text = (value) => document.createTextNode(value == null || value === "" ? "—" : String(value));
@@ -191,6 +192,40 @@ grantsBody.addEventListener("click", async (event) => {
     await loadGrants();
   } catch (error) {
     grantStatus.textContent = error instanceof Error ? error.message : "Code could not be revoked.";
+  }
+});
+
+document.querySelector(".guide-grid").addEventListener("click", async (event) => {
+  const button = event.target.closest("button[data-guide-url]");
+  if (!button) return;
+
+  const guideWindow = window.open("", "_blank");
+  if (!guideWindow) {
+    guideStatus.textContent = "Allow pop-ups for this site, then tap OPEN PDF again.";
+    return;
+  }
+  guideWindow.opener = null;
+  button.disabled = true;
+  guideStatus.textContent = "Opening PDF…";
+
+  try {
+    const response = await fetch(button.dataset.guideUrl, {
+      headers: { Authorization: `Bearer ${adminKey}` },
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "The guide could not be opened.");
+    }
+
+    const objectUrl = URL.createObjectURL(await response.blob());
+    guideWindow.location.replace(objectUrl);
+    guideStatus.textContent = "";
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 10 * 60 * 1000);
+  } catch (error) {
+    guideWindow.close();
+    guideStatus.textContent = error instanceof Error ? error.message : "The guide could not be opened.";
+  } finally {
+    button.disabled = false;
   }
 });
 

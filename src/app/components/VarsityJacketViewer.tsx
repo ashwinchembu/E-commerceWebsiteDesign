@@ -1416,7 +1416,14 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       } else {
         clock.getDelta();
       }
-      modelRoot.rotation.set(d.rotX, d.rotY, 0);
+      // DecalGeometry is projected in world space. Keep the model at identity
+      // until every asynchronous chest layer has been attached; otherwise the
+      // later wordmark projection can be generated inside the jacket shell.
+      if (modelPrepared) {
+        modelRoot.rotation.set(d.rotX, d.rotY, 0);
+      } else {
+        modelRoot.rotation.set(0, 0, 0);
+      }
       renderer.render(scene, camera);
       if (!readyReported) {
         const frameIsStable =

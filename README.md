@@ -9,6 +9,8 @@
 
   Run `npm run dev` to start the development server.
 
+  `npm run build` always creates a password-free static build. Private access is only included by the explicit `npm run build:private` or `npm run secure` commands used with the separate Node access server.
+
   ## Private access deployment
 
   The private-preview gate is preserved in `server/` and in the `manoir-kits-private` Render service, but it is disconnected from the public storefront. The `ecommerce-website-design` Render static service publishes `dist`, so visitors do not need a password and the Node access server is not in the request path.

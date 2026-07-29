@@ -1423,8 +1423,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         && hasRenderedJacketPixels()
       ) {
         readyReported = true;
-        // Give the stable first frame a brief pause before auto-rotation.
-        d.lastInteraction = performance.now();
         automaticRetryRef.current = 0;
         setViewerStatus("ready");
       }

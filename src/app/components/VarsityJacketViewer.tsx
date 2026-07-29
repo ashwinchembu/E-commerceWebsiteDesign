@@ -1286,7 +1286,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const animate = () => {
       const d = dragRef.current;
       const elapsedSinceInteraction = performance.now() - d.lastInteraction;
-      if (!reduceMotion && !d.active && elapsedSinceInteraction > 1800) {
+      // Keep the hidden canvas at its front-facing pose while the fallback
+      // poster is visible. Rotating it before the handoff made the two jacket
+      // images visibly diverge during the initial reveal.
+      if (readyReported && !reduceMotion && !d.active && elapsedSinceInteraction > 1800) {
         d.rotY += clock.getDelta() * 0.176;
       } else {
         clock.getDelta();
@@ -1300,6 +1303,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         && hasRenderedJacketPixels()
       ) {
         readyReported = true;
+        // Give the stable first frame a brief pause before auto-rotation.
+        d.lastInteraction = performance.now();
         automaticRetryRef.current = 0;
         setViewerStatus("ready");
       }
@@ -1344,7 +1349,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         src="/images/jacket-preview-poster.jpg"
         alt=""
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 h-full w-full object-contain transition-opacity duration-300 ${
+        className={`pointer-events-none absolute inset-0 h-full w-full object-contain ${
           viewerStatus === "ready" ? "opacity-0" : "opacity-100"
         }`}
       />

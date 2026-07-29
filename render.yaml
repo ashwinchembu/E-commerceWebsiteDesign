@@ -1,18 +1,19 @@
 services:
   - type: web
     name: manoir-kits-private
-    runtime: node
-    plan: free
-    region: oregon
+    runtime: static
     buildCommand: npm ci && npm run build
-    startCommand: NODE_ENV=production npm start
-    healthCheckPath: /health
+    staticPublishPath: ./dist
     autoDeployTrigger: commit
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: NODE_VERSION
         value: "24.14.1"
       - key: VITE_PRIVATE_ACCESS_ENABLED
-        value: "true"
+        value: "false"
       - key: TRUST_PROXY
         value: "1"
       - key: ACCESS_EVENT_RETENTION_DAYS

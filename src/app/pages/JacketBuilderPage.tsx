@@ -271,9 +271,15 @@ const PRINT_COLORS = [
 
 interface JacketBuilderPageProps {
   accessRole?: "visitor" | "footballer" | "admin";
+  onShopifySignIn?: () => void;
+  shopifyAccessStatus?: "checking" | "signed-out" | "eligible" | "ineligible" | "unavailable" | "error";
 }
 
-export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageProps) {
+export function JacketBuilderPage({
+  accessRole = "visitor",
+  onShopifySignIn,
+  shopifyAccessStatus = "signed-out",
+}: JacketBuilderPageProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Jacket");
@@ -332,6 +338,14 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
 
   const isFootballersEdition = jacketEdition === "Footballers";
   const canUseFootballersEdition = accessRole === "footballer" || accessRole === "admin";
+  const footballersAccessLabel =
+    shopifyAccessStatus === "checking"
+      ? "Checking account"
+      : shopifyAccessStatus === "ineligible"
+        ? "Approval required"
+        : shopifyAccessStatus === "error" || shopifyAccessStatus === "unavailable"
+          ? "Account check unavailable"
+          : "Shopify account required";
   const renderedBodyColor = isFootballersEdition ? sleeveColor : bodyColor;
   const renderedBodyMaterial: BodyMaterial = isFootballersEdition ? "Leather" : "Wool";
 
@@ -571,7 +585,9 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
                               {edition === "Footballers" ? "Full leather body and sleeves" : "Wool body with leather sleeves"}
                             </span>
                             {edition === "Footballers" && !canUseFootballersEdition && (
-                              <span className="mt-2 block text-[9px] tracking-widest uppercase text-gray-400">Login required</span>
+                              <span className="mt-2 block text-[9px] tracking-widest uppercase text-gray-400">
+                                {footballersAccessLabel}
+                              </span>
                             )}
                           </button>
                         );
@@ -580,14 +596,32 @@ export function JacketBuilderPage({ accessRole = "visitor" }: JacketBuilderPageP
                     {showFootballersAccess && !canUseFootballersEdition && (
                       <div className="border border-gray-200 bg-white p-3">
                         <p className="text-xs leading-relaxed text-gray-600">
-                          Footballers full-leather jackets require a Footballer or Owner access code.
+                          {shopifyAccessStatus === "ineligible"
+                            ? "This Shopify account is signed in, but Footballers access has not been approved."
+                            : shopifyAccessStatus === "checking"
+                              ? "Checking your Shopify customer account for Footballers access."
+                              : shopifyAccessStatus === "unavailable"
+                                ? "Shopify customer access is temporarily unavailable."
+                                : shopifyAccessStatus === "error"
+                                  ? "Shopify could not verify your customer account. Please sign in again."
+                                : "Sign in with an approved Shopify customer account to unlock Footballers jackets."}
                         </p>
-                        <button
-                          onClick={() => navigate("/contact")}
-                          className="mt-3 w-full bg-black px-3 py-2 text-[10px] tracking-widest uppercase text-white transition-colors hover:bg-gray-800"
-                        >
-                          Request Footballers Access
-                        </button>
+                        {(shopifyAccessStatus === "signed-out" || shopifyAccessStatus === "error") &&
+                        onShopifySignIn ? (
+                          <button
+                            onClick={onShopifySignIn}
+                            className="mt-3 w-full bg-black px-3 py-2 text-[10px] tracking-widest uppercase text-white transition-colors hover:bg-gray-800"
+                          >
+                            Sign In With Shopify
+                          </button>
+                        ) : shopifyAccessStatus !== "checking" ? (
+                          <button
+                            onClick={() => navigate("/contact")}
+                            className="mt-3 w-full bg-black px-3 py-2 text-[10px] tracking-widest uppercase text-white transition-colors hover:bg-gray-800"
+                          >
+                            Request Footballers Access
+                          </button>
+                        ) : null}
                       </div>
                     )}
                     {isFootballersEdition && (

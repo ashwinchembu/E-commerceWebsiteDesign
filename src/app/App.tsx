@@ -21,6 +21,7 @@ import { TermsPage } from './pages/TermsPage';
 import { DoNotSellPage } from './pages/DoNotSellPage';
 import { JacketBuilderPage } from './pages/JacketBuilderPage';
 import { SecurityWatermark } from './components/SecurityWatermark';
+import { useShopifyCustomerAccount } from './hooks/useShopifyCustomerAccount';
 
 export interface CartItem {
   id: number;
@@ -47,6 +48,7 @@ interface AccessIdentity {
 
 export default function App() {
   const privateAccessEnabled = import.meta.env.VITE_PRIVATE_ACCESS_ENABLED === 'true';
+  const shopifyCustomerAccount = useShopifyCustomerAccount(!privateAccessEnabled);
   const [showNewsletterModal, setShowNewsletterModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -157,6 +159,18 @@ export default function App() {
   };
 
   const cartItemCount = cart.reduce((total, item) => total + item.quantity, 0);
+  const jacketAccessRole =
+    accessIdentity?.role ??
+    (shopifyCustomerAccount.state.status === 'signed-in' &&
+    shopifyCustomerAccount.state.customer.hasFootballerAccess
+      ? 'footballer'
+      : 'visitor');
+  const shopifyAccessStatus =
+    shopifyCustomerAccount.state.status === 'signed-in'
+      ? shopifyCustomerAccount.state.customer.hasFootballerAccess
+        ? 'eligible'
+        : 'ineligible'
+      : shopifyCustomerAccount.state.status;
 
   if (privateAccessEnabled && (!accessChecked || !accessIdentity)) {
     return <div className="min-h-screen bg-black" aria-label="Verifying private access" />;
@@ -216,13 +230,30 @@ export default function App() {
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
-            <Route path="/account" element={<AccountPage />} />
+            <Route
+              path="/account"
+              element={
+                <AccountPage
+                  accountState={shopifyCustomerAccount.state}
+                  configured={shopifyCustomerAccount.configured}
+                  onRefresh={shopifyCustomerAccount.refresh}
+                  onSignIn={shopifyCustomerAccount.signIn}
+                  onSignOut={shopifyCustomerAccount.signOut}
+                />
+              }
+            />
             <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/do-not-sell" element={<DoNotSellPage />} />
             <Route
               path="/jacket-builder"
-              element={<JacketBuilderPage accessRole={accessIdentity?.role ?? 'visitor'} />}
+              element={
+                <JacketBuilderPage
+                  accessRole={jacketAccessRole}
+                  onShopifySignIn={() => void shopifyCustomerAccount.signIn('/jacket-builder')}
+                  shopifyAccessStatus={shopifyAccessStatus}
+                />
+              }
             />
           </Routes>
         </main>

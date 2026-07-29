@@ -7,7 +7,7 @@ services:
     buildCommand: npm ci && npm run build
     startCommand: NODE_ENV=production npm start
     healthCheckPath: /health
-    autoDeployTrigger: commit
+    autoDeployTrigger: off
     envVars:
       - key: NODE_VERSION
         value: "24.14.1"

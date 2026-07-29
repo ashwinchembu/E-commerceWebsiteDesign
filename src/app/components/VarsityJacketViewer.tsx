@@ -9,6 +9,21 @@ import crestImage from "figma:asset/49db8db3192aa070a09b2e638fd91cfc6cf1ca1e.png
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#c9a24a";
 const CHEST_FILL = "#f2ede2";
+const COMPACT_VIEW_MAX_WIDTH = 640;
+const MAX_RENDER_PIXELS = 2_000_000;
+
+/**
+ * Small iPhone screens commonly have a 3× device pixel ratio. Rendering them
+ * at the old global 2× cap made Safari enlarge the WebGL canvas, which softened
+ * and stair-stepped the jacket silhouette. Use the screen's full density for
+ * compact views while keeping a pixel budget for tall views and larger screens.
+ */
+function renderPixelRatio(width: number, height: number) {
+  const deviceRatio = window.devicePixelRatio || 1;
+  const densityCap = width <= COMPACT_VIEW_MAX_WIDTH ? 3 : 2;
+  const pixelBudgetRatio = Math.sqrt(MAX_RENDER_PIXELS / Math.max(width * height, 1));
+  return Math.max(1, Math.min(deviceRatio, densityCap, pixelBudgetRatio));
+}
 
 // Reuse successfully decoded files if Safari has to restart the viewer after
 // a transient first-load failure.
@@ -775,7 +790,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         window.clearTimeout(retryTimer);
       };
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setPixelRatio(renderPixelRatio(mount.clientWidth, mount.clientHeight));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1379,6 +1394,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const h = mount.clientHeight || 1;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
+      renderer.setPixelRatio(renderPixelRatio(w, h));
       renderer.setSize(w, h);
     };
     window.addEventListener("resize", onResize);

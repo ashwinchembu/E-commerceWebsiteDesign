@@ -11,7 +11,7 @@
 
   ## Private access deployment
 
-  The private-preview gate is preserved in `server/` but is currently disconnected from production. The production deployment is a public static site with `VITE_PRIVATE_ACCESS_ENABLED=false`, so visitors do not need a password and the Node access server does not run.
+  The private-preview gate is preserved in `server/` and in the `manoir-kits-private` Render service, but it is disconnected from the public storefront. The `ecommerce-website-design` Render static service publishes `dist`, so visitors do not need a password and the Node access server is not in the request path.
 
   To restore private access:
 
@@ -22,7 +22,7 @@
 
   For a future private production deployment, configure the same environment variables in the hosting platform, provide `MONGODB_URI`, and route all traffic through `server/access-server.mjs`. Set `TRUST_PROXY=1` only behind a trusted proxy so IP and approximate provider location headers cannot be spoofed.
 
-  `render.yaml` currently deploys the Vite build as a Render static site. The preserved access server stores private-access data in MongoDB Atlas when it is enabled.
+  `render.yaml` preserves the private Node service definition with automatic deploys disabled. The preserved access server stores private-access data in MongoDB Atlas when it is enabled.
 
   Access logs store the assigned person, allowed/denied result, timestamp, IP address, approximate provider-supplied location, and browser/device user agent for 30 days. The system does not use covert fingerprinting or precise-location collection.
 

@@ -4,11 +4,12 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "VITE_PRIVATE_ACCESS_ENABLED=false vite build",
+    "build:private": "VITE_PRIVATE_ACCESS_ENABLED=true vite build",
     "dev": "vite",
     "dev:access": "node --env-file-if-exists=.env.access.local server/access-server.mjs",
     "start": "node --env-file-if-exists=.env.access.local server/access-server.mjs",
-    "secure": "npm run build && npm run start"
+    "secure": "npm run build:private && npm run start"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

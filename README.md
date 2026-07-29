@@ -9,6 +9,8 @@
 
   Run `npm run dev` to start the development server.
 
+  `npm run build` always creates a password-free static build. Private access is only included by the explicit `npm run build:private` or `npm run secure` commands used with the separate Node access server.
+
   ## Private access deployment
 
   The private-preview gate must run through the included Node access server. Do not publish the `dist` folder as a public static site, because static hosting would bypass server-side access enforcement.

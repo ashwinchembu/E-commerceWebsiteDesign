@@ -732,6 +732,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     let retryTimer = 0;
     let modelPrepared = false;
     let readyReported = false;
+    let stableRenderedFrames = 0;
     const retrySilently = (message: string, error?: unknown) => {
       if (disposed) return;
       if (error) console.warn(message, error);
@@ -821,7 +822,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     dracoLoader.setDecoderPath("/draco/");
     const loader = new GLTFLoader();
     loader.setDRACOLoader(dracoLoader);
-    loader.load(MODEL_PATH, (gltf) => {
+    loader.load(MODEL_PATH, async (gltf) => {
       if (disposed) return;
       const root = gltf.scene;
       const byName: Record<string, THREE.Mesh> = {};
@@ -848,7 +849,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       root.position.multiplyScalar(scale);
       root.scale.setScalar(scale);
       modelRoot.add(root);
-      modelPrepared = true;
       // Decal geometry below is generated in world space and parented to
       // modelRoot, so the root must sit at identity while we build it (the
       // animation loop may already have applied a drag tilt).
@@ -1119,8 +1119,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       badgeCanvas.width = 320;
       badgeCanvas.height = 360;
       const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.336, -0.02, 0.2);
-      void loadCrest().then((crest) => {
-        if (!crest) return;
+      const crest = await loadCrest();
+      if (disposed) return;
+      if (crest) {
         const bctx = badgeCanvas.getContext("2d")!;
         bctx.clearRect(0, 0, badgeCanvas.width, badgeCanvas.height);
         const { body: crestBody, outline: crestOutline } = splitCrestOuterOutline(crest);
@@ -1185,7 +1186,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           threadMaterial.roughness = 0.7;
           threadMaterial.envMapIntensity = 0.55;
         }
-      });
+      }
 
       // MANOIR / KITS wordmark on the wearer-right chest (front_body_R).
       const wordCanvas = document.createElement("canvas");
@@ -1206,6 +1207,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         sleeves: sleeveSets,
       };
       redrawDesign();
+      modelPrepared = true;
     }, undefined, (error) => {
       retrySilently("Failed to load jacket model", error);
     });
@@ -1416,15 +1418,17 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       }
       modelRoot.rotation.set(d.rotX, d.rotY, 0);
       renderer.render(scene, camera);
-      if (
-        modelPrepared
-        && !readyReported
-        && renderer.info.render.triangles > 0
-        && hasRenderedJacketPixels()
-      ) {
-        readyReported = true;
-        automaticRetryRef.current = 0;
-        setViewerStatus("ready");
+      if (!readyReported) {
+        const frameIsStable =
+          modelPrepared
+          && renderer.info.render.triangles > 0
+          && hasRenderedJacketPixels();
+        stableRenderedFrames = frameIsStable ? stableRenderedFrames + 1 : 0;
+        if (stableRenderedFrames >= 3) {
+          readyReported = true;
+          automaticRetryRef.current = 0;
+          setViewerStatus("ready");
+        }
       }
       frameRef.current = requestAnimationFrame(animate);
     };
@@ -1467,21 +1471,32 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         src="/images/jacket-preview-poster.jpg"
         alt=""
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 h-full w-full object-contain ${
-          viewerStatus === "ready" ? "opacity-0" : "opacity-100"
+        className={`pointer-events-none absolute inset-0 h-full w-full object-contain transition-opacity duration-200 ${
+          viewerStatus === "error" ? "opacity-100" : "opacity-0"
         }`}
       />
       <div
         ref={mountRef}
-        className={`absolute inset-0 touch-none cursor-grab transition-opacity duration-300 active:cursor-grabbing ${
+        className={`absolute inset-0 touch-none cursor-grab transition-opacity duration-200 active:cursor-grabbing ${
           viewerStatus === "ready" ? "opacity-100" : "opacity-0"
         }`}
       />
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-0 z-10 grid place-items-center bg-[#f4f1ed] transition-opacity duration-200 ${
+          viewerStatus === "loading" ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        <div className="flex flex-col items-center gap-4 text-black/55">
+          <span className="h-5 w-5 rounded-full border border-black/15 border-t-black motion-safe:animate-spin" />
+          <span className="text-[10px] uppercase tracking-[0.24em]">Preparing jacket</span>
+        </div>
+      </div>
       <span className="sr-only" role="status" aria-live="polite">
         {viewerStatus === "ready" ? "Jacket preview ready" : "Loading jacket preview"}
       </span>
       {viewerStatus === "error" && (
-        <div className="absolute inset-0 z-10 grid place-items-center">
+        <div className="absolute inset-0 z-20 grid place-items-center">
           <button
             type="button"
             onClick={retryPreview}

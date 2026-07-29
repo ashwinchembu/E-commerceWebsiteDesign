@@ -76,9 +76,102 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
 }
 
 /**
+ * Separate the light merrowed outline from the crest artwork. Only neutral,
+ * bright pixels close to the outer alpha edge are selected, so the inner MK,
+ * laurels, lettering, and gold shield stay in the dimensional badge layer.
+ */
+function splitCrestOuterOutline(source: HTMLCanvasElement) {
+  const width = source.width;
+  const height = source.height;
+  const sourceContext = source.getContext("2d")!;
+  const sourcePixels = sourceContext.getImageData(0, 0, width, height);
+  const opaque = new Uint8Array(width * height);
+  const outsidePrefix = new Uint32Array((width + 1) * (height + 1));
+  const radius = Math.max(6, Math.round(Math.min(width, height) * 0.04));
+
+  for (let y = 0; y < height; y += 1) {
+    let rowOutside = 0;
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      opaque[index] = sourcePixels.data[index * 4 + 3] >= 24 ? 1 : 0;
+      rowOutside += opaque[index] ? 0 : 1;
+      outsidePrefix[(y + 1) * (width + 1) + x + 1] =
+        outsidePrefix[y * (width + 1) + x + 1] + rowOutside;
+    }
+  }
+
+  const outsideCount = (left: number, top: number, right: number, bottom: number) => {
+    const stride = width + 1;
+    return (
+      outsidePrefix[(bottom + 1) * stride + right + 1]
+      - outsidePrefix[top * stride + right + 1]
+      - outsidePrefix[(bottom + 1) * stride + left]
+      + outsidePrefix[top * stride + left]
+    );
+  };
+
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  const maskContext = maskCanvas.getContext("2d")!;
+  const mask = maskContext.createImageData(width, height);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      if (!opaque[index]) continue;
+
+      const offset = index * 4;
+      const red = sourcePixels.data[offset];
+      const green = sourcePixels.data[offset + 1];
+      const blue = sourcePixels.data[offset + 2];
+      const brightness = (red + green + blue) / 3;
+      const chroma = Math.max(red, green, blue) - Math.min(red, green, blue);
+      if (brightness < 135 || chroma > 100) continue;
+
+      const left = Math.max(0, x - radius);
+      const right = Math.min(width - 1, x + radius);
+      const top = Math.max(0, y - radius);
+      const bottom = Math.min(height - 1, y + radius);
+      const touchesCanvasEdge =
+        left !== x - radius
+        || right !== x + radius
+        || top !== y - radius
+        || bottom !== y + radius;
+      if (!touchesCanvasEdge && outsideCount(left, top, right, bottom) === 0) continue;
+
+      mask.data[offset] = 255;
+      mask.data[offset + 1] = 255;
+      mask.data[offset + 2] = 255;
+      mask.data[offset + 3] = 255;
+    }
+  }
+  maskContext.putImageData(mask, 0, 0);
+
+  const body = document.createElement("canvas");
+  body.width = width;
+  body.height = height;
+  const bodyContext = body.getContext("2d")!;
+  bodyContext.drawImage(source, 0, 0);
+  bodyContext.globalCompositeOperation = "destination-out";
+  bodyContext.drawImage(maskCanvas, 0, 0);
+
+  const outline = document.createElement("canvas");
+  outline.width = width;
+  outline.height = height;
+  const outlineContext = outline.getContext("2d")!;
+  outlineContext.drawImage(source, 0, 0);
+  outlineContext.globalCompositeOperation = "destination-in";
+  outlineContext.drawImage(maskCanvas, 0, 0);
+
+  return { body, outline };
+}
+
+/**
  * Isolate the cream/white threadwork from the gold crest field. The returned
  * transparent canvas becomes a second geometric embroidery layer containing
- * the merrowed border, laurels, MK monogram, and MANOIR KITS lettering.
+ * the laurels, MK monogram, and MANOIR KITS lettering. The outer outline is
+ * removed beforehand and rendered separately as one flat surface.
  */
 function extractCrestThreadwork(source: HTMLCanvasElement): HTMLCanvasElement {
   const detail = document.createElement("canvas");
@@ -1030,16 +1123,23 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         if (!crest) return;
         const bctx = badgeCanvas.getContext("2d")!;
         bctx.clearRect(0, 0, badgeCanvas.width, badgeCanvas.height);
+        const { body: crestBody, outline: crestOutline } = splitCrestOuterOutline(crest);
         const cw = badgeCanvas.width * 0.9;
         const chh = cw * (crest.height / crest.width);
-        bctx.globalAlpha = 0.4;
-        bctx.filter = "brightness(0) blur(6px)";
-        bctx.drawImage(crest, (badgeCanvas.width - cw) / 2, (badgeCanvas.height - chh) / 2 + 6, cw, chh);
-        bctx.filter = "none";
-        bctx.globalAlpha = 1;
-        bctx.drawImage(crest, (badgeCanvas.width - cw) / 2, (badgeCanvas.height - chh) / 2, cw, chh);
+        const cx = (badgeCanvas.width - cw) / 2;
+        const cy = (badgeCanvas.height - chh) / 2;
+        bctx.drawImage(crestBody, cx, cy, cw, chh);
         if (badgeArt) {
           badgeArt.texture.needsUpdate = true;
+
+          const outlineCanvas = document.createElement("canvas");
+          outlineCanvas.width = badgeCanvas.width;
+          outlineCanvas.height = badgeCanvas.height;
+          outlineCanvas.getContext("2d")!.drawImage(crestOutline, cx, cy, cw, chh);
+          const outlineTexture = new THREE.CanvasTexture(outlineCanvas);
+          outlineTexture.colorSpace = THREE.SRGBColorSpace;
+          outlineTexture.anisotropy = 8;
+
           const threadCanvas = extractCrestThreadwork(badgeCanvas);
           const threadTexture = new THREE.CanvasTexture(threadCanvas);
           threadTexture.colorSpace = THREE.SRGBColorSpace;
@@ -1052,13 +1152,33 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             topOffset: number,
             renderOrder: number,
           ) => THREE.Mesh;
+
+          // One surface only: no repeated offsets, geometric sidewall, bump,
+          // or cast shadow on the white outline. It sits almost exactly on the
+          // badge top so it remains visually connected at grazing angles.
+          const outlineTop = addStack(
+            badgeArt.decal.geometry,
+            outlineTexture,
+            new THREE.Vector3(0, 0, 1),
+            [],
+            0.0087,
+            9,
+          );
+          const outlineMaterial = outlineTop.material as THREE.MeshStandardMaterial;
+          outlineMaterial.bumpMap = null;
+          outlineMaterial.bumpScale = 0;
+          outlineMaterial.roughness = 0.82;
+          outlineMaterial.envMapIntensity = 0.35;
+          outlineMaterial.needsUpdate = true;
+          outlineTop.castShadow = false;
+
           const threadTop = addStack(
             badgeArt.decal.geometry,
             threadTexture,
             new THREE.Vector3(0, 0, 1),
             [0.0092, 0.0103, 0.0114, 0.0125, 0.0136, 0.0147],
             0.0158,
-            9,
+            10,
           );
           const threadMaterial = threadTop.material as THREE.MeshStandardMaterial;
           threadMaterial.bumpScale = 0.07;

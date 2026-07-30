@@ -5,3 +5,12 @@ dist/
 .env*.local
 .env.access.local
 data/*.sqlite*
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+functions/.env
+functions/.env.*
+functions/.secret.local
+service-account*.json

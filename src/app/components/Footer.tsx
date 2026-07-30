@@ -119,6 +119,9 @@ export function Footer() {
               <Link to="/contact" className="hover:text-white transition-colors">
                 Contact
               </Link>
+              <Link to="/feedback" className="hover:text-white transition-colors">
+                Feedback
+              </Link>
               <Link to="/privacy-policy" className="hover:text-white transition-colors">
                 Privacy Policy
               </Link>

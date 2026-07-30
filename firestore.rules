@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Browser clients never access backend records directly. Every operation
+    // is authorized and performed by the Firebase Admin SDK in Cloud Functions.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

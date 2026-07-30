@@ -1,31 +1,203 @@
+# Manoir Kits storefront
 
-  # E-commerce Website Design
+React/Vite storefront for Manoir Kits. The browser storefront is deployed as a
+static site on Render. Shopify owns customers, passwordless customer sign-in,
+orders, and checkout. Firebase provides the trusted application backend.
 
-  This is a code bundle for E-commerce Website Design. The original project is available at https://www.figma.com/design/VGb966HO1uOYxjnHQ6too5/E-commerce-Website-Design.
+## Local storefront
 
-  ## Running the code
+```sh
+npm ci
+npm run dev
+```
 
-  Run `npm i` to install the dependencies.
+`npm run build` always creates the public production storefront. An intentional
+private-preview build can be created with `npm run build:private`, but a static
+host cannot make compiled assets secret from someone who knows their URLs.
 
-  Run `npm run dev` to start the development server.
+## Firebase backend
 
-  `npm run build` always creates a password-free static build. Private access is only included by the explicit `npm run build:private` or `npm run secure` commands used with the separate Node access server.
+Firebase replaces the former long-running Render Node service:
 
-  ## Private access deployment
+- Firebase Authentication gives every operator an individual admin account.
+- Cloud Functions validates access codes, issues Firebase sessions, enforces
+  limits, serves owner guides, and performs all privileged operations.
+- Cloud Firestore stores access grants, 30-day security events, rate limits, and
+  the protected Shopify customer mirror.
+- Shopify remains authoritative. The mirror contains customer IDs, names, email
+  addresses, and tags; it does not copy passwords, sessions, orders, or payment
+  details.
 
-  The private-preview gate is preserved in `server/` and in the `manoir-kits-private` Render service, but it is disconnected from the public storefront. The `ecommerce-website-design` Render static service publishes `dist`, so visitors do not need a password and the Node access server is not in the request path.
+The old code under `server/` is retained only as migration history. It is not
+referenced by the build, package scripts, or Render deployment.
 
-  To restore private access:
+### 1. Create or select the Firebase project
 
-  1. Copy `.env.access.example` to `.env.access.local`.
-  2. Replace both secret placeholders with long random values. Keep this file out of source control.
-  3. Run `npm run secure` to build the site and serve it behind the private-access gate.
-  4. Open `/admin/access`, enter `ACCESS_ADMIN_SECRET`, and issue a unique code for each person.
+Cloud Functions requires a billing-enabled Blaze project even when traffic stays
+inside the no-cost allowance.
 
-  For a future private production deployment, configure the same environment variables in the hosting platform, provide `MONGODB_URI`, and route all traffic through `server/access-server.mjs`. Set `TRUST_PROXY=1` only behind a trusted proxy so IP and approximate provider location headers cannot be spoofed.
+```sh
+cp .firebaserc.example .firebaserc
+```
 
-  `render.yaml` preserves the private Node service definition with automatic deploys disabled. The preserved access server stores private-access data in MongoDB Atlas when it is enabled.
+Replace the placeholder in `.firebaserc` with the real Firebase project ID. In
+Firebase Console:
 
-  Access logs store the assigned person, allowed/denied result, timestamp, IP address, approximate provider-supplied location, and browser/device user agent for 30 days. The system does not use covert fingerprinting or precise-location collection.
+1. Create a Firestore database.
+2. Enable Authentication.
+3. Enable Google and/or Email/Password as an Authentication provider.
+4. Register a Web app and copy its public configuration values.
 
-  Private-preview codes only control entry to the site. They do not sign someone into the separate customer or Footballers account system.
+Add these public build settings to Render:
+
+```text
+VITE_FIREBASE_API_KEY
+VITE_FIREBASE_APP_ID
+VITE_FIREBASE_AUTH_DOMAIN
+VITE_FIREBASE_PROJECT_ID
+VITE_FIREBASE_FUNCTIONS_REGION=us-west1
+```
+
+Never put a service-account key or Shopify secret in a `VITE_` variable.
+
+### 2. Configure the Shopify secret
+
+The existing Manoir Customer Access app uses Shopify client-credentials
+authentication. Store its client secret in Google Secret Manager through the
+Firebase CLI:
+
+```sh
+firebase functions:secrets:set SHOPIFY_CLIENT_SECRET
+```
+
+The Functions defaults match the current shop and app. They can be overridden
+with Firebase parameter values:
+
+```text
+SHOPIFY_SHOP=8e48d6-30
+SHOPIFY_CLIENT_ID=079422065aab48eb65be83b6158971be
+SHOPIFY_API_VERSION=2026-07
+ACCESS_EVENT_RETENTION_DAYS=30
+```
+
+The Shopify app needs `read_customers` access and approval for the protected
+customer fields that it mirrors.
+
+### 3. Configure customer feedback
+
+Feedback submissions pass through a replay-protected callable Function and are
+stored as private Shopify metaobjects. Firestore is not used for feedback.
+
+In the Shopify app configuration, add these Admin API scopes:
+
+```text
+write_metaobject_definitions
+read_metaobjects
+write_metaobjects
+```
+
+Apply the app configuration, then create the app-owned feedback definition:
+
+```sh
+npm run shopify:feedback:setup
+```
+
+After setup succeeds, remove `write_metaobject_definitions` from the Shopify
+app and apply the configuration again. The production Functions keep
+`read_metaobjects` and `write_metaobjects`.
+
+In Google Cloud Console, create a reCAPTCHA Enterprise website key for the
+storefront domains. Register it for the Firebase Web app under **App Check** and
+add its public site key to Render:
+
+```text
+VITE_FIREBASE_APPCHECK_SITE_KEY
+```
+
+The `submitFeedback` Function rejects missing or replayed App Check tokens. It
+also uses a honeypot and a one-submission-per-network, five-minute Shopify
+metaobject handle. The handle contains only a keyed digest, never the raw
+network address.
+
+### 4. Deploy and authorize the first administrator
+
+```sh
+npm ci --prefix functions
+npm run firebase:test
+npm run firebase:deploy
+```
+
+Create or sign in with the intended administrator once so the Firebase Auth user
+exists. Then use a service-account credential locally to assign the custom admin
+claim:
+
+```sh
+export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json
+npm --prefix functions run set-admin -- owner@example.com
+```
+
+Keep the service-account JSON outside this repository and remove it from the
+machine when it is no longer needed. The administrator signs in at
+`/admin/access`, which includes the private Shopify-backed feedback inbox.
+
+### 5. Keep Shopify customers synchronized
+
+After the first admin signs in, select **Sync all customers** in the admin
+dashboard to create the initial Firestore mirror.
+
+Configure the Shopify app to deliver these HTTPS webhook topics to the deployed
+`shopifyCustomerWebhook` Function:
+
+```text
+customers/create
+customers/update
+customers/delete
+customers/redact
+shop/redact
+```
+
+The endpoint has this form:
+
+```text
+https://us-west1-PROJECT_ID.cloudfunctions.net/shopifyCustomerWebhook
+```
+
+The Function verifies Shopify's HMAC signature, rejects other shops, ignores
+duplicate deliveries, and removes mirrored customer records for deletion and
+redaction events. Mandatory compliance subscriptions should be configured in
+the Shopify app's Dev Dashboard or app configuration.
+
+## Firebase emulators
+
+Use a demo project locally so tests cannot reach production resources:
+
+```sh
+npm run firebase:emulators
+```
+
+In a second terminal:
+
+```sh
+VITE_FIREBASE_API_KEY=demo-api-key \
+VITE_FIREBASE_APP_ID=demo-app-id \
+VITE_FIREBASE_AUTH_DOMAIN=demo-manoir-kits.firebaseapp.com \
+VITE_FIREBASE_PROJECT_ID=demo-manoir-kits \
+npm run dev:private
+```
+
+The Emulator UI is available at `http://127.0.0.1:4500`.
+
+## Production deployment
+
+Before pushing the storefront, run the same command Render runs:
+
+```sh
+npm ci && npm run build
+```
+
+Commit and push `main` to `origin`, then verify the Render static build.
+Firebase Functions, rules, and indexes deploy separately with:
+
+```sh
+npm run firebase:deploy
+```

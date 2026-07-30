@@ -5,6 +5,26 @@ accounts control the Footballers jacket option.
 
 ## Grant access
 
+From this project on the configured Mac:
+
+```sh
+npm run footballer -- grant customer@example.com
+```
+
+The command uses the `Manoir Customer Access CLI` Shopify app. Its client
+secret is stored in macOS Keychain and is never committed to Git. It can also
+check or revoke access:
+
+```sh
+npm run footballer -- status customer@example.com
+npm run footballer -- revoke customer@example.com
+```
+
+To use the command on another machine, set `SHOPIFY_CLIENT_SECRET` in that
+machine's secret manager or environment.
+
+The equivalent manual flow is:
+
 1. In Shopify Admin, open **Customers**.
 2. Open the customer who should have Footballers access.
 3. Add either the `footballer` or `owner` customer tag.

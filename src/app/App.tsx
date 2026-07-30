@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { Header } from './components/Header';
@@ -14,6 +14,7 @@ import { CartPage } from './pages/CartPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { AboutPage } from './pages/AboutPage';
 import { ContactPage } from './pages/ContactPage';
+import { FeedbackPage } from './pages/FeedbackPage';
 import { AccountPage } from './pages/AccountPage';
 import { SearchResultsPage } from './pages/SearchResultsPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
@@ -22,6 +23,17 @@ import { DoNotSellPage } from './pages/DoNotSellPage';
 import { JacketBuilderPage } from './pages/JacketBuilderPage';
 import { SecurityWatermark } from './components/SecurityWatermark';
 import { useShopifyCustomerAccount } from './hooks/useShopifyCustomerAccount';
+
+const AdminAccessPage = lazy(() =>
+  import('./pages/AdminAccessPage').then((module) => ({
+    default: module.AdminAccessPage,
+  })),
+);
+const PrivateAccessPage = lazy(() =>
+  import('./pages/PrivateAccessPage').then((module) => ({
+    default: module.PrivateAccessPage,
+  })),
+);
 
 export interface CartItem {
   id: number;
@@ -48,7 +60,11 @@ interface AccessIdentity {
 
 export default function App() {
   const privateAccessEnabled = import.meta.env.VITE_PRIVATE_ACCESS_ENABLED === 'true';
-  const shopifyCustomerAccount = useShopifyCustomerAccount(!privateAccessEnabled);
+  const isAdminAccessRoute = window.location.pathname.startsWith('/admin/access');
+  const isPrivateAccessRoute = window.location.pathname === '/access';
+  const shopifyCustomerAccount = useShopifyCustomerAccount(
+    !privateAccessEnabled && !isAdminAccessRoute && !isPrivateAccessRoute,
+  );
   const [showNewsletterModal, setShowNewsletterModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -57,33 +73,65 @@ export default function App() {
   const [accessChecked, setAccessChecked] = useState(!privateAccessEnabled);
 
   useEffect(() => {
-    if (!privateAccessEnabled) return;
+    if (!privateAccessEnabled || isAdminAccessRoute || isPrivateAccessRoute) return;
     let active = true;
-    fetch('/api/access/session', { credentials: 'same-origin' })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Private access session is required.');
-        return response.json();
-      })
-      .then(({ access }) => {
+    let unsubscribe = () => {};
+    void Promise.all([import('firebase/auth'), import('./lib/firebase')])
+      .then(async ([firebaseAuth, firebaseClient]) => {
+        const { auth, persistenceReady } = firebaseClient.getFirebaseServices();
+        await persistenceReady;
         if (!active) return;
-        setAccessIdentity({
-          id: access.id,
-          name: access.name,
-          email: access.email || '',
-          role: access.role === 'footballer' || access.role === 'admin' ? access.role : 'visitor',
+        unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (user) => {
+          if (!active) return;
+          if (!user) {
+            window.location.assign(
+              `/access?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+            );
+            return;
+          }
+          try {
+            const { access } = await firebaseClient.callFirebaseFunction<
+              Record<string, never>,
+              { access: AccessIdentity }
+            >('getAccessSession', {});
+            if (!active) return;
+            setAccessIdentity({
+              id: access.id,
+              name: access.name,
+              email: access.email || '',
+              role:
+                access.role === 'footballer' || access.role === 'admin'
+                  ? access.role
+                  : 'visitor',
+            });
+            setAccessChecked(true);
+          } catch {
+            await firebaseAuth.signOut(auth);
+            window.location.assign(
+              `/access?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+            );
+          }
         });
-        setAccessChecked(true);
       })
       .catch(() => {
-        window.location.assign(`/access?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+        window.location.assign(
+          `/access?next=${encodeURIComponent(window.location.pathname + window.location.search)}`,
+        );
       });
     return () => {
       active = false;
+      unsubscribe();
     };
-  }, [privateAccessEnabled]);
+  }, [isAdminAccessRoute, isPrivateAccessRoute, privateAccessEnabled]);
 
   useEffect(() => {
-    if (window.location.pathname === '/jacket-builder') return;
+    if (
+      window.location.pathname === '/jacket-builder' ||
+      isAdminAccessRoute ||
+      isPrivateAccessRoute
+    ) {
+      return;
+    }
 
     // Check if newsletter has been shown before
     const newsletterShown = localStorage.getItem('newsletterShown');
@@ -98,7 +146,7 @@ export default function App() {
         clearTimeout(newsletterTimer);
       };
     }
-  }, []);
+  }, [isAdminAccessRoute, isPrivateAccessRoute]);
 
   const handleNewsletterClose = () => {
     setShowNewsletterModal(false);
@@ -149,12 +197,11 @@ export default function App() {
   };
 
   const handlePrivateAccessLogout = async () => {
-    const response = await fetch('/api/access/logout', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    if (!response.ok) throw new Error('Private access logout failed.');
+    const [firebaseAuth, firebaseClient] = await Promise.all([
+      import('firebase/auth'),
+      import('./lib/firebase'),
+    ]);
+    await firebaseAuth.signOut(firebaseClient.getFirebaseServices().auth);
     window.location.assign('/access');
   };
 
@@ -171,6 +218,22 @@ export default function App() {
         ? 'eligible'
         : 'ineligible'
       : shopifyCustomerAccount.state.status;
+
+  if (isAdminAccessRoute) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-black" />}>
+        <AdminAccessPage />
+      </Suspense>
+    );
+  }
+
+  if (isPrivateAccessRoute) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-black" />}>
+        <PrivateAccessPage />
+      </Suspense>
+    );
+  }
 
   if (privateAccessEnabled && (!accessChecked || !accessIdentity)) {
     return <div className="min-h-screen bg-black" aria-label="Verifying private access" />;
@@ -230,6 +293,7 @@ export default function App() {
             <Route path="/checkout" element={<CheckoutPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
+            <Route path="/feedback" element={<FeedbackPage />} />
             <Route
               path="/account"
               element={

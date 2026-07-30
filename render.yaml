@@ -1,27 +1,34 @@
 services:
   - type: web
-    name: manoir-kits-private
-    runtime: node
-    plan: free
-    region: oregon
-    buildCommand: npm ci && npm run build:private
-    startCommand: NODE_ENV=production npm start
-    healthCheckPath: /health
-    autoDeployTrigger: off
+    name: ecommerce-website-design
+    runtime: static
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    autoDeployTrigger: commit
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
-      - key: NODE_VERSION
-        value: "24.14.1"
-      - key: VITE_PRIVATE_ACCESS_ENABLED
-        value: "true"
-      - key: TRUST_PROXY
-        value: "1"
-      - key: ACCESS_EVENT_RETENTION_DAYS
-        value: "30"
-      - key: ACCESS_ADMIN_SECRET
+      - key: VITE_FIREBASE_API_KEY
         sync: false
-      - key: ACCESS_SESSION_SECRET
-        generateValue: true
-      - key: MONGODB_DATABASE
-        value: manoir_kits_access
-      - key: MONGODB_URI
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_FUNCTIONS_REGION
+        value: us-west1
+      - key: VITE_FIREBASE_APPCHECK_SITE_KEY
+        sync: false
+      - key: VITE_SHOPIFY_STORE_DOMAIN
+        sync: false
+      - key: VITE_SHOPIFY_API_VERSION
+        value: "2026-07"
+      - key: VITE_SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID
+        sync: false
+      - key: VITE_SHOPIFY_FOOTBALLER_TAGS
+        value: footballer,owner
+      - key: VITE_SHOPIFY_JACKET_VARIANTS
         sync: false

@@ -21,6 +21,9 @@ export function PrivacyPolicyPage() {
               <p className="text-sm leading-relaxed mt-4">
                 For private-preview access, we associate security events with the person or organization assigned to an access code. These events can include the time and result of an attempt, exact connection IP, requested page, browser and operating-system information, language, timezone, screen size, a limited device-capability summary, and an approximate city, region, country, postal area, network number, or coordinates only when our trusted hosting provider supplies them. IP-derived location is approximate and does not reveal a precise street address. We do not request precise device geolocation or use covert canvas or audio fingerprinting.
               </p>
+              <p className="text-sm leading-relaxed mt-4">
+                When you send feedback, we collect your rating, category, comments, the page where the form was submitted, and any name or email address you choose to provide. Feedback is stored privately in Shopify and is not published automatically. We use a short-lived, one-way network identifier only to limit repeated submissions; we do not store the raw network address with your feedback.
+              </p>
             </div>
 
             <div>

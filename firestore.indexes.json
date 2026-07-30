@@ -1,0 +1,63 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "accessEvents",
+      "fieldPath": "client_meta",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accessEvents",
+      "fieldPath": "expire_at",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accessEvents",
+      "fieldPath": "user_agent",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accessGrants",
+      "fieldPath": "allowed_ips",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accessGrants",
+      "fieldPath": "notes",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accessGrants",
+      "fieldPath": "salt",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accessGrants",
+      "fieldPath": "secret_hash",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accessRateLimits",
+      "fieldPath": "expire_at",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "accessRateLimits",
+      "fieldPath": "failures",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "shopifyCustomers",
+      "fieldPath": "tags",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "shopifyWebhookReceipts",
+      "fieldPath": "expire_at",
+      "ttl": true,
+      "indexes": []
+    }
+  ]
+}

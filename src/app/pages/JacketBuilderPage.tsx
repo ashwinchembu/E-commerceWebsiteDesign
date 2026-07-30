@@ -6,16 +6,22 @@ import { createJacketCheckout, type ShopifyAttribute } from "../lib/shopify";
 
 const SIZES = ["S", "M", "L", "XL", "2XL", "3XL"];
 
-// Jacket color options collated into one product palette. Gold stays reserved
-// for fixed brand details and is not offered as a selectable jacket color.
-const COLOR_GROUP_ENTRIES: { group: string; shades: { label: string; color: string }[] }[] = [
+// Approved jacket body colors. Metallic gold and gold-family shades are not
+// selectable; Champagne is represented as a pale neutral.
+const COLOR_GROUPS: { group: string; shades: { label: string; color: string }[] }[] = [
   {
     group: "Neutrals",
     shades: [
       { label: "Black", color: "#181b20" },
-      { label: "Bright White", color: "#eee3d5" },
-      { label: "Graphite", color: "#3a3a3a" },
-      { label: "Warm Grey", color: "#676263" },
+      { label: "Jet Black", color: "#090909" },
+      { label: "White", color: "#f8f8f5" },
+      { label: "Off White", color: "#eee9df" },
+      { label: "Gray", color: "#7a7a78" },
+      { label: "Light Gray", color: "#b9b9b5" },
+      { label: "Dark Gray", color: "#3a3a3a" },
+      { label: "Brown", color: "#654332" },
+      { label: "Champagne", color: "#f3e6d2" },
+      { label: "Nude", color: "#d5b39c" },
     ],
   },
   {
@@ -23,125 +29,70 @@ const COLOR_GROUP_ENTRIES: { group: string; shades: { label: string; color: stri
     shades: [
       { label: "Solid Red", color: "#d71920" },
       { label: "Varsity Red", color: "#b3181e" },
+      { label: "Wine", color: "#722f37" },
+      { label: "Cognac", color: "#9a463d" },
       { label: "Burgundy", color: "#770d22" },
-      { label: "Maroon", color: "#3d1022" },
-      { label: "Dark Maroon", color: "#561e1e" },
-      { label: "Oxblood", color: "#691c1a" },
-      { label: "Clay Red", color: "#be6858" },
+      { label: "Maroon", color: "#561e1e" },
+      { label: "Bordeaux", color: "#4c1c24" },
     ],
   },
   {
     group: "Blues",
     shades: [
       { label: "Solid Blue", color: "#0057b8" },
-      { label: "Bright Royal", color: "#3d87c0" },
-      { label: "Royal Blue", color: "#1b294b" },
-      { label: "High Royal", color: "#1c275f" },
-      { label: "Medium Blue", color: "#184a98" },
-      { label: "Dress Navy", color: "#1c1b2b" },
+      { label: "Light Blue", color: "#6fa8dc" },
+      { label: "Dark Blue", color: "#1b294b" },
+      { label: "Royal Blue", color: "#20408f" },
+      { label: "Sky Blue", color: "#87ceeb" },
+      { label: "Powder Blue", color: "#aecbe8" },
+      { label: "Baby Blue", color: "#8fb8e0" },
     ],
   },
   {
     group: "Greens",
     shades: [
       { label: "Solid Green", color: "#00843d" },
-      { label: "Forest", color: "#054012" },
-      { label: "Bottle Green", color: "#0e3426" },
-      { label: "Kelly Green", color: "#144c24" },
-      { label: "Olive", color: "#2a3a2d" },
+      { label: "Forest Green", color: "#054012" },
+      { label: "Olive Green", color: "#59652f" },
+      { label: "Emerald Green", color: "#007a5e" },
+      { label: "Evergreen", color: "#143d2b" },
+      { label: "Hunter Green", color: "#24503a" },
+      { label: "Army Green", color: "#4b5320" },
     ],
   },
   {
     group: "Purples",
     shades: [
       { label: "Solid Purple", color: "#6a1b9a" },
-      { label: "Varsity Purple", color: "#4b1d63" },
-      { label: "Eggplant", color: "#28142c" },
+      { label: "Violet", color: "#5b3a86" },
+      { label: "Royal Purple", color: "#4b1d63" },
     ],
   },
   {
     group: "Yellows",
     shades: [
       { label: "Solid Yellow", color: "#ffd400" },
-      { label: "Lemon", color: "#f2a407" },
-      { label: "Pale Yellow", color: "#f5e6a6" },
-      { label: "Sunshine", color: "#f2c94c" },
-      { label: "Athletic Yellow", color: "#f1b51c" },
-      { label: "Maize", color: "#d9a520" },
-      { label: "Mustard", color: "#b8860b" },
-      { label: "Ochre", color: "#a87418" },
+      { label: "Light Yellow", color: "#fff3a3" },
+      { label: "Dark Yellow", color: "#aaa000" },
+      { label: "Lemon", color: "#fff44f" },
     ],
   },
   {
     group: "Oranges",
     shades: [
-      { label: "Orange", color: "#ec8e19" },
-      { label: "Papaya Orange", color: "#d83e0d" },
-      { label: "Pumpkin Orange", color: "#a23e01" },
+      { label: "Solid Orange", color: "#f47c20" },
+      { label: "Pumpkin", color: "#a23e01" },
       { label: "Burnt Orange", color: "#a63000" },
-      { label: "Rust", color: "#9c3d06" },
       { label: "Copper", color: "#bb6323" },
-      { label: "Terracotta", color: "#bd6a45" },
-      { label: "Coral", color: "#d47a5a" },
-    ],
-  },
-  {
-    group: "Reds",
-    shades: [
-      { label: "Deep Maroon", color: "#5e1b26" },
-      { label: "Wine Burgundy", color: "#6b1e2a" },
-      { label: "Cardinal", color: "#8f2130" },
-      { label: "Crimson", color: "#a11d2e" },
-      { label: "Brick", color: "#7c3a34" },
-    ],
-  },
-  {
-    group: "Greens",
-    shades: [
-      { label: "Deep Forest", color: "#1a3d2b" },
-      { label: "Hunter", color: "#24503a" },
-      { label: "Bottle", color: "#0f3d2e" },
-      { label: "Army Olive", color: "#4a5320" },
-      { label: "Sage", color: "#7fa88a" },
-    ],
-  },
-  {
-    group: "Blues",
-    shades: [
-      { label: "Navy", color: "#1e2d5a" },
-      { label: "Classic Royal Blue", color: "#20408f" },
-      { label: "Clear Blue", color: "#2f5fb0" },
-      { label: "France Blue", color: "#3a6bd6" },
-      { label: "Baby Blue", color: "#8fb8e0" },
-      { label: "Powder", color: "#aecbe8" },
-    ],
-  },
-  {
-    group: "Purples",
-    shades: [
-      { label: "Deep Purple", color: "#38265a" },
-      { label: "Grape", color: "#442a6b" },
-      { label: "Violet", color: "#5b3a86" },
-      { label: "Plum", color: "#5a2a52" },
-    ],
-  },
-  {
-    group: "Neutrals",
-    shades: [
-      { label: "Soft Bright White", color: "#f1ead9" },
-      { label: "Cream", color: "#e7dec8" },
-      { label: "Bone", color: "#d9cfba" },
-      { label: "Stone Grey", color: "#9a958c" },
-      { label: "Charcoal", color: "#2c2c2c" },
-      { label: "Classic Black", color: "#141414" },
+      { label: "Tangerine", color: "#f28500" },
+      { label: "Apricot", color: "#f5b278" },
+      { label: "Peach", color: "#f6c5a5" },
+      { label: "Melon", color: "#f28c82" },
+      { label: "Mango", color: "#ff9f1c" },
+      { label: "Papaya", color: "#e85d2a" },
     ],
   },
 ];
-
-const COLOR_GROUPS = ["Neutrals", "Reds", "Blues", "Greens", "Purples", "Yellows", "Oranges"].map((group) => ({
-  group,
-  shades: COLOR_GROUP_ENTRIES.filter((entry) => entry.group === group).flatMap((entry) => entry.shades),
-}));
 
 // Leather / trim / snaps are black & white only.
 const LEATHER_BW = [

@@ -1,4 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  MAX_SAVED_JACKETS,
+  SAVED_JACKETS_KEY,
+  SAVED_JACKETS_NAMESPACE,
+  parseSavedJackets,
+  type SavedJacket,
+  type SavedJacketsStore,
+  type ShopifySavedJacketsApi,
+} from "../lib/savedJackets";
 
 const TOKEN_STORAGE_KEY = "manoir-kits:shopify-customer-token";
 const LOGIN_STORAGE_KEY = "manoir-kits:shopify-customer-login";
@@ -174,7 +183,12 @@ async function currentAccessToken() {
   return refreshToken(stored);
 }
 
-async function queryCustomer(accessToken: string) {
+async function customerGraphql<T>(
+  accessToken: string,
+  operationName: string,
+  query: string,
+  variables: Record<string, unknown> = {},
+) {
   const api = await discoverCustomerApi();
   const response = await fetch(api.graphql_api, {
     method: "POST",
@@ -182,9 +196,28 @@ async function queryCustomer(accessToken: string) {
       Authorization: accessToken,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      operationName: "CustomerFootballerAccess",
-      query: `
+    body: JSON.stringify({ operationName, query, variables }),
+  });
+  const payload = (await response.json()) as {
+    data?: T;
+    errors?: Array<{ message: string }>;
+  };
+  if (!response.ok || payload.errors?.length || !payload.data) {
+    throw new Error(
+      payload.errors?.map((error) => error.message).join(" ") ||
+        "Shopify customer accounts could not be reached.",
+    );
+  }
+  return payload.data;
+}
+
+async function queryCustomer(accessToken: string) {
+  const data = await customerGraphql<{
+    customer?: { displayName?: string; id: string; tags?: string[] };
+  }>(
+    accessToken,
+    "CustomerFootballerAccess",
+    `
         query CustomerFootballerAccess {
           customer {
             id
@@ -193,20 +226,9 @@ async function queryCustomer(accessToken: string) {
           }
         }
       `,
-      variables: {},
-    }),
-  });
-  const payload = (await response.json()) as {
-    data?: { customer?: { displayName?: string; id: string; tags?: string[] } };
-    errors?: Array<{ message: string }>;
-  };
-  const customer = payload.data?.customer;
-  if (!response.ok || payload.errors?.length || !customer) {
-    throw new Error(
-      payload.errors?.map((error) => error.message).join(" ") ||
-        "Shopify could not verify this customer account.",
-    );
-  }
+  );
+  const customer = data.customer;
+  if (!customer) throw new Error("Shopify could not verify this customer account.");
   const tags = customer.tags ?? [];
   const approvedTags = allowedFootballerTags();
   return {
@@ -215,6 +237,98 @@ async function queryCustomer(accessToken: string) {
     id: customer.id,
     tags,
   } satisfies ShopifyCustomer;
+}
+
+async function loadCustomerSavedJackets(): Promise<SavedJacketsStore> {
+  const token = await currentAccessToken();
+  if (!token) throw new Error("Sign in with Shopify to save jackets.");
+  const data = await customerGraphql<{
+    customer: {
+      metafield: { compareDigest: string; value: string } | null;
+    };
+  }>(
+    token.accessToken,
+    "SavedJackets",
+    `
+      query SavedJackets($namespace: String!, $key: String!) {
+        customer {
+          metafield(namespace: $namespace, key: $key) {
+            compareDigest
+            value
+          }
+        }
+      }
+    `,
+    { key: SAVED_JACKETS_KEY, namespace: SAVED_JACKETS_NAMESPACE },
+  );
+  const metafield = data.customer.metafield;
+  let value: unknown = [];
+  if (metafield?.value) {
+    try {
+      value = JSON.parse(metafield.value);
+    } catch {
+      value = [];
+    }
+  }
+  return {
+    compareDigest: metafield?.compareDigest ?? null,
+    jackets: parseSavedJackets(value),
+  };
+}
+
+async function saveCustomerSavedJackets(
+  customerId: string,
+  jackets: SavedJacket[],
+  compareDigest: string | null,
+): Promise<SavedJacketsStore> {
+  if (jackets.length > MAX_SAVED_JACKETS) {
+    throw new Error(`You can save up to ${MAX_SAVED_JACKETS} jackets.`);
+  }
+  const token = await currentAccessToken();
+  if (!token) throw new Error("Sign in with Shopify to save jackets.");
+  const safeJackets = parseSavedJackets(jackets);
+  const data = await customerGraphql<{
+    metafieldsSet: {
+      metafields: Array<{ compareDigest: string; value: string }> | null;
+      userErrors: Array<{ message: string }>;
+    };
+  }>(
+    token.accessToken,
+    "SaveJackets",
+    `
+      mutation SaveJackets($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            compareDigest
+            value
+          }
+          userErrors {
+            message
+          }
+        }
+      }
+    `,
+    {
+      metafields: [{
+        compareDigest,
+        key: SAVED_JACKETS_KEY,
+        namespace: SAVED_JACKETS_NAMESPACE,
+        ownerId: customerId,
+        type: "json",
+        value: JSON.stringify(safeJackets),
+      }],
+    },
+  );
+  const userErrors = data.metafieldsSet.userErrors ?? [];
+  if (userErrors.length) {
+    throw new Error(userErrors.map((error) => error.message).join(" "));
+  }
+  const metafield = data.metafieldsSet.metafields?.[0];
+  if (!metafield) throw new Error("Shopify did not save these jackets.");
+  return {
+    compareDigest: metafield.compareDigest,
+    jackets: safeJackets,
+  };
 }
 
 async function loadCustomer() {
@@ -416,8 +530,24 @@ export function useShopifyCustomerAccount(enabled = true) {
     }
   }, []);
 
+  const loadSavedJackets = useCallback(() => loadCustomerSavedJackets(), []);
+  const saveSavedJackets = useCallback(
+    (jackets: SavedJacket[], compareDigest: string | null) => {
+      if (state.status !== "signed-in") {
+        return Promise.reject(new Error("Sign in with Shopify to save jackets."));
+      }
+      return saveCustomerSavedJackets(state.customer.id, jackets, compareDigest);
+    },
+    [state],
+  );
+
+  const savedJackets = useMemo<ShopifySavedJacketsApi>(
+    () => ({ load: loadSavedJackets, save: saveSavedJackets }),
+    [loadSavedJackets, saveSavedJackets],
+  );
+
   return useMemo(
-    () => ({ configured, refresh, signIn, signOut, state }),
-    [configured, refresh, signIn, signOut, state],
+    () => ({ configured, refresh, savedJackets, signIn, signOut, state }),
+    [configured, refresh, savedJackets, signIn, signOut, state],
   );
 }

@@ -13,6 +13,7 @@
     "firebase:test": "npm test --prefix functions",
     "footballer": "node scripts/shopify-footballer.mjs",
     "shopify:feedback:setup": "node scripts/setup-shopify-feedback.mjs",
+    "shopify:saved-jackets:setup": "node scripts/setup-shopify-saved-jackets.mjs",
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck && npm run build && npm run firebase:test",
     "secure": "npm run build:private"

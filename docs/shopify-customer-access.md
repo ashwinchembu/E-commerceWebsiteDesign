@@ -43,5 +43,21 @@ Footballers access ends the next time the site verifies their account.
 
 The Customer Account API client is a public browser client. It must allow each
 deployed site origin, use `/account` as its callback, and use `/` as its logout
-URL. The storefront only reads the signed-in customer's ID, display name, and
-tags. Never add a Shopify Admin API secret to a `VITE_` environment variable.
+URL. The storefront reads the signed-in customer's ID, display name, tags, and
+private saved-jacket metafield. Never add a Shopify Admin API secret to a
+`VITE_` environment variable.
+
+## Saved jacket comparisons
+
+Saved comparisons use one private JSON metafield on the signed-in Shopify
+customer. The app needs `customer_read_customers` and
+`customer_write_customers` in addition to its Admin API `write_customers`
+scope. Apply those scopes, then create the app-owned definition once:
+
+```sh
+npm run shopify:saved-jackets:setup
+```
+
+The storefront caps the list at four compact jacket configurations and uses
+Shopify compare-and-set protection so two browser tabs cannot silently
+overwrite each other.

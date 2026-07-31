@@ -16,10 +16,13 @@ export function HeroSection() {
     if (!video) return;
 
     if (playbackBlocked || video.paused) {
-      video.muted = false;
+      // Starting muted is the most reliable way to resume inline playback on
+      // iPhone. The next tap can enable sound once the film is moving.
+      video.defaultMuted = true;
+      video.muted = true;
       try {
         await video.play();
-        setMuted(false);
+        setMuted(true);
         setPlaybackBlocked(false);
       } catch {
         setPlaybackBlocked(true);
@@ -35,18 +38,47 @@ export function HeroSection() {
     const video = videoRef.current;
     if (!video) return;
 
+    let cancelled = false;
+    const markPlaying = () => {
+      if (!cancelled) setPlaybackBlocked(false);
+    };
     const attemptPlayback = async () => {
+      if (cancelled) return;
+      if (!video.paused && !video.ended) {
+        markPlaying();
+        return;
+      }
+
+      video.defaultMuted = true;
+      video.muted = true;
       try {
         await video.play();
-        setPlaybackBlocked(false);
+        markPlaying();
       } catch {
-        // iOS blocks autoplay in Low Power Mode. Keep the hero clean and let
-        // the visitor start the film with the branded control instead.
-        setPlaybackBlocked(true);
+        if (!cancelled && video.paused) setPlaybackBlocked(true);
       }
     };
 
-    void attemptPlayback();
+    const retryWhenVisible = () => {
+      if (document.visibilityState === 'visible') void attemptPlayback();
+    };
+
+    video.addEventListener('playing', markPlaying);
+    video.addEventListener('canplay', attemptPlayback);
+    window.addEventListener('pageshow', attemptPlayback);
+    document.addEventListener('visibilitychange', retryWhenVisible);
+
+    if (video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      void attemptPlayback();
+    }
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener('playing', markPlaying);
+      video.removeEventListener('canplay', attemptPlayback);
+      window.removeEventListener('pageshow', attemptPlayback);
+      document.removeEventListener('visibilitychange', retryWhenVisible);
+    };
   }, []);
 
   useEffect(() => {
@@ -102,7 +134,7 @@ export function HeroSection() {
           muted={muted}
           playsInline
           poster="/images/jacket-preview-poster.jpg"
-          preload="metadata"
+          preload="auto"
           aria-label="Manoir Kits collection film"
         >
           <source media="(min-width: 768px)" src={HERO_VIDEO_DESKTOP} type="video/mp4" />

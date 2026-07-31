@@ -92,9 +92,11 @@ export function Footer() {
                   {status}
                 </p>
               ) : null}
-              <p className="text-[11px] leading-5 text-gray-500">
-                By subscribing you agree to receive marketing emails. You may
-                unsubscribe at any time.
+              <p className="text-center text-[11px] leading-5 text-gray-500">
+                <span className="block">
+                  By subscribing you agree to receive marketing emails.
+                </span>
+                <span className="block">You may unsubscribe at any time.</span>
               </p>
             </form>
           </div>

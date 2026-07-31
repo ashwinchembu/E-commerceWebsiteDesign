@@ -248,7 +248,7 @@ export default function App() {
         if (shouldShowNewsletterOffer()) {
           setShowNewsletterModal(true);
         }
-      }, 30_000);
+      }, 1_500);
     };
     const closeNewsletter = () => setShowNewsletterModal(false);
 

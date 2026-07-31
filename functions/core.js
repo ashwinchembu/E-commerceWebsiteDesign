@@ -215,15 +215,16 @@ export function normalizeFeedbackInput(value) {
   if (message.length < 3) {
     throw new Error("Feedback must be at least 3 characters.");
   }
-  if (email && !validEmail(email)) {
+  if (!name) throw new Error("Full name is required.");
+  if (!validEmail(email)) {
     throw new Error("Email address is not valid.");
   }
 
   return {
     category,
-    email: email || null,
+    email,
     message,
-    name: name || null,
+    name,
     path:
       requestedPath.startsWith("/") && !requestedPath.startsWith("//")
         ? requestedPath

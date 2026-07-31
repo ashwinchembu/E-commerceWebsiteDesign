@@ -160,7 +160,9 @@ test("feedback input is normalized and constrained", () => {
     () =>
       normalizeFeedbackInput({
         category: "website",
+        email: "customer@example.com",
         message: "Useful",
+        name: "Customer",
         rating: 0,
       }),
     /rating/,
@@ -169,7 +171,9 @@ test("feedback input is normalized and constrained", () => {
     () =>
       normalizeFeedbackInput({
         category: "unsupported",
+        email: "customer@example.com",
         message: "Useful",
+        name: "Customer",
         rating: 5,
       }),
     /category/,
@@ -180,6 +184,27 @@ test("feedback input is normalized and constrained", () => {
         category: "website",
         email: "not-an-email",
         message: "Useful",
+        name: "Customer",
+        rating: 5,
+      }),
+    /Email/,
+  );
+  assert.throws(
+    () =>
+      normalizeFeedbackInput({
+        category: "website",
+        email: "customer@example.com",
+        message: "Useful",
+        rating: 5,
+      }),
+    /name/,
+  );
+  assert.throws(
+    () =>
+      normalizeFeedbackInput({
+        category: "website",
+        message: "Useful",
+        name: "Customer",
         rating: 5,
       }),
     /Email/,

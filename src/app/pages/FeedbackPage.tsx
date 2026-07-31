@@ -9,9 +9,9 @@ import {
 } from '../lib/firebase';
 
 const categories = [
-  { label: 'Jacket builder', value: 'jacket-builder' },
+  { label: 'Jacket Builder', value: 'jacket-builder' },
   { label: 'Product', value: 'product' },
-  { label: 'Shopping experience', value: 'shopping' },
+  { label: 'Shopping Experience', value: 'shopping' },
   { label: 'Website', value: 'website' },
   { label: 'Other', value: 'other' },
 ] as const;
@@ -203,7 +203,7 @@ export function FeedbackPage() {
                     className="mb-2 block text-sm tracking-wide"
                     htmlFor="feedback-name"
                   >
-                    NAME (OPTIONAL)
+                    FULL NAME (REQUIRED)
                   </label>
                   <input
                     autoComplete="name"
@@ -216,6 +216,7 @@ export function FeedbackPage() {
                         name: event.target.value,
                       }))
                     }
+                    required
                     type="text"
                     value={form.name}
                   />
@@ -225,7 +226,7 @@ export function FeedbackPage() {
                     className="mb-2 block text-sm tracking-wide"
                     htmlFor="feedback-email"
                   >
-                    EMAIL (OPTIONAL)
+                    EMAIL ADDRESS (REQUIRED)
                   </label>
                   <input
                     autoComplete="email"
@@ -238,6 +239,7 @@ export function FeedbackPage() {
                         email: event.target.value,
                       }))
                     }
+                    required
                     type="email"
                     value={form.email}
                   />

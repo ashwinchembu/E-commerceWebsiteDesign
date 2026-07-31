@@ -19,7 +19,7 @@ export function Header() {
     : 'border-gray-200';
 
   return (
-    <header className={headerClass}>
+    <header className={`${headerClass} pt-[env(safe-area-inset-top)]`}>
       <div className="container mx-auto px-6">
         <div className="relative flex h-16 items-center justify-between">
           <button

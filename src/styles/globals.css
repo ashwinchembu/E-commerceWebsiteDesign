@@ -132,6 +132,12 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  .hero-video::-webkit-media-controls,
+  .hero-video::-webkit-media-controls-start-playback-button {
+    display: none !important;
+    -webkit-appearance: none;
+  }
+
   button:not(:disabled),
   a[href],
   select:not(:disabled),
@@ -192,4 +198,5 @@
 
 html {
   font-size: var(--font-size);
+  background: #000000;
 }

@@ -93,8 +93,8 @@ export function Footer() {
                 </p>
               ) : null}
               <p className="text-[11px] leading-5 text-gray-500">
-                By subscribing you agree to receive marketing emails You can
-                unsubscribe at any time
+                By subscribing you agree to receive marketing emails. You may
+                unsubscribe at any time.
               </p>
             </form>
           </div>

@@ -76,12 +76,6 @@ export function Header() {
               >
                 ACCOUNT
               </Link>
-              <Link
-                className="text-sm tracking-wide transition-opacity hover:opacity-70"
-                to="/feedback"
-              >
-                FEEDBACK
-              </Link>
             </div>
           </nav>
         ) : null}

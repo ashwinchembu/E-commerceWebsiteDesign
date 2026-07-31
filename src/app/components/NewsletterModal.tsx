@@ -123,8 +123,8 @@ export function NewsletterModal({ isOpen, onClose }: NewsletterModalProps) {
                 {submitting ? 'SUBSCRIBING…' : 'SUBSCRIBE'}
               </button>
               <p className="mt-4 text-center text-[11px] leading-5 text-gray-500">
-                By subscribing you agree to receive marketing emails You can
-                unsubscribe at any time
+                By subscribing you agree to receive marketing emails. You may
+                unsubscribe at any time.
               </p>
             </form>
           </>

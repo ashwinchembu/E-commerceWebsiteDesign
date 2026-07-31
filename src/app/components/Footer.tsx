@@ -40,7 +40,7 @@ export function Footer() {
   return (
     <footer className="bg-black text-white py-16">
       <div className="container mx-auto px-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
+        <div className="grid grid-cols-1 gap-12 mb-12 lg:grid-cols-3">
           {/* Left - Logo and Copyright */}
           <div>
             <h3 className="text-2xl tracking-widest mb-4 font-light">
@@ -54,7 +54,7 @@ export function Footer() {
           </div>
 
           {/* Center - Newsletter */}
-          <div className="md:text-center">
+          <div className="lg:text-center">
             <p className="text-sm tracking-wide mb-4">
               For the latest news & most limited drops
             </p>
@@ -102,9 +102,9 @@ export function Footer() {
           </div>
 
           {/* Right - Social Media */}
-          <div className="md:text-right">
+          <div className="lg:text-right">
             <p className="text-sm tracking-wide mb-4">Follow Us</p>
-            <div className="flex gap-4 md:justify-end">
+            <div className="flex gap-4 lg:justify-end">
               <a
                 href="https://www.instagram.com/manoirkits/"
                 target="_blank"

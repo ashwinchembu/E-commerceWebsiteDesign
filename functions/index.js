@@ -17,6 +17,7 @@ import {
   createAccessCode,
   evaluateGrantUse,
   grantState,
+  isAuthorizedAdminEmail,
   normalizeClientMeta,
   normalizeContactInput,
   normalizeFeedbackInput,
@@ -83,6 +84,10 @@ const FEEDBACK_ALLOWED_ORIGINS = [
   "https://www.manoirkits.com",
   /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
 ];
+const ADMIN_EMAIL_ALLOWLIST = [
+  "ashchembu@gmail.com",
+  "manoirkits@gmail.com",
+];
 
 function assertAdmin(request) {
   if (!request.auth) {
@@ -95,6 +100,41 @@ function assertAdmin(request) {
     );
   }
 }
+
+export const claimAdminAccess = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Administrator sign-in is required.");
+  }
+
+  const user = await auth.getUser(request.auth.uid);
+  const email = request.auth.token.email || user.email;
+  const emailVerified =
+    request.auth.token.email_verified === true && user.emailVerified === true;
+  if (
+    !isAuthorizedAdminEmail(
+      email,
+      emailVerified,
+      ADMIN_EMAIL_ALLOWLIST,
+    )
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "This account does not have administrator access.",
+    );
+  }
+
+  if (user.customClaims?.admin !== true) {
+    await auth.setCustomUserClaims(user.uid, {
+      ...(user.customClaims || {}),
+      admin: true,
+    });
+    logger.info("Granted an allowlisted account administrator access.", {
+      uid: user.uid,
+    });
+  }
+
+  return { authorized: true };
+});
 
 function invalidArgument(error) {
   if (error instanceof HttpsError) return error;
@@ -412,6 +452,10 @@ const guideFiles = {
   orders: {
     filename: "Manoir-Kits-Shopify-Order-Guide.pdf",
     path: "Manoir-Kits-Shopify-Order-Guide.pdf",
+  },
+  billing: {
+    filename: "firebase-billing-setup-guide.pdf",
+    path: "firebase-billing-setup-guide.pdf",
   },
 };
 

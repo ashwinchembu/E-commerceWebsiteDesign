@@ -17,6 +17,17 @@ export function cleanString(value, maxLength) {
     : "";
 }
 
+export function isAuthorizedAdminEmail(value, emailVerified, allowlist) {
+  if (emailVerified !== true) return false;
+  const email = cleanString(value, 320).toLowerCase();
+  return (
+    email.length > 0 &&
+    allowlist.some(
+      (candidate) => cleanString(candidate, 320).toLowerCase() === email,
+    )
+  );
+}
+
 function validEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }

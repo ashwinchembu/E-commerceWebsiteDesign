@@ -4,6 +4,7 @@ import {
   createAccessCode,
   evaluateGrantUse,
   grantState,
+  isAuthorizedAdminEmail,
   normalizeContactInput,
   normalizeFeedbackInput,
   normalizeFeedbackRecord,
@@ -12,6 +13,26 @@ import {
   normalizeShopifyCustomer,
   parseAccessCode,
 } from "./core.js";
+
+test("admin bootstrap requires an exact verified allowlisted email", () => {
+  const allowlist = ["ashchembu@gmail.com", "manoirkits@gmail.com"];
+  assert.equal(
+    isAuthorizedAdminEmail(" ASHCHEMBU@GMAIL.COM ", true, allowlist),
+    true,
+  );
+  assert.equal(
+    isAuthorizedAdminEmail("manoirkits@gmail.com", false, allowlist),
+    false,
+  );
+  assert.equal(
+    isAuthorizedAdminEmail("attacker@example.com", true, allowlist),
+    false,
+  );
+  assert.equal(
+    isAuthorizedAdminEmail("ashchembu@gmail.com.evil.test", true, allowlist),
+    false,
+  );
+});
 
 test("generated access codes parse and validate", () => {
   const generated = createAccessCode();

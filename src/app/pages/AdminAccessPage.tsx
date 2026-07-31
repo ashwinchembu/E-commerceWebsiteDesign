@@ -61,6 +61,29 @@ type GuideResponse = {
   filename: string;
 };
 
+const adminGuides = [
+  {
+    id: 'access',
+    category: 'PRIVATE ACCESS',
+    title: 'Access Key Guide',
+    description: 'Create and manage secure access for private visitors.',
+  },
+  {
+    id: 'orders',
+    category: 'ORDERS & FULFILLMENT',
+    title: 'Shopify Order Guide',
+    description: 'Review checkout, order transfer, and fulfillment.',
+  },
+  {
+    id: 'billing',
+    category: 'FIREBASE BILLING',
+    title: 'Firebase Billing Setup Guide',
+    description: 'Open the step-by-step Blaze billing setup walkthrough.',
+  },
+] as const;
+
+type AdminGuideId = (typeof adminGuides)[number]['id'];
+
 type FeedbackItem = {
   id: string;
   rating: number | null;
@@ -185,16 +208,21 @@ export function AdminAccessPage() {
             return;
           }
           try {
-            const token = await user.getIdTokenResult(true);
+            let token = await user.getIdTokenResult(true);
             if (token.claims.admin !== true) {
-              await signOut(auth);
-              setAuthError('This Firebase account has not been granted the admin role.');
-              setAdmin(null);
-            } else {
-              setAuthError('');
-              setAdmin(user);
+              await callFirebaseFunction<Record<string, never>, { authorized: boolean }>(
+                'claimAdminAccess',
+                {},
+              );
+              token = await user.getIdTokenResult(true);
             }
+            if (token.claims.admin !== true) {
+              throw new Error('This Firebase account has not been granted the admin role.');
+            }
+            setAuthError('');
+            setAdmin(user);
           } catch (error) {
+            await signOut(auth).catch(() => undefined);
             setAuthError(firebaseErrorMessage(error, 'Administrator verification failed.'));
             setAdmin(null);
           } finally {
@@ -358,7 +386,7 @@ export function AdminAccessPage() {
     }
   }
 
-  async function openGuide(guide: 'access' | 'orders') {
+  async function openGuide(guide: AdminGuideId) {
     const guideWindow = window.open('', '_blank');
     if (!guideWindow) {
       toast.error('Allow pop-ups for this site, then open the guide again.');
@@ -400,8 +428,8 @@ export function AdminAccessPage() {
             <p className="text-xs tracking-[0.25em] text-white/50">MANOIR KITS</p>
             <h1 className="mt-4 text-3xl font-light">Administrator sign-in</h1>
             <p className="mt-4 text-sm leading-6 text-white/60">
-              Sign in with an individually authorized Firebase account. The former shared
-              administrator key is no longer accepted.
+              Sign in with an approved owner Google account. The former shared administrator
+              key is no longer accepted.
             </p>
             <button
               className={`${secondaryButton} mt-7 w-full`}
@@ -609,23 +637,26 @@ export function AdminAccessPage() {
         <section className={panel}>
           <p className="text-xs tracking-[0.2em] text-white/45">OWNER REFERENCE</p>
           <h2 className="mt-2 text-2xl font-light">Operations guides</h2>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <button
-              className="border border-white/15 p-5 text-left transition hover:border-white/50"
-              onClick={() => void openGuide('access')}
-              type="button"
-            >
-              <span className="text-xs tracking-[0.18em] text-white/45">PRIVATE ACCESS</span>
-              <strong className="mt-3 block text-lg font-normal">Access Key Guide</strong>
-            </button>
-            <button
-              className="border border-white/15 p-5 text-left transition hover:border-white/50"
-              onClick={() => void openGuide('orders')}
-              type="button"
-            >
-              <span className="text-xs tracking-[0.18em] text-white/45">ORDERS & FULFILLMENT</span>
-              <strong className="mt-3 block text-lg font-normal">Shopify Order Guide</strong>
-            </button>
+          <p className="mt-3 max-w-3xl text-sm leading-6 text-white/55">
+            Every owner guide is kept here and only opens after administrator sign-in.
+          </p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {adminGuides.map((guide) => (
+              <button
+                className="border border-white/15 p-5 text-left transition hover:border-white/50"
+                key={guide.id}
+                onClick={() => void openGuide(guide.id)}
+                type="button"
+              >
+                <span className="text-xs tracking-[0.18em] text-white/45">
+                  {guide.category}
+                </span>
+                <strong className="mt-3 block text-lg font-normal">{guide.title}</strong>
+                <span className="mt-3 block text-sm leading-6 text-white/50">
+                  {guide.description}
+                </span>
+              </button>
+            ))}
           </div>
         </section>
 

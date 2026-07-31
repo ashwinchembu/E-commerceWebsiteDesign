@@ -1,14 +1,38 @@
 import { Instagram, Youtube } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { subscribeToNewsletter } from '../lib/newsletter';
 
 export function Footer() {
   const [email, setEmail] = useState('');
+  const [website, setWebsite] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Newsletter signup:', email);
-    setEmail('');
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setStatus('');
+    setSubmitting(true);
+    try {
+      const result = await subscribeToNewsletter(email, website);
+      setEmail('');
+      setWebsite('');
+      setStatus(
+        result.discountCode
+          ? `you are subscribed — welcome code ${result.discountCode}`
+          : 'you are subscribed',
+      );
+    } catch (error) {
+      const { firebaseErrorMessage } = await import('../lib/firebase');
+      setStatus(
+        firebaseErrorMessage(
+          error,
+          'newsletter signup is temporarily unavailable',
+        ),
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -34,6 +58,8 @@ export function Footer() {
             </p>
             <form onSubmit={handleSubmit} className="flex flex-col gap-3">
               <input
+                aria-label="Email address for newsletter"
+                autoComplete="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -41,12 +67,33 @@ export function Footer() {
                 className="bg-transparent border border-white/30 px-4 py-3 text-sm focus:outline-none focus:border-white transition-colors"
                 required
               />
+              <div hidden>
+                <label htmlFor="footer-newsletter-website">Website</label>
+                <input
+                  autoComplete="off"
+                  id="footer-newsletter-website"
+                  onChange={(event) => setWebsite(event.target.value)}
+                  tabIndex={-1}
+                  type="text"
+                  value={website}
+                />
+              </div>
               <button
                 type="submit"
-                className="bg-white text-black px-6 py-3 hover:bg-gray-200 transition-colors tracking-wide text-sm cursor-pointer"
+                className="cursor-pointer bg-white px-6 py-3 text-sm tracking-wide text-black transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={submitting}
               >
-                SUBSCRIBE
+                {submitting ? 'SUBSCRIBING…' : 'SUBSCRIBE'}
               </button>
+              {status ? (
+                <p aria-live="polite" className="text-xs leading-5 text-gray-300">
+                  {status}
+                </p>
+              ) : null}
+              <p className="text-[11px] leading-5 text-gray-500">
+                By subscribing you agree to receive marketing emails You can
+                unsubscribe at any time
+              </p>
             </form>
           </div>
 

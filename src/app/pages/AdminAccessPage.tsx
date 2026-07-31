@@ -63,7 +63,7 @@ type GuideResponse = {
 
 type FeedbackItem = {
   id: string;
-  rating: number;
+  rating: number | null;
   category: string;
   message: string;
   page: string;
@@ -502,11 +502,11 @@ export function AdminAccessPage() {
         <section className={panel}>
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs tracking-[0.2em] text-white/45">CUSTOMER FEEDBACK</p>
-              <h2 className="mt-2 text-2xl font-light">Feedback inbox</h2>
+              <p className="text-xs tracking-[0.2em] text-white/45">CUSTOMER MESSAGES</p>
+              <h2 className="mt-2 text-2xl font-light">Shopify inbox</h2>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-white/55">
-                Website feedback is collected here from the private Shopify records so it stays
-                organized in one owner-only place.
+                Website feedback and contact messages are collected here from private Shopify
+                records so they stay organized in one owner-only place.
               </p>
             </div>
             <button
@@ -528,13 +528,19 @@ export function AdminAccessPage() {
               {feedback.map((item) => (
                 <article className="border border-white/15 p-5" key={item.id}>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span
-                      aria-label={`${item.rating} out of 5 stars`}
-                      className="tracking-[0.12em] text-amber-200"
-                    >
-                      {'★'.repeat(item.rating)}
-                      <span className="text-white/20">{'☆'.repeat(5 - item.rating)}</span>
-                    </span>
+                    {item.rating ? (
+                      <span
+                        aria-label={`${item.rating} out of 5 stars`}
+                        className="tracking-[0.12em] text-amber-200"
+                      >
+                        {'★'.repeat(item.rating)}
+                        <span className="text-white/20">{'☆'.repeat(5 - item.rating)}</span>
+                      </span>
+                    ) : (
+                      <span className="text-xs tracking-[0.14em] text-white/50">
+                        CONTACT MESSAGE
+                      </span>
+                    )}
                     <span className="border border-white/20 px-2 py-1 text-[10px] tracking-[0.14em] text-white/60">
                       {item.status.toUpperCase()}
                     </span>

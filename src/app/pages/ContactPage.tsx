@@ -1,19 +1,60 @@
-import { useState } from 'react';
-import { Mail, Phone, MapPin, Send } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { FormEvent, useState } from 'react';
+import { Send } from 'lucide-react';
+import {
+  callFirebaseFunction,
+  firebaseAppCheckIsConfigured,
+  firebaseErrorMessage,
+  firebaseIsConfigured,
+} from '../lib/firebase';
 
 export function ContactPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     subject: '',
-    message: ''
+    message: '',
+    website: '',
   });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    alert('Thank you for your message. We will get back to you soon!');
-    setFormData({ name: '', email: '', subject: '', message: '' });
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError('');
+    if (!firebaseIsConfigured() || !firebaseAppCheckIsConfigured()) {
+      setError('Messages are temporarily unavailable. Please try again later.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await callFirebaseFunction(
+        'submitContact',
+        {
+          ...formData,
+          path: window.location.pathname,
+        },
+        { limitedUseAppCheckTokens: true },
+      );
+      setFormData({
+        name: '',
+        email: '',
+        subject: '',
+        message: '',
+        website: '',
+      });
+      setSubmitted(true);
+    } catch (submissionError) {
+      setError(
+        firebaseErrorMessage(
+          submissionError,
+          'Your message could not be sent. Please try again later.',
+        ),
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -45,7 +86,22 @@ export function ContactPage() {
           {/* Contact Form */}
           <div className="bg-gray-50 p-8">
             <h2 className="text-2xl tracking-wide mb-6 font-light">SEND US A MESSAGE</h2>
-            
+
+            {submitted ? (
+              <div className="border border-black bg-white px-6 py-12 text-center" role="status">
+                <h3 className="text-2xl font-light tracking-wide">MESSAGE RECEIVED</h3>
+                <p className="mt-4 text-sm leading-6 text-gray-600">
+                  Your message is saved privately in the Manoir Kits Shopify inbox
+                </p>
+                <button
+                  className="mt-7 bg-black px-8 py-3 text-sm tracking-widest text-white transition-colors hover:bg-gray-800"
+                  onClick={() => setSubmitted(false)}
+                  type="button"
+                >
+                  SEND ANOTHER MESSAGE
+                </button>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <label htmlFor="name" className="block text-sm tracking-wide mb-2">
@@ -55,6 +111,7 @@ export function ContactPage() {
                   type="text"
                   id="name"
                   name="name"
+                  maxLength={120}
                   value={formData.name}
                   onChange={handleChange}
                   className="w-full border border-gray-300 px-4 py-3 focus:outline-none focus:border-black"
@@ -70,6 +127,7 @@ export function ContactPage() {
                   type="email"
                   id="email"
                   name="email"
+                  maxLength={180}
                   value={formData.email}
                   onChange={handleChange}
                   className="w-full border border-gray-300 px-4 py-3 focus:outline-none focus:border-black"
@@ -85,6 +143,7 @@ export function ContactPage() {
                   type="text"
                   id="subject"
                   name="subject"
+                  maxLength={160}
                   value={formData.subject}
                   onChange={handleChange}
                   className="w-full border border-gray-300 px-4 py-3 focus:outline-none focus:border-black"
@@ -99,6 +158,8 @@ export function ContactPage() {
                 <textarea
                   id="message"
                   name="message"
+                  maxLength={1800}
+                  minLength={3}
                   value={formData.message}
                   onChange={handleChange}
                   rows={6}
@@ -107,14 +168,38 @@ export function ContactPage() {
                 />
               </div>
 
+              <div hidden>
+                <label htmlFor="contact-website">Website</label>
+                <input
+                  autoComplete="off"
+                  id="contact-website"
+                  name="website"
+                  onChange={handleChange}
+                  tabIndex={-1}
+                  type="text"
+                  value={formData.website}
+                />
+              </div>
+
+              {error ? (
+                <p
+                  className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+                  role="alert"
+                >
+                  {error}
+                </p>
+              ) : null}
+
               <button
                 type="submit"
-                className="w-full bg-black text-white py-4 hover:bg-gray-800 transition-colors tracking-widest text-sm flex items-center justify-center gap-2 cursor-pointer"
+                className="flex w-full cursor-pointer items-center justify-center gap-2 bg-black py-4 text-sm tracking-widest text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={submitting}
               >
                 <Send className="w-4 h-4" />
-                SEND MESSAGE
+                {submitting ? 'SENDING…' : 'SEND MESSAGE'}
               </button>
             </form>
+            )}
           </div>
         </div>
       </div>

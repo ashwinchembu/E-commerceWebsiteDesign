@@ -13,16 +13,19 @@ export function PrivacyPolicyPage() {
             <div>
               <h3 className="text-xl tracking-wide mb-4 font-light">1. Information We Collect</h3>
               <p className="text-sm leading-relaxed mb-4">
-                We collect information you provide directly to us, including your name, email address, shipping address, payment information, and any other information you choose to provide when you create an account, make a purchase, or contact us.
+                We collect information you provide directly to us, including your name, email address, shipping address, jacket selections, and any other information you choose to provide when you create an account, make a purchase, join our newsletter, or contact us. Shopify processes checkout and payment information and Manoir Kits does not receive your complete card number.
               </p>
               <p className="text-sm leading-relaxed">
-                We also automatically collect certain information about your device when you use our website, including your IP address, browser type, operating system, referring URLs, and information about your usage of our website.
+                Our service providers may process limited technical information such as an IP address, browser type, and requested page to deliver the website, prevent abuse, and keep accounts secure.
               </p>
               <p className="text-sm leading-relaxed mt-4">
                 For private-preview access, we associate security events with the person or organization assigned to an access code. These events can include the time and result of an attempt, exact connection IP, requested page, browser and operating-system information, language, timezone, screen size, a limited device-capability summary, and an approximate city, region, country, postal area, network number, or coordinates only when our trusted hosting provider supplies them. IP-derived location is approximate and does not reveal a precise street address. We do not request precise device geolocation or use covert canvas or audio fingerprinting.
               </p>
               <p className="text-sm leading-relaxed mt-4">
                 When you send feedback, we collect your rating, category, comments, the page where the form was submitted, and any name or email address you choose to provide. Feedback is stored privately in Shopify and is not published automatically. We use a short-lived, one-way network identifier only to limit repeated submissions; we do not store the raw network address with your feedback.
+              </p>
+              <p className="text-sm leading-relaxed mt-4">
+                Contact messages and newsletter subscriptions are also sent securely to Shopify. Contact messages include the name, email address, subject, and message you submit. Newsletter records include your email address and marketing-consent status.
               </p>
             </div>
 
@@ -51,7 +54,7 @@ export function PrivacyPolicyPage() {
             <div>
               <h3 className="text-xl tracking-wide mb-4 font-light">4. Cookies and Tracking</h3>
               <p className="text-sm leading-relaxed">
-                We use cookies and similar tracking technologies to enhance your browsing experience, analyze site traffic, and understand where our visitors are coming from. You can control cookies through your browser settings.
+                We currently use only necessary cookies or browser storage for secure access, account sessions, and preferences such as whether a notice has already been shown. We do not currently use advertising cookies or third-party behavioral analytics.
               </p>
             </div>
 

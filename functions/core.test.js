@@ -4,9 +4,11 @@ import {
   createAccessCode,
   evaluateGrantUse,
   grantState,
+  normalizeContactInput,
   normalizeFeedbackInput,
   normalizeFeedbackRecord,
   normalizeGrantInput,
+  normalizeNewsletterInput,
   normalizeShopifyCustomer,
   parseAccessCode,
 } from "./core.js";
@@ -163,6 +165,44 @@ test("feedback input is normalized and constrained", () => {
   );
 });
 
+test("contact input is normalized and constrained", () => {
+  const contact = normalizeContactInput({
+    email: " CUSTOMER@EXAMPLE.COM ",
+    message: "  I have a sizing question.  ",
+    name: " Customer ",
+    path: "/contact?source=footer",
+    subject: " Jacket sizing ",
+  });
+
+  assert.deepEqual(contact, {
+    email: "customer@example.com",
+    message: "I have a sizing question.",
+    name: "Customer",
+    path: "/contact?source=footer",
+    subject: "Jacket sizing",
+  });
+  assert.throws(
+    () =>
+      normalizeContactInput({
+        email: "not-an-email",
+        message: "Question",
+        name: "Customer",
+        subject: "Sizing",
+      }),
+    /Email/,
+  );
+});
+
+test("newsletter input requires a valid normalized email", () => {
+  assert.deepEqual(normalizeNewsletterInput({ email: " FAN@EXAMPLE.COM " }), {
+    email: "fan@example.com",
+  });
+  assert.throws(
+    () => normalizeNewsletterInput({ email: "not-an-email" }),
+    /Email/,
+  );
+});
+
 test("Shopify feedback metaobjects are sanitized for the admin inbox", () => {
   const feedback = normalizeFeedbackRecord({
     createdAt: "2026-07-30T12:00:00Z",
@@ -200,5 +240,5 @@ test("Shopify feedback metaobjects are sanitized for the admin inbox", () => {
     ],
     id: "gid://shopify/Metaobject/456",
   });
-  assert.equal(malformed.rating, 1);
+  assert.equal(malformed.rating, null);
 });

@@ -70,7 +70,8 @@ export function HeroSection() {
           loop
           muted={muted}
           playsInline
-          preload="auto"
+          poster="/images/jacket-preview-poster.jpg"
+          preload="metadata"
           aria-label="Manoir Kits collection film"
         >
           <source media="(min-width: 768px)" src={HERO_VIDEO_DESKTOP} type="video/mp4" />

@@ -7,19 +7,15 @@ export function CookieConsent() {
   useEffect(() => {
     const consent = localStorage.getItem('cookieConsent');
     if (!consent) {
-      // Show after a brief delay
-      setTimeout(() => setIsVisible(true), 2000);
+      const timer = window.setTimeout(() => setIsVisible(true), 2000);
+      return () => window.clearTimeout(timer);
     }
   }, []);
 
-  const handleAccept = () => {
-    localStorage.setItem('cookieConsent', 'accepted');
+  const handleContinue = () => {
+    localStorage.setItem('cookieConsent', 'acknowledged');
     setIsVisible(false);
-  };
-
-  const handleDecline = () => {
-    localStorage.setItem('cookieConsent', 'declined');
-    setIsVisible(false);
+    window.dispatchEvent(new Event('manoir:cookie-consent'));
   };
 
   if (!isVisible) return null;
@@ -31,27 +27,22 @@ export function CookieConsent() {
           <div className="flex-1">
             <h3 className="text-xs tracking-widest mb-1.5 sm:text-sm sm:mb-2">COOKIES & PRIVACY</h3>
             <p className="text-[11px] leading-relaxed text-gray-400 tracking-wide max-w-2xl sm:text-xs">
-              We use cookies to enhance your browsing experience, serve personalized content, and analyze our traffic. 
-              By clicking "Accept", you consent to our use of cookies. Read our{' '}
+              We currently use only necessary browser storage for secure access and your site
+              preferences. Read our{' '}
               <Link to="/privacy-policy" className="underline hover:text-white">
                 Privacy Policy
               </Link>{' '}
-              for more information.
+              for more information
             </p>
           </div>
           
-          <div className="grid w-full grid-cols-2 gap-3 sm:flex sm:w-auto sm:items-center">
+          <div className="w-full sm:w-auto">
             <button
-              onClick={handleDecline}
-              className="px-4 py-2 border border-white text-white hover:bg-white hover:text-black transition-colors text-xs tracking-widest cursor-pointer sm:px-6"
+              onClick={handleContinue}
+              className="w-full cursor-pointer bg-white px-6 py-2 text-xs tracking-widest text-black transition-colors hover:bg-gray-200"
+              type="button"
             >
-              DECLINE
-            </button>
-            <button
-              onClick={handleAccept}
-              className="px-4 py-2 bg-white text-black hover:bg-gray-200 transition-colors text-xs tracking-widest cursor-pointer sm:px-6"
-            >
-              ACCEPT
+              CONTINUE
             </button>
           </div>
         </div>

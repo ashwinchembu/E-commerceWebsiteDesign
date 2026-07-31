@@ -1,7 +1,7 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "manoir-kits-storefront",
   "private": true,
-  "version": "0.0.1",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "build": "VITE_PRIVATE_ACCESS_ENABLED=false vite build",
@@ -13,6 +13,8 @@
     "firebase:test": "npm test --prefix functions",
     "footballer": "node scripts/shopify-footballer.mjs",
     "shopify:feedback:setup": "node scripts/setup-shopify-feedback.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run build && npm run firebase:test",
     "secure": "npm run build:private"
   },
   "dependencies": {
@@ -64,6 +66,8 @@
     "react-dnd-html5-backend": "16.0.1",
     "react-hook-form": "7.55.0",
     "react-popper": "2.3.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "react-resizable-panels": "2.1.7",
     "react-responsive-masonry": "2.7.1",
     "react-router": "7.18.1",
@@ -78,27 +82,12 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.12",
+    "@types/node": "^26.1.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
+    "typescript": "^7.0.2",
     "vite": "6.4.3"
-  },
-  "peerDependencies": {
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    }
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "6.3.5"
-    }
-  },
-  "readme": "ERROR: No README data found!",
-  "_id": "@figma/my-make-file@0.0.1"
+  }
 }

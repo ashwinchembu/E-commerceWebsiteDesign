@@ -15,7 +15,7 @@ export function BenefitTiles() {
     {
       icon: Shield,
       title: 'QUALITY ASSURED',
-      description: '100% Guarantee'
+      description: 'Every Made-to-Order Jacket Is Reviewed Before Shipping'
     }
   ];
 

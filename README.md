@@ -78,15 +78,21 @@ SHOPIFY_SHOP=8e48d6-30
 SHOPIFY_CLIENT_ID=079422065aab48eb65be83b6158971be
 SHOPIFY_API_VERSION=2026-07
 ACCESS_EVENT_RETENTION_DAYS=30
+NEWSLETTER_DISCOUNT_CODE=
 ```
 
-The Shopify app needs `read_customers` access and approval for the protected
-customer fields that it mirrors.
+The Shopify app needs `read_customers` and `write_customers` access plus
+approval for the protected customer fields that it mirrors. Newsletter signups
+create or update Shopify customers and record their email marketing consent.
+Set `NEWSLETTER_DISCOUNT_CODE` only after the matching discount is active in
+Shopify; the storefront never promises or displays an unconfigured code.
 
-### 3. Configure customer feedback
+### 3. Configure customer messages and feedback
 
 Feedback submissions pass through a replay-protected callable Function and are
-stored as private Shopify metaobjects. Firestore is not used for feedback.
+stored as private Shopify metaobjects. Contact messages use the same private
+owner inbox with a `contact` category. Firestore is not used for either type of
+customer submission.
 
 In the Shopify app configuration, add these Admin API scopes:
 
@@ -114,10 +120,10 @@ add its public site key to Render:
 VITE_FIREBASE_APPCHECK_SITE_KEY
 ```
 
-The `submitFeedback` Function rejects missing or replayed App Check tokens. It
-also uses a honeypot and a one-submission-per-network, five-minute Shopify
-metaobject handle. The handle contains only a keyed digest, never the raw
-network address.
+The `submitFeedback`, `submitContact`, and `subscribeNewsletter` Functions
+reject missing or replayed App Check tokens. Customer message forms also use a
+honeypot and a one-submission-per-network, five-minute Shopify metaobject
+handle. The handle contains only a keyed digest, never the raw network address.
 
 ### 4. Deploy and authorize the first administrator
 

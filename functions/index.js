@@ -18,9 +18,11 @@ import {
   evaluateGrantUse,
   grantState,
   normalizeClientMeta,
+  normalizeContactInput,
   normalizeFeedbackInput,
   normalizeFeedbackRecord,
   normalizeGrantInput,
+  normalizeNewsletterInput,
   normalizeShopifyCustomer,
   parseAccessCode,
   publicGrant,
@@ -59,6 +61,11 @@ const shopifyApiVersion = defineString("SHOPIFY_API_VERSION", {
   description: "Stable Shopify Admin API version.",
 });
 const shopifyClientSecret = defineSecret("SHOPIFY_CLIENT_SECRET");
+const newsletterDiscountCode = defineString("NEWSLETTER_DISCOUNT_CODE", {
+  default: "",
+  description:
+    "Optional active Shopify discount code returned after a newsletter signup.",
+});
 
 const db = getFirestore();
 const auth = getAuth();
@@ -490,13 +497,17 @@ async function shopifyGraphql(query, variables) {
   return payload.data;
 }
 
-function feedbackHandle(ip, occurredAt) {
+function submissionHandle(kind, ip, occurredAt) {
   const bucket = Math.floor(occurredAt / FEEDBACK_RATE_WINDOW_MS).toString(36);
   const networkDigest = createHmac("sha256", shopifyClientSecret.value())
     .update(ip)
     .digest("hex")
     .slice(0, 20);
-  return `feedback-${bucket}-${networkDigest}`;
+  return `${kind}-${bucket}-${networkDigest}`;
+}
+
+function feedbackHandle(ip, occurredAt) {
+  return submissionHandle("feedback", ip, occurredAt);
 }
 
 function feedbackMetaobjectFields(feedback, occurredAt) {
@@ -511,6 +522,87 @@ function feedbackMetaobjectFields(feedback, occurredAt) {
   if (feedback.name) fields.push({ key: "name", value: feedback.name });
   if (feedback.email) fields.push({ key: "email", value: feedback.email });
   return fields;
+}
+
+function contactMetaobjectFields(contact, occurredAt) {
+  return [
+    { key: "category", value: "contact" },
+    { key: "message", value: `${contact.subject}\n\n${contact.message}` },
+    { key: "page", value: contact.path },
+    { key: "submitted_at", value: new Date(occurredAt).toISOString() },
+    { key: "status", value: "new" },
+    { key: "name", value: contact.name },
+    { key: "email", value: contact.email },
+  ];
+}
+
+async function createCustomerSubmission(fields, handle) {
+  const data = await shopifyGraphql(
+    `mutation CreateCustomerSubmission($metaobject: MetaobjectCreateInput!) {
+      metaobjectCreate(metaobject: $metaobject) {
+        metaobject {
+          id
+        }
+        userErrors {
+          code
+          field
+          message
+        }
+      }
+    }`,
+    {
+      metaobject: {
+        fields,
+        handle,
+        type: FEEDBACK_METAOBJECT_TYPE,
+      },
+    },
+  );
+  return data?.metaobjectCreate;
+}
+
+function assertCustomerSubmission(result, noun) {
+  const userErrors = Array.isArray(result?.userErrors)
+    ? result.userErrors
+    : [];
+  if (userErrors.length) {
+    const duplicate = userErrors.some((error) => {
+      const code = cleanString(error?.code, 80).toUpperCase();
+      const message = cleanString(error?.message, 300).toLowerCase();
+      return (
+        code === "TAKEN" ||
+        message.includes("already exists") ||
+        message.includes("has already been taken")
+      );
+    });
+    if (duplicate) {
+      throw new HttpsError(
+        "resource-exhausted",
+        `Please wait a few minutes before sending another ${noun}.`,
+      );
+    }
+
+    logger.error("Shopify rejected a customer submission.", {
+      errors: userErrors.slice(0, 5).map((error) => ({
+        code: cleanString(error?.code, 80) || "unknown",
+        field: Array.isArray(error?.field)
+          ? error.field.map((part) => cleanString(part, 80)).slice(0, 8)
+          : [],
+      })),
+      submissionType: noun,
+    });
+    throw new HttpsError(
+      "failed-precondition",
+      `${noun[0].toUpperCase()}${noun.slice(1)} is temporarily unavailable. Please try again later.`,
+    );
+  }
+
+  if (!result?.metaobject?.id) {
+    throw new HttpsError(
+      "internal",
+      `${noun[0].toUpperCase()}${noun.slice(1)} could not be confirmed. Please try again later.`,
+    );
+  }
 }
 
 export const submitFeedback = onCall(
@@ -543,29 +635,12 @@ export const submitFeedback = onCall(
     const occurredAt = Date.now();
     let result;
     try {
-      const data = await shopifyGraphql(
-        `mutation SubmitCustomerFeedback($metaobject: MetaobjectCreateInput!) {
-          metaobjectCreate(metaobject: $metaobject) {
-            metaobject {
-              id
-            }
-            userErrors {
-              code
-              field
-              message
-            }
-          }
-        }`,
-        {
-          metaobject: {
-            fields: feedbackMetaobjectFields(feedback, occurredAt),
-            handle: feedbackHandle(clientIp(request.rawRequest), occurredAt),
-            type: FEEDBACK_METAOBJECT_TYPE,
-          },
-        },
+      result = await createCustomerSubmission(
+        feedbackMetaobjectFields(feedback, occurredAt),
+        feedbackHandle(clientIp(request.rawRequest), occurredAt),
       );
-      result = data?.metaobjectCreate;
     } catch (error) {
+      if (error instanceof HttpsError) throw error;
       logger.error("Shopify feedback request failed.", {
         errorType: error instanceof Error ? error.name : typeof error,
       });
@@ -575,47 +650,196 @@ export const submitFeedback = onCall(
       );
     }
 
-    const userErrors = Array.isArray(result?.userErrors)
-      ? result.userErrors
-      : [];
-    if (userErrors.length) {
-      const duplicate = userErrors.some((error) => {
-        const code = cleanString(error?.code, 80).toUpperCase();
-        const message = cleanString(error?.message, 300).toLowerCase();
-        return (
-          code === "TAKEN" ||
-          message.includes("already exists") ||
-          message.includes("has already been taken")
-        );
-      });
-      if (duplicate) {
-        throw new HttpsError(
-          "resource-exhausted",
-          "Please wait a few minutes before sending more feedback.",
-        );
-      }
-
-      logger.error("Shopify rejected a feedback metaobject.", {
-        errors: userErrors.slice(0, 5).map((error) => ({
-          code: cleanString(error?.code, 80) || "unknown",
-          field: Array.isArray(error?.field)
-            ? error.field.map((part) => cleanString(part, 80)).slice(0, 8)
-            : [],
-        })),
-      });
-      throw new HttpsError(
-        "failed-precondition",
-        "Feedback is temporarily unavailable. Please try again later.",
-      );
-    }
-
-    if (!result?.metaobject?.id) {
-      throw new HttpsError(
-        "internal",
-        "Feedback could not be confirmed. Please try again later.",
-      );
-    }
+    assertCustomerSubmission(result, "feedback");
     return { ok: true };
+  },
+);
+
+export const submitContact = onCall(
+  {
+    consumeAppCheckToken: true,
+    cors: FEEDBACK_ALLOWED_ORIGINS,
+    enforceAppCheck: true,
+    maxInstances: 5,
+    secrets: [shopifyClientSecret],
+    timeoutSeconds: 30,
+  },
+  async (request) => {
+    if (request.app?.alreadyConsumed) {
+      throw new HttpsError(
+        "permission-denied",
+        "This contact request has already been used.",
+      );
+    }
+    if (cleanString(request.data?.website, 120)) return { ok: true };
+
+    let contact;
+    try {
+      contact = normalizeContactInput(request.data);
+    } catch (error) {
+      throw invalidArgument(error);
+    }
+
+    const occurredAt = Date.now();
+    let result;
+    try {
+      result = await createCustomerSubmission(
+        contactMetaobjectFields(contact, occurredAt),
+        submissionHandle(
+          "contact",
+          clientIp(request.rawRequest),
+          occurredAt,
+        ),
+      );
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      logger.error("Shopify contact request failed.", {
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
+      throw new HttpsError(
+        "unavailable",
+        "Messages are temporarily unavailable. Please try again later.",
+      );
+    }
+
+    assertCustomerSubmission(result, "message");
+    return { ok: true };
+  },
+);
+
+export const subscribeNewsletter = onCall(
+  {
+    consumeAppCheckToken: true,
+    cors: FEEDBACK_ALLOWED_ORIGINS,
+    enforceAppCheck: true,
+    maxInstances: 5,
+    secrets: [shopifyClientSecret],
+    timeoutSeconds: 30,
+  },
+  async (request) => {
+    if (request.app?.alreadyConsumed) {
+      throw new HttpsError(
+        "permission-denied",
+        "This signup request has already been used.",
+      );
+    }
+    if (cleanString(request.data?.website, 120)) {
+      return { discountCode: null, ok: true };
+    }
+
+    let newsletter;
+    try {
+      newsletter = normalizeNewsletterInput(request.data);
+    } catch (error) {
+      throw invalidArgument(error);
+    }
+
+    try {
+      const query = `email:${JSON.stringify(newsletter.email)}`;
+      const customerData = await shopifyGraphql(
+        `query FindNewsletterCustomer($query: String!) {
+          customers(first: 10, query: $query) {
+            nodes {
+              id
+              email
+              emailMarketingConsent {
+                marketingState
+              }
+            }
+          }
+        }`,
+        { query },
+      );
+      const customer = (
+        Array.isArray(customerData?.customers?.nodes)
+          ? customerData.customers.nodes
+          : []
+      ).find(
+        (item) =>
+          cleanString(item?.email, 180).toLowerCase() === newsletter.email,
+      );
+
+      if (!customer) {
+        const created = await shopifyGraphql(
+          `mutation CreateNewsletterCustomer($input: CustomerInput!) {
+            customerCreate(input: $input) {
+              customer {
+                id
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }`,
+          {
+            input: {
+              email: newsletter.email,
+              emailMarketingConsent: {
+                consentUpdatedAt: new Date().toISOString(),
+                marketingOptInLevel: "SINGLE_OPT_IN",
+                marketingState: "SUBSCRIBED",
+              },
+              tags: ["newsletter", "website-signup"],
+            },
+          },
+        );
+        const errors = created?.customerCreate?.userErrors || [];
+        if (errors.length || !created?.customerCreate?.customer?.id) {
+          throw new Error("Shopify rejected the newsletter customer.");
+        }
+      } else if (
+        customer.emailMarketingConsent?.marketingState !== "SUBSCRIBED"
+      ) {
+        const updated = await shopifyGraphql(
+          `mutation SubscribeNewsletterCustomer(
+            $input: CustomerEmailMarketingConsentUpdateInput!
+          ) {
+            customerEmailMarketingConsentUpdate(input: $input) {
+              customer {
+                id
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }`,
+          {
+            input: {
+              customerId: customer.id,
+              emailMarketingConsent: {
+                consentUpdatedAt: new Date().toISOString(),
+                marketingOptInLevel: "SINGLE_OPT_IN",
+                marketingState: "SUBSCRIBED",
+              },
+            },
+          },
+        );
+        const errors =
+          updated?.customerEmailMarketingConsentUpdate?.userErrors || [];
+        if (
+          errors.length ||
+          !updated?.customerEmailMarketingConsentUpdate?.customer?.id
+        ) {
+          throw new Error("Shopify rejected the marketing consent update.");
+        }
+      }
+    } catch (error) {
+      logger.error("Shopify newsletter signup failed.", {
+        errorType: error instanceof Error ? error.name : typeof error,
+      });
+      throw new HttpsError(
+        "unavailable",
+        "Newsletter signup is temporarily unavailable. Please try again later.",
+      );
+    }
+
+    return {
+      discountCode:
+        cleanString(newsletterDiscountCode.value(), 80).toUpperCase() || null,
+      ok: true,
+    };
   },
 );
 

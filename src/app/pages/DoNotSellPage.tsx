@@ -34,10 +34,10 @@ export function DoNotSellPage() {
               </p>
               <ul className="text-sm leading-relaxed space-y-2 ml-6 list-disc">
                 <li>Identifiers (name, email address, mailing address)</li>
-                <li>Payment information</li>
+                <li>Order and payment records processed by Shopify</li>
                 <li>Purchase history and preferences</li>
-                <li>Internet activity (browsing behavior, IP address)</li>
-                <li>Geolocation data</li>
+                <li>Limited technical and security activity such as an IP address</li>
+                <li>Approximate location only when supplied for private-access security</li>
               </ul>
             </div>
 
@@ -72,7 +72,7 @@ export function DoNotSellPage() {
             <div>
               <h3 className="text-xl tracking-wide mb-4 font-light">Cookies and Tracking</h3>
               <p className="text-sm leading-relaxed">
-                We use cookies and similar technologies for analytics and to improve your experience. You can opt-out of certain cookies through our cookie consent banner or your browser settings. Note that disabling certain cookies may affect website functionality.
+                We currently use only necessary cookies or browser storage for secure access, account sessions, and website preferences. We do not currently use advertising cookies or third-party behavioral analytics. Disabling necessary storage may affect website functionality.
               </p>
             </div>
 

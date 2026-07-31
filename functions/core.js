@@ -17,6 +17,10 @@ export function cleanString(value, maxLength) {
     : "";
 }
 
+function validEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 export function normalizeAccessCode(value) {
   return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
 }
@@ -86,7 +90,7 @@ export function normalizeGrantInput(value, currentTime = Date.now()) {
     : currentTime + 14 * 24 * 60 * 60 * 1000;
 
   if (!label) throw new Error("Person or organization name is required.");
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (email && !validEmail(email)) {
     throw new Error("Email address is not valid.");
   }
   if (!Number.isFinite(expiresAt) || expiresAt <= currentTime) {
@@ -200,7 +204,7 @@ export function normalizeFeedbackInput(value) {
   if (message.length < 3) {
     throw new Error("Feedback must be at least 3 characters.");
   }
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (email && !validEmail(email)) {
     throw new Error("Email address is not valid.");
   }
 
@@ -217,6 +221,42 @@ export function normalizeFeedbackInput(value) {
   };
 }
 
+export function normalizeContactInput(value) {
+  const input =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const email = cleanString(input.email, 180).toLowerCase();
+  const message = cleanString(input.message, 1800);
+  const name = cleanString(input.name, 120);
+  const requestedPath = cleanString(input.path, 300);
+  const subject = cleanString(input.subject, 160);
+
+  if (!name) throw new Error("Name is required.");
+  if (!validEmail(email)) throw new Error("Email address is not valid.");
+  if (!subject) throw new Error("Subject is required.");
+  if (message.length < 3) {
+    throw new Error("Message must be at least 3 characters.");
+  }
+
+  return {
+    email,
+    message,
+    name,
+    path:
+      requestedPath.startsWith("/") && !requestedPath.startsWith("//")
+        ? requestedPath
+        : "/contact",
+    subject,
+  };
+}
+
+export function normalizeNewsletterInput(value) {
+  const input =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const email = cleanString(input.email, 180).toLowerCase();
+  if (!validEmail(email)) throw new Error("Email address is not valid.");
+  return { email };
+}
+
 export function normalizeFeedbackRecord(value) {
   const metaobject =
     value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -228,10 +268,11 @@ export function normalizeFeedbackRecord(value) {
       ])
       .filter(([key]) => key),
   );
-  const parsedRating = Number(fields.get("rating"));
-  const rating = Number.isFinite(parsedRating)
+  const rawRating = fields.get("rating");
+  const parsedRating = Number(rawRating);
+  const rating = rawRating && Number.isFinite(parsedRating)
     ? Math.min(5, Math.max(1, Math.trunc(parsedRating)))
-    : 1;
+    : null;
   const submittedAt =
     cleanString(fields.get("submitted_at"), 80) ||
     cleanString(metaobject.createdAt, 80);

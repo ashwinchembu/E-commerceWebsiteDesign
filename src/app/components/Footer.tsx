@@ -2,6 +2,7 @@ import { Instagram, Youtube } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { subscribeToNewsletter } from '../lib/newsletter';
+import { markNewsletterSubscribed } from '../lib/newsletterPreferences';
 
 export function Footer() {
   const [email, setEmail] = useState('');
@@ -17,6 +18,7 @@ export function Footer() {
       const result = await subscribeToNewsletter(email, website);
       setEmail('');
       setWebsite('');
+      markNewsletterSubscribed(true);
       setStatus(
         result.discountCode
           ? `you are subscribed — welcome code ${result.discountCode}`

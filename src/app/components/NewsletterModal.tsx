@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import { subscribeToNewsletter } from '../lib/newsletter';
+import { markNewsletterSubscribed } from '../lib/newsletterPreferences';
 
 interface NewsletterModalProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export function NewsletterModal({ isOpen, onClose }: NewsletterModalProps) {
       const result = await subscribeToNewsletter(email, website);
       setDiscountCode(result.discountCode);
       setSubmitted(true);
+      markNewsletterSubscribed();
     } catch (submissionError) {
       const { firebaseErrorMessage } = await import('../lib/firebase');
       setError(
@@ -77,10 +79,10 @@ export function NewsletterModal({ isOpen, onClose }: NewsletterModalProps) {
         ) : (
           <>
             <h2 className="mb-2 text-center text-2xl font-light tracking-wide">
-              JOIN THE MANOIR FAMILY
+              GET THE LATEST DROPS
             </h2>
             <p className="mb-6 text-center text-sm tracking-wide text-gray-600">
-              Get early access to limited releases and brand updates
+              Get early access to limited releases and Manoir Kits updates
             </p>
 
             <form onSubmit={handleSubmit}>

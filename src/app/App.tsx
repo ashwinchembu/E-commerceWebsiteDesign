@@ -14,6 +14,11 @@ import { NewsletterModal } from './components/NewsletterModal';
 import { ScrollToTop } from './components/ScrollToTop';
 import { SecurityWatermark } from './components/SecurityWatermark';
 import { useShopifyCustomerAccount } from './hooks/useShopifyCustomerAccount';
+import {
+  NEWSLETTER_SUBSCRIBED_EVENT,
+  shouldShowNewsletterOffer,
+  snoozeNewsletterOffer,
+} from './lib/newsletterPreferences';
 import { HomePage } from './pages/HomePage';
 
 const AboutPage = lazy(() =>
@@ -230,7 +235,7 @@ export default function App() {
       window.location.pathname === '/jacket-builder' ||
       isAdminAccessRoute ||
       isPrivateAccessRoute ||
-      localStorage.getItem('newsletterShown')
+      !shouldShowNewsletterOffer()
     ) {
       return;
     }
@@ -238,8 +243,13 @@ export default function App() {
     let timer = 0;
     const scheduleNewsletter = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setShowNewsletterModal(true), 20_000);
+      timer = window.setTimeout(() => {
+        if (shouldShowNewsletterOffer()) {
+          setShowNewsletterModal(true);
+        }
+      }, 30_000);
     };
+    const closeNewsletter = () => setShowNewsletterModal(false);
 
     if (localStorage.getItem('cookieConsent')) {
       scheduleNewsletter();
@@ -248,16 +258,18 @@ export default function App() {
         once: true,
       });
     }
+    window.addEventListener(NEWSLETTER_SUBSCRIBED_EVENT, closeNewsletter);
 
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener('manoir:cookie-consent', scheduleNewsletter);
+      window.removeEventListener(NEWSLETTER_SUBSCRIBED_EVENT, closeNewsletter);
     };
   }, [isAdminAccessRoute, isPrivateAccessRoute]);
 
   const handleNewsletterClose = () => {
     setShowNewsletterModal(false);
-    localStorage.setItem('newsletterShown', 'true');
+    snoozeNewsletterOffer();
   };
 
   const handlePrivateAccessLogout = async () => {

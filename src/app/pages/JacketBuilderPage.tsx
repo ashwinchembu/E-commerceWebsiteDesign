@@ -252,7 +252,6 @@ export function JacketBuilderPage({
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [wishlisted, setWishlisted] = useState(false);
   const [showInterior, setShowInterior] = useState(false);
   const [interiorImages, setInteriorImages] = useState<{ label: string; patch: string } | null>(null);
 
@@ -441,10 +440,6 @@ export function JacketBuilderPage({
           </div>
 
           <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
-            <button onClick={() => setWishlisted((w) => !w)} className="text-gray-400 hover:text-black transition-colors">
-              <Star className={`w-4 h-4 ${wishlisted ? "fill-black text-black" : ""}`} />
-            </button>
-            <div className="h-5 w-px bg-gray-200" />
             <div className="text-sm font-semibold tracking-wide">${price.toLocaleString()}</div>
             <button
               onClick={() => setShowSizeModal(true)}

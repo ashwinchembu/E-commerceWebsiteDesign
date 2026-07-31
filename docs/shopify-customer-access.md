@@ -49,14 +49,19 @@ private saved-jacket metafield. Never add a Shopify Admin API secret to a
 
 ## Saved jacket comparisons
 
-Saved comparisons use one private JSON metafield on the signed-in Shopify
-customer. The app needs `customer_read_customers` and
-`customer_write_customers` in addition to its Admin API `write_customers`
-scope. Apply those scopes, then create the app-owned definition once:
+Saved comparisons use one JSON metafield on the signed-in Shopify customer.
+The Admin API app needs `write_customers` to create the definition. Create the
+merchant-owned definition once:
 
 ```sh
 npm run shopify:saved-jackets:setup
 ```
+
+Then open **Shopify Admin → Settings → Custom data → Customers → Saved jacket
+comps** and enable **Customer Account API read and write access**. Separately,
+the Headless storefront's Customer Account API permissions must enable both
+`customer_read_customers` and `customer_write_customers`. Run the setup command
+again to verify both the definition and its access setting.
 
 The storefront caps the list at four compact jacket configurations and uses
 Shopify compare-and-set protection so two browser tabs cannot silently

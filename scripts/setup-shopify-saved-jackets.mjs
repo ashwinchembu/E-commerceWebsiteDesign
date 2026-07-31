@@ -7,13 +7,9 @@ const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || "2026-07";
 const KEYCHAIN_ACCOUNT = "Manoir Customer Access CLI";
 const KEYCHAIN_SERVICE = "manoir-kits-shopify-client-secret";
 const FIREBASE_PROJECT = process.env.FIREBASE_PROJECT || "manoir-kits";
-const NAMESPACE = "$app:builder";
+const NAMESPACE = "manoir_kits_builder";
 const KEY = "saved_jackets";
-const REQUIRED_SCOPES = new Set([
-  "write_customers",
-  "customer_read_customers",
-  "customer_write_customers",
-]);
+const REQUIRED_SCOPES = new Set(["write_customers"]);
 
 function readClientSecret() {
   if (process.env.SHOPIFY_CLIENT_SECRET) return process.env.SHOPIFY_CLIENT_SECRET;
@@ -90,7 +86,7 @@ function matchingDefinition(definitions) {
   return definitions.find(
     (definition) =>
       definition.key === KEY &&
-      (definition.namespace === NAMESPACE || definition.namespace.endsWith("--builder")),
+      definition.namespace === NAMESPACE,
   );
 }
 
@@ -146,10 +142,6 @@ async function main() {
     }`,
     {
       definition: {
-        access: {
-          admin: "MERCHANT_READ",
-          customerAccount: "READ_WRITE",
-        },
         description: "Up to four jacket builder configurations saved by this customer.",
         key: KEY,
         name: "Saved jacket comps",
@@ -166,8 +158,12 @@ async function main() {
         "Shopify did not create the saved jacket definition.",
     );
   }
-  assertDefinition(result.createdDefinition);
-  console.log("Shopify saved jacket storage is configured.");
+  if (result.createdDefinition.type?.name !== "json") {
+    throw new Error("Shopify created the saved jacket metafield with the wrong data type.");
+  }
+  console.log(
+    "Shopify saved jacket storage was created. Enable Customer Account read/write access for it in Shopify Admin, then run this command again to verify it.",
+  );
 }
 
 main().catch((error) => {

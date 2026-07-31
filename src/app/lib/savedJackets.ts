@@ -1,6 +1,6 @@
 export const MAX_SAVED_JACKETS = 4;
 
-export const SAVED_JACKETS_NAMESPACE = "$app:builder";
+export const SAVED_JACKETS_NAMESPACE = "manoir_kits_builder";
 export const SAVED_JACKETS_KEY = "saved_jackets";
 
 export type JacketConfiguration = {

@@ -75,6 +75,11 @@ export async function createJacketCheckout(size: string, edition: string, attrib
   ];
   const checkoutUrl = payload.data?.cartCreate?.cart?.checkoutUrl;
   if (!response.ok || errors.length || !checkoutUrl) {
+    if (errors.some((message) => /online store channel is locked/i.test(message))) {
+      throw new Error(
+        "Shopify checkout is temporarily unavailable while the store is in pre-launch mode.",
+      );
+    }
     throw new Error(errors.join(" ") || "Shopify could not create this checkout.");
   }
   return checkoutUrl;

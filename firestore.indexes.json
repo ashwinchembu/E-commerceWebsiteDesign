@@ -58,6 +58,26 @@
       "fieldPath": "expire_at",
       "ttl": true,
       "indexes": []
+    },
+    {
+      "collectionGroup": "supportAuditEvents",
+      "fieldPath": "details",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "supportEntries",
+      "fieldPath": "changed_files",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "supportEntries",
+      "fieldPath": "description",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "supportEntries",
+      "fieldPath": "message",
+      "indexes": []
     }
   ]
 }

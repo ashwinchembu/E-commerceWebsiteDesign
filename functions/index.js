@@ -13,6 +13,7 @@ import {
   defineString,
 } from "firebase-functions/params";
 import {
+  SUPPORT_PLAN_DEFAULTS,
   cleanString,
   createAccessCode,
   evaluateGrantUse,
@@ -20,14 +21,17 @@ import {
   isAuthorizedAdminEmail,
   normalizeClientMeta,
   normalizeContactInput,
+  normalizeDeploymentLog,
   normalizeFeedbackInput,
   normalizeFeedbackRecord,
   normalizeGrantInput,
   normalizeNewsletterInput,
   normalizeShopifyCustomer,
+  normalizeSupportEntryInput,
   parseAccessCode,
   publicGrant,
   secureEqual,
+  supportPlanSummary,
 } from "./core.js";
 
 initializeApp();
@@ -62,6 +66,7 @@ const shopifyApiVersion = defineString("SHOPIFY_API_VERSION", {
   description: "Stable Shopify Admin API version.",
 });
 const shopifyClientSecret = defineSecret("SHOPIFY_CLIENT_SECRET");
+const deploymentTrackerSecret = defineSecret("DEPLOYMENT_TRACKER_SECRET");
 const newsletterDiscountCode = defineString("NEWSLETTER_DISCOUNT_CODE", {
   default: "",
   description:
@@ -76,6 +81,9 @@ const rateLimits = db.collection("accessRateLimits");
 const shopifyCustomers = db.collection("shopifyCustomers");
 const system = db.collection("system");
 const webhookReceipts = db.collection("shopifyWebhookReceipts");
+const supportEntries = db.collection("supportEntries");
+const supportAuditEvents = db.collection("supportAuditEvents");
+const supportPlanReference = system.doc("supportPlan");
 const FEEDBACK_METAOBJECT_TYPE = "$app:customer_feedback";
 const FEEDBACK_RATE_WINDOW_MS = 5 * 60 * 1000;
 const FEEDBACK_ALLOWED_ORIGINS = [
@@ -87,6 +95,7 @@ const FEEDBACK_ALLOWED_ORIGINS = [
 const ADMIN_EMAIL_ALLOWLIST = [
   "ashchembu@gmail.com",
   "manoirkits@gmail.com",
+  "skpbains@gmail.com",
 ];
 
 function assertAdmin(request) {
@@ -142,6 +151,35 @@ function invalidArgument(error) {
     "invalid-argument",
     error instanceof Error ? error.message : "The request is not valid.",
   );
+}
+
+function supportActor(request) {
+  return {
+    email: cleanString(request.auth?.token?.email, 180).toLowerCase() || null,
+    uid: request.auth?.uid || null,
+  };
+}
+
+function supportEntryForAdmin(document) {
+  return { id: document.id, ...document.data() };
+}
+
+function supportAuditRecord(action, actor, details, occurredAt = Date.now()) {
+  return {
+    action,
+    actor_email: actor.email || null,
+    actor_uid: actor.uid || null,
+    details,
+    occurred_at: occurredAt,
+  };
+}
+
+function validSupportDocumentId(value) {
+  const id = cleanString(value, 120);
+  if (!/^[A-Za-z0-9_-]{6,120}$/.test(id)) {
+    throw new HttpsError("invalid-argument", "Support log ID is invalid.");
+  }
+  return id;
 }
 
 function clientIp(rawRequest) {
@@ -290,6 +328,291 @@ export const listAccessEvents = onCall(async (request) => {
     retentionDays: Math.max(1, eventRetentionDays.value()),
   };
 });
+
+export const getSupportTracker = onCall(async (request) => {
+  assertAdmin(request);
+  const [planSnapshot, entrySnapshot, auditSnapshot] = await Promise.all([
+    supportPlanReference.get(),
+    supportEntries.orderBy("created_at", "desc").limit(500).get(),
+    supportAuditEvents.orderBy("occurred_at", "desc").limit(100).get(),
+  ]);
+  const plan = {
+    ...SUPPORT_PLAN_DEFAULTS,
+    ...(planSnapshot.exists ? planSnapshot.data() : {}),
+  };
+  const entries = entrySnapshot.docs.map(supportEntryForAdmin);
+  return {
+    audit: auditSnapshot.docs.map((document) => ({
+      id: document.id,
+      ...document.data(),
+    })),
+    entries,
+    plan,
+    summary: supportPlanSummary(entries, plan),
+  };
+});
+
+export const setSupportLaunchDate = onCall(async (request) => {
+  assertAdmin(request);
+  const rawLaunchAt = request.data?.launchAt;
+  const launchAt = rawLaunchAt ? Date.parse(String(rawLaunchAt)) : null;
+  if (rawLaunchAt && !Number.isFinite(launchAt)) {
+    throw new HttpsError("invalid-argument", "Official launch date is invalid.");
+  }
+  if (
+    launchAt &&
+    (launchAt < Date.parse("2020-01-01T00:00:00Z") ||
+      launchAt > Date.parse("2040-01-01T00:00:00Z"))
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Official launch date is outside the supported range.",
+    );
+  }
+
+  const now = Date.now();
+  const actor = supportActor(request);
+  const batch = db.batch();
+  batch.set(
+    supportPlanReference,
+    {
+      ...SUPPORT_PLAN_DEFAULTS,
+      launch_at: launchAt,
+      updated_at: now,
+      updated_by_email: actor.email,
+      updated_by_uid: actor.uid,
+    },
+    { merge: true },
+  );
+  batch.set(
+    supportAuditEvents.doc(),
+    supportAuditRecord("launch_date_updated", actor, { launch_at: launchAt }, now),
+  );
+  await batch.commit();
+  return { launchAt };
+});
+
+export const createSupportEntry = onCall(async (request) => {
+  assertAdmin(request);
+  let normalized;
+  try {
+    normalized = normalizeSupportEntryInput(request.data);
+  } catch (error) {
+    throw invalidArgument(error);
+  }
+
+  const now = Date.now();
+  const actor = supportActor(request);
+  const reference = supportEntries.doc();
+  const record = {
+    ...normalized,
+    created_at: now,
+    created_by_email: actor.email,
+    created_by_uid: actor.uid,
+    source: "manual",
+    updated_at: now,
+    updated_by_email: actor.email,
+    updated_by_uid: actor.uid,
+    voided_at: null,
+  };
+  const batch = db.batch();
+  batch.set(reference, record);
+  batch.set(
+    supportAuditEvents.doc(),
+    supportAuditRecord(
+      "entry_created",
+      actor,
+      {
+        actual_hours: record.actual_hours,
+        allocation: record.allocation,
+        entry_id: reference.id,
+        estimate_hours: record.estimate_hours,
+        title: record.title,
+      },
+      now,
+    ),
+  );
+  await batch.commit();
+  return { id: reference.id };
+});
+
+export const updateSupportEntry = onCall(async (request) => {
+  assertAdmin(request);
+  const id = validSupportDocumentId(request.data?.id);
+  const reference = supportEntries.doc(id);
+  const actor = supportActor(request);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(reference);
+    if (!snapshot.exists) {
+      throw new HttpsError("not-found", "Support log entry was not found.");
+    }
+    const current = snapshot.data();
+    if (current.voided_at) {
+      throw new HttpsError("failed-precondition", "Voided entries cannot be edited.");
+    }
+    let normalized;
+    try {
+      normalized = normalizeSupportEntryInput({
+        actualHours: request.data?.actualHours,
+        allocation: request.data?.allocation,
+        description: request.data?.description,
+        estimateHours: current.estimate_hours,
+        occurredAt: new Date(current.occurred_at || current.created_at).toISOString(),
+        title: current.title,
+      });
+    } catch (error) {
+      throw invalidArgument(error);
+    }
+    const now = Date.now();
+    const changes = {
+      actual_hours: normalized.actual_hours,
+      allocation: normalized.allocation,
+      description: normalized.description,
+      updated_at: now,
+      updated_by_email: actor.email,
+      updated_by_uid: actor.uid,
+    };
+    transaction.update(reference, changes);
+    transaction.set(
+      supportAuditEvents.doc(),
+      supportAuditRecord(
+        "entry_reviewed",
+        actor,
+        {
+          after: changes,
+          before: {
+            actual_hours: current.actual_hours ?? null,
+            allocation: current.allocation,
+            description: current.description ?? null,
+          },
+          entry_id: id,
+          title: current.title,
+        },
+        now,
+      ),
+    );
+  });
+  return { ok: true };
+});
+
+export const voidSupportEntry = onCall(async (request) => {
+  assertAdmin(request);
+  const id = validSupportDocumentId(request.data?.id);
+  const reason = cleanString(request.data?.reason, 500);
+  if (!reason) {
+    throw new HttpsError("invalid-argument", "A reason is required to void an entry.");
+  }
+  const reference = supportEntries.doc(id);
+  const actor = supportActor(request);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(reference);
+    if (!snapshot.exists) {
+      throw new HttpsError("not-found", "Support log entry was not found.");
+    }
+    if (snapshot.data().voided_at) return;
+    const now = Date.now();
+    transaction.update(reference, {
+      updated_at: now,
+      updated_by_email: actor.email,
+      updated_by_uid: actor.uid,
+      void_reason: reason,
+      voided_at: now,
+    });
+    transaction.set(
+      supportAuditEvents.doc(),
+      supportAuditRecord(
+        "entry_voided",
+        actor,
+        { entry_id: id, reason, title: snapshot.data().title },
+        now,
+      ),
+    );
+  });
+  return { ok: true };
+});
+
+export const logDeployment = onRequest(
+  {
+    maxInstances: 2,
+    secrets: [deploymentTrackerSecret],
+  },
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    if (request.method !== "POST") {
+      response.set("Allow", "POST").status(405).json({ error: "Method not allowed" });
+      return;
+    }
+    const suppliedSecret = cleanString(
+      request.get("x-deployment-tracker-secret"),
+      200,
+    );
+    if (!secureEqual(suppliedSecret, deploymentTrackerSecret.value())) {
+      response.status(401).json({ error: "Invalid tracker secret" });
+      return;
+    }
+
+    let deployment;
+    try {
+      deployment = normalizeDeploymentLog(request.body);
+    } catch (error) {
+      response.status(400).json({
+        error: error instanceof Error ? error.message : "Deployment log is invalid.",
+      });
+      return;
+    }
+
+    const reference = supportEntries.doc(`deploy_${deployment.sha}`);
+    const now = Date.now();
+    const record = {
+      ...deployment,
+      actual_hours: null,
+      allocation: "unreviewed",
+      created_at: now,
+      created_by_email: deployment.author_email,
+      created_by_uid: null,
+      description:
+        "Automatically logged from a push to main. Review the estimate before applying hours.",
+      occurred_at: deployment.pushed_at,
+      source: "deployment",
+      title: deployment.message.split("\n")[0],
+      updated_at: now,
+      updated_by_email: deployment.author_email,
+      updated_by_uid: null,
+      voided_at: null,
+    };
+
+    const result = await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      if (snapshot.exists) {
+        return { duplicate: true, estimateHours: snapshot.data().estimate_hours };
+      }
+      transaction.create(reference, record);
+      transaction.set(
+        supportAuditEvents.doc(),
+        supportAuditRecord(
+          "deployment_logged",
+          { email: deployment.author_email, uid: null },
+          {
+            additions: deployment.additions,
+            commit_url: deployment.commit_url,
+            deletions: deployment.deletions,
+            entry_id: reference.id,
+            estimate_hours: deployment.estimate_hours,
+            files_changed: deployment.files_changed,
+            sha: deployment.sha,
+          },
+          now,
+        ),
+      );
+      return { duplicate: false, estimateHours: deployment.estimate_hours };
+    });
+    response.status(result.duplicate ? 200 : 201).json({
+      ...result,
+      entryId: reference.id,
+      logged: true,
+    });
+  },
+);
 
 export const revokeAccessGrant = onCall(async (request) => {
   assertAdmin(request);

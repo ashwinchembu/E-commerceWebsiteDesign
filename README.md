@@ -146,6 +146,19 @@ Keep the service-account JSON outside this repository and remove it from the
 machine when it is no longer needed. The administrator signs in at
 `/admin/access`, which includes the private Shopify-backed feedback inbox.
 
+The same owner dashboard contains the support ledger for the final project
+terms: a $3,000 future-work bank (24 hours at $125/hour) and a separate 30-day
+post-launch bug-fix window capped at 20 hours. Set the official launch date in
+the dashboard when the site launches. Every push to `main` is logged as an
+unreviewed deployment with its commit, changed files, line totals, and an
+initial engineering-effort estimate. An administrator must review and allocate
+the entry before either balance changes.
+
+The `.github/workflows/support-tracker.yml` workflow authenticates to the
+`logDeployment` Function with the `DEPLOYMENT_TRACKER_SECRET` GitHub Actions
+secret. Store the same value in Firebase Secret Manager before deploying the
+Function; never commit it to this repository.
+
 ### 5. Keep Shopify customers synchronized
 
 After the first admin signs in, select **Sync all customers** in the admin

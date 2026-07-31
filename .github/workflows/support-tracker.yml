@@ -1,0 +1,30 @@
+name: Log deployment effort
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: support-tracker-main
+  cancel-in-progress: false
+
+jobs:
+  log-deployment:
+    name: Estimate and log main push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read deployment changes
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add deployment to owner dashboard
+        env:
+          DEPLOYMENT_TRACKER_ENDPOINT: https://us-west1-manoir-kits.cloudfunctions.net/logDeployment
+          DEPLOYMENT_TRACKER_SECRET: ${{ secrets.DEPLOYMENT_TRACKER_SECRET }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: node scripts/log-deployment.mjs

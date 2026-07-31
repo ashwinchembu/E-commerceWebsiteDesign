@@ -96,6 +96,63 @@ type FeedbackItem = {
   submitted_at?: string | null;
 };
 
+type SupportAllocation = 'unreviewed' | 'grace' | 'bank' | 'non_billable';
+
+type SupportPlan = {
+  bank_total_hours: number;
+  bank_value_dollars: number;
+  grace_days: number;
+  grace_total_hours: number;
+  hourly_rate: number;
+  launch_at?: number | null;
+};
+
+type SupportEntry = {
+  id: string;
+  actual_hours?: number | null;
+  additions?: number;
+  allocation: SupportAllocation;
+  author_email?: string | null;
+  author_name?: string | null;
+  changed_files?: Array<{ additions: number; deletions: number; path: string }>;
+  commit_url?: string | null;
+  created_at: number;
+  deletions?: number;
+  description?: string | null;
+  estimate_hours: number;
+  files_changed?: number;
+  occurred_at: number;
+  sha?: string;
+  source: 'deployment' | 'manual';
+  title: string;
+  updated_at: number;
+  updated_by_email?: string | null;
+  void_reason?: string | null;
+  voided_at?: number | null;
+};
+
+type SupportAuditEvent = {
+  id: string;
+  action: string;
+  actor_email?: string | null;
+  details?: Record<string, unknown>;
+  occurred_at: number;
+};
+
+type SupportTracker = {
+  audit: SupportAuditEvent[];
+  entries: SupportEntry[];
+  plan: SupportPlan;
+  summary: {
+    bank_remaining_hours: number;
+    bank_used_hours: number;
+    grace_ends_at?: number | null;
+    grace_remaining_hours: number;
+    grace_used_hours: number;
+    unreviewed_count: number;
+  };
+};
+
 function defaultExpiration() {
   const date = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
   date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
@@ -110,6 +167,37 @@ function feedbackDateTime(value?: string | null) {
   if (!value) return '—';
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : '—';
+}
+
+function dateInput(value?: number | null) {
+  if (!value) return '';
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+function hours(value?: number | null) {
+  return `${Number(value || 0).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')}h`;
+}
+
+const allocationLabels: Record<SupportAllocation, string> = {
+  bank: 'Future-work bank',
+  grace: '30-day bug-fix window',
+  non_billable: 'Non-billable / included',
+  unreviewed: 'Unreviewed',
+};
+
+function allocationClasses(allocation: SupportAllocation) {
+  if (allocation === 'bank') {
+    return 'border-sky-400/45 bg-sky-400/10 text-sky-100';
+  }
+  if (allocation === 'grace') {
+    return 'border-emerald-400/45 bg-emerald-400/10 text-emerald-100';
+  }
+  if (allocation === 'non_billable') {
+    return 'border-white/20 bg-white/5 text-white/60';
+  }
+  return 'border-amber-400/45 bg-amber-400/10 text-amber-100';
 }
 
 function grantStatus(grant: Grant) {
@@ -175,6 +263,383 @@ const button =
   'border border-white bg-white px-4 py-3 text-xs tracking-[0.18em] text-black transition hover:bg-transparent hover:text-white disabled:cursor-not-allowed disabled:opacity-40';
 const secondaryButton =
   'border border-white/30 px-4 py-3 text-xs tracking-[0.16em] text-white transition hover:border-white disabled:cursor-not-allowed disabled:opacity-40';
+
+function SupportTrackerSection() {
+  const [tracker, setTracker] = useState<SupportTracker | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [launchDate, setLaunchDate] = useState('');
+
+  const loadTracker = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await callFirebaseFunction<Record<string, never>, SupportTracker>(
+        'getSupportTracker',
+        {},
+      );
+      setTracker(result);
+      setLaunchDate(dateInput(result.plan.launch_at));
+    } catch (error) {
+      toast.error(firebaseErrorMessage(error, 'The support tracker could not be loaded.'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTracker();
+  }, [loadTracker]);
+
+  async function saveLaunchDate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setWorking(true);
+    try {
+      const launchAt = launchDate
+        ? new Date(`${launchDate}T00:00:00`).toISOString()
+        : null;
+      await callFirebaseFunction<{ launchAt: string | null }, { launchAt: number | null }>(
+        'setSupportLaunchDate',
+        { launchAt },
+      );
+      toast.success(launchDate ? 'Official launch date saved.' : 'Launch date cleared.');
+      await loadTracker();
+    } catch (error) {
+      toast.error(firebaseErrorMessage(error, 'The launch date could not be saved.'));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function createEntry(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
+    setWorking(true);
+    try {
+      await callFirebaseFunction<Record<string, FormDataEntryValue>, { id: string }>(
+        'createSupportEntry',
+        values,
+      );
+      toast.success('Work entry logged.');
+      form.reset();
+      await loadTracker();
+    } catch (error) {
+      toast.error(firebaseErrorMessage(error, 'The work entry could not be logged.'));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function updateEntry(event: FormEvent<HTMLFormElement>, id: string) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    setWorking(true);
+    try {
+      await callFirebaseFunction<Record<string, FormDataEntryValue | string>, { ok: boolean }>(
+        'updateSupportEntry',
+        { ...values, id },
+      );
+      toast.success('Hours reviewed and saved.');
+      await loadTracker();
+    } catch (error) {
+      toast.error(firebaseErrorMessage(error, 'The work entry could not be updated.'));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function voidEntry(id: string) {
+    const reason = window.prompt('Why should this entry be voided? The audit record will remain.');
+    if (!reason?.trim()) return;
+    setWorking(true);
+    try {
+      await callFirebaseFunction<{ id: string; reason: string }, { ok: boolean }>(
+        'voidSupportEntry',
+        { id, reason },
+      );
+      toast.success('Entry voided; its audit history was preserved.');
+      await loadTracker();
+    } catch (error) {
+      toast.error(firebaseErrorMessage(error, 'The work entry could not be voided.'));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  if (loading && !tracker) {
+    return (
+      <section className={panel}>
+        <p className="text-xs tracking-[0.2em] text-white/45">SUPPORT & MAINTENANCE</p>
+        <p className="mt-4 text-sm text-white/55">Loading the work ledger…</p>
+      </section>
+    );
+  }
+
+  if (!tracker) return null;
+  const { plan, summary } = tracker;
+  const graceWindowStatus = !plan.launch_at
+    ? 'Starts when the official launch date is recorded'
+    : summary.grace_ends_at && Date.now() <= summary.grace_ends_at
+      ? `Active through ${new Date(summary.grace_ends_at).toLocaleDateString()}`
+      : `Ended ${summary.grace_ends_at ? new Date(summary.grace_ends_at).toLocaleDateString() : '—'}`;
+
+  return (
+    <section className={panel}>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs tracking-[0.2em] text-white/45">SUPPORT & MAINTENANCE</p>
+          <h2 className="mt-2 text-2xl font-light">Project work ledger</h2>
+          <p className="mt-3 max-w-4xl text-sm leading-6 text-white/55">
+            Every push to <span className="font-mono text-white/75">main</span> is logged with
+            its commit, change totals, and an initial effort estimate. An administrator reviews
+            the estimate before any hours are applied.
+          </p>
+        </div>
+        <button
+          className={secondaryButton}
+          disabled={loading || working}
+          onClick={() => void loadTracker()}
+          type="button"
+        >
+          {loading ? 'REFRESHING…' : 'REFRESH LEDGER'}
+        </button>
+      </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="border border-sky-400/25 bg-sky-400/[0.06] p-5">
+          <p className="text-[10px] tracking-[0.18em] text-sky-100/60">FUTURE-WORK BANK</p>
+          <p className="mt-3 text-3xl font-light">{hours(summary.bank_remaining_hours)}</p>
+          <p className="mt-2 text-xs leading-5 text-white/45">
+            {hours(summary.bank_used_hours)} used of {hours(plan.bank_total_hours)} · $
+            {plan.bank_value_dollars.toLocaleString()} at ${plan.hourly_rate}/hr
+          </p>
+        </div>
+        <div className="border border-emerald-400/25 bg-emerald-400/[0.06] p-5">
+          <p className="text-[10px] tracking-[0.18em] text-emerald-100/60">BUG-FIX GRACE</p>
+          <p className="mt-3 text-3xl font-light">{hours(summary.grace_remaining_hours)}</p>
+          <p className="mt-2 text-xs leading-5 text-white/45">
+            {hours(summary.grace_used_hours)} used of {hours(plan.grace_total_hours)} · separate
+            from the paid bank
+          </p>
+        </div>
+        <div className="border border-white/15 p-5">
+          <p className="text-[10px] tracking-[0.18em] text-white/45">30-DAY WINDOW</p>
+          <p className="mt-3 text-lg font-light">{graceWindowStatus}</p>
+          <p className="mt-2 text-xs leading-5 text-white/45">
+            Only launch-related bug fixes approved in this window count against the grace cap.
+          </p>
+        </div>
+        <div className="border border-amber-400/25 bg-amber-400/[0.06] p-5">
+          <p className="text-[10px] tracking-[0.18em] text-amber-100/60">NEEDS REVIEW</p>
+          <p className="mt-3 text-3xl font-light">{summary.unreviewed_count}</p>
+          <p className="mt-2 text-xs leading-5 text-white/45">
+            Estimates do not reduce either balance until reviewed.
+          </p>
+        </div>
+      </div>
+
+      <form
+        className="mt-6 flex flex-col gap-4 border border-white/15 p-5 sm:flex-row sm:items-end"
+        onSubmit={saveLaunchDate}
+      >
+        <label className="w-full max-w-sm text-xs tracking-[0.14em] text-white/65">
+          OFFICIAL LAUNCH DATE
+          <input
+            className={input}
+            onChange={(event) => setLaunchDate(event.target.value)}
+            type="date"
+            value={launchDate}
+          />
+        </label>
+        <button className={button} disabled={working} type="submit">
+          SAVE LAUNCH DATE
+        </button>
+        {launchDate && (
+          <button
+            className={secondaryButton}
+            disabled={working}
+            onClick={() => setLaunchDate('')}
+            type="button"
+          >
+            CLEAR FIELD
+          </button>
+        )}
+      </form>
+
+      <details className="mt-6 border border-white/15 p-5">
+        <summary className="cursor-pointer text-sm tracking-[0.12em] text-white/75">
+          LOG WORK MANUALLY
+        </summary>
+        <form className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-4" onSubmit={createEntry}>
+          <label className="text-xs tracking-[0.14em] text-white/65 md:col-span-2">
+            WORK TITLE
+            <input className={input} maxLength={180} name="title" required type="text" />
+          </label>
+          <label className="text-xs tracking-[0.14em] text-white/65">
+            ESTIMATE (HOURS)
+            <input className={input} min="0.25" name="estimateHours" required step="0.25" type="number" />
+          </label>
+          <label className="text-xs tracking-[0.14em] text-white/65">
+            WORK DATE
+            <input className={input} name="occurredAt" required type="date" />
+          </label>
+          <label className="text-xs tracking-[0.14em] text-white/65">
+            APPLY TO
+            <select className={input} defaultValue="unreviewed" name="allocation">
+              {Object.entries(allocationLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs tracking-[0.14em] text-white/65">
+            APPLIED HOURS
+            <input className={input} min="0.25" name="actualHours" step="0.25" type="number" />
+          </label>
+          <label className="text-xs tracking-[0.14em] text-white/65 md:col-span-2">
+            DETAILS
+            <textarea className={input} maxLength={3000} name="description" rows={3} />
+          </label>
+          <button className={button} disabled={working} type="submit">ADD WORK ENTRY</button>
+        </form>
+      </details>
+
+      <div className="mt-6 grid gap-4">
+        {tracker.entries.length === 0 ? (
+          <p className="border border-white/10 p-5 text-sm text-white/50">
+            No work has been logged yet. The next push to main will appear automatically.
+          </p>
+        ) : tracker.entries.map((entry) => (
+          <article
+            className={`border p-5 ${entry.voided_at ? 'border-red-400/25 opacity-55' : 'border-white/15'}`}
+            key={entry.id}
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`border px-2 py-1 text-[10px] tracking-[0.14em] ${allocationClasses(entry.allocation)}`}>
+                    {entry.voided_at ? 'VOIDED' : allocationLabels[entry.allocation].toUpperCase()}
+                  </span>
+                  <span className="border border-white/15 px-2 py-1 text-[10px] tracking-[0.14em] text-white/45">
+                    {entry.source.toUpperCase()}
+                  </span>
+                </div>
+                <h3 className="mt-3 break-words text-lg font-normal">{entry.title}</h3>
+                <p className="mt-2 text-xs leading-5 text-white/45">
+                  {dateTime(entry.occurred_at)} · estimate {hours(entry.estimate_hours)} · applied{' '}
+                  {entry.actual_hours == null ? 'not reviewed' : hours(entry.actual_hours)}
+                </p>
+                {entry.description && (
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/60">{entry.description}</p>
+                )}
+                {entry.source === 'deployment' && (
+                  <div className="mt-4 text-xs leading-5 text-white/45">
+                    <p>
+                      {entry.files_changed || 0} files · +{entry.additions || 0} / −{entry.deletions || 0}
+                      {entry.author_name ? ` · ${entry.author_name}` : ''}
+                    </p>
+                    {entry.commit_url && (
+                      <a
+                        className="mt-1 inline-block break-all font-mono text-white/65 underline underline-offset-4 hover:text-white"
+                        href={entry.commit_url}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {entry.sha?.slice(0, 10)} ↗
+                      </a>
+                    )}
+                    {entry.changed_files && entry.changed_files.length > 0 && (
+                      <details className="mt-3">
+                        <summary className="cursor-pointer text-white/60">VIEW CHANGED FILES</summary>
+                        <ul className="mt-2 grid gap-1 font-mono text-[11px]">
+                          {entry.changed_files.map((file) => (
+                            <li className="break-all" key={file.path}>
+                              +{file.additions} −{file.deletions} {file.path}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                )}
+                {entry.voided_at && (
+                  <p className="mt-3 text-xs text-red-200">Voided: {entry.void_reason || 'No reason recorded'}</p>
+                )}
+              </div>
+
+              {!entry.voided_at && (
+                <form
+                  className="grid shrink-0 gap-3 border border-white/10 p-4 sm:grid-cols-2 lg:w-[520px]"
+                  onSubmit={(event) => void updateEntry(event, entry.id)}
+                >
+                  <label className="text-[10px] tracking-[0.12em] text-white/55">
+                    APPLY TO
+                    <select className={input} defaultValue={entry.allocation} name="allocation">
+                      {Object.entries(allocationLabels).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-[10px] tracking-[0.12em] text-white/55">
+                    APPLIED HOURS
+                    <input
+                      className={input}
+                      defaultValue={entry.actual_hours ?? entry.estimate_hours}
+                      min="0.25"
+                      name="actualHours"
+                      required
+                      step="0.25"
+                      type="number"
+                    />
+                  </label>
+                  <label className="text-[10px] tracking-[0.12em] text-white/55 sm:col-span-2">
+                    REVIEW NOTES
+                    <textarea
+                      className={input}
+                      defaultValue={entry.description || ''}
+                      maxLength={3000}
+                      name="description"
+                      rows={2}
+                    />
+                  </label>
+                  <button className={button} disabled={working} type="submit">SAVE REVIEW</button>
+                  <button
+                    className="border border-red-300/30 px-4 py-3 text-xs tracking-[0.14em] text-red-200 hover:border-red-200"
+                    disabled={working}
+                    onClick={() => void voidEntry(entry.id)}
+                    type="button"
+                  >
+                    VOID ENTRY
+                  </button>
+                </form>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <details className="mt-6 border border-white/15 p-5">
+        <summary className="cursor-pointer text-sm tracking-[0.12em] text-white/75">
+          ACTIVITY HISTORY ({tracker.audit.length})
+        </summary>
+        <div className="mt-4 grid gap-3">
+          {tracker.audit.map((event) => (
+            <div className="border-t border-white/10 pt-3 text-xs leading-5 text-white/50" key={event.id}>
+              <p>
+                <span className="text-white/75">{event.action.replaceAll('_', ' ')}</span> ·{' '}
+                {dateTime(event.occurred_at)} · {event.actor_email || 'deployment automation'}
+              </p>
+              {event.details && (
+                <p className="mt-1 break-words font-mono text-[11px] text-white/35">
+                  {JSON.stringify(event.details)}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </details>
+    </section>
+  );
+}
 
 export function AdminAccessPage() {
   const [authReady, setAuthReady] = useState(false);
@@ -526,6 +991,8 @@ export function AdminAccessPage() {
             <p className="mt-3 text-4xl font-light">{feedback.length.toLocaleString()}</p>
           </div>
         </section>
+
+        <SupportTrackerSection />
 
         <section className={panel}>
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">

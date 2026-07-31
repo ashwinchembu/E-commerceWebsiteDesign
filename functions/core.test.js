@@ -2,16 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createAccessCode,
+  estimateDeploymentHours,
   evaluateGrantUse,
   grantState,
   isAuthorizedAdminEmail,
   normalizeContactInput,
+  normalizeDeploymentLog,
   normalizeFeedbackInput,
   normalizeFeedbackRecord,
   normalizeGrantInput,
   normalizeNewsletterInput,
   normalizeShopifyCustomer,
+  normalizeSupportEntryInput,
   parseAccessCode,
+  supportPlanSummary,
 } from "./core.js";
 
 test("admin bootstrap requires an exact verified allowlisted email", () => {
@@ -287,4 +291,74 @@ test("Shopify feedback metaobjects are sanitized for the admin inbox", () => {
     id: "gid://shopify/Metaobject/456",
   });
   assert.equal(malformed.rating, null);
+});
+
+test("deployment logs are normalized and receive a bounded effort estimate", () => {
+  const deployment = normalizeDeploymentLog({
+    authorEmail: " ASHWIN@EXAMPLE.COM ",
+    authorName: " Ashwin ",
+    branch: "main",
+    changedFiles: [
+      { additions: 120, deletions: 20, path: "src/app/pages/AdminAccessPage.tsx" },
+      { additions: 80, deletions: 4, path: "functions/index.js" },
+    ],
+    commitUrl: "https://github.com/example/repo/commit/abc",
+    message: " Add support tracker ",
+    pushedAt: "2026-07-31T12:00:00Z",
+    repository: "example/repo",
+    sha: "a".repeat(40),
+  });
+
+  assert.equal(deployment.additions, 200);
+  assert.equal(deployment.author_email, "ashwin@example.com");
+  assert.equal(deployment.files_changed, 2);
+  assert.ok(deployment.estimate_hours >= 0.25);
+  assert.ok(deployment.estimate_hours <= 8);
+  assert.throws(
+    () => normalizeDeploymentLog({ branch: "preview", sha: "a".repeat(40) }),
+    /main-branch/,
+  );
+  assert.equal(
+    estimateDeploymentHours({ additions: 100000, filesChanged: 500 }),
+    8,
+  );
+});
+
+test("support entries require reviewed hours and summarize both separate banks", () => {
+  const reviewed = normalizeSupportEntryInput({
+    actualHours: 1.26,
+    allocation: "bank",
+    description: " Checkout adjustment ",
+    estimateHours: 1.1,
+    occurredAt: "2026-07-31T12:00:00Z",
+    title: " Checkout fix ",
+  });
+  assert.equal(reviewed.actual_hours, 1.25);
+  assert.equal(reviewed.estimate_hours, 1);
+  assert.throws(
+    () =>
+      normalizeSupportEntryInput({
+        allocation: "grace",
+        estimateHours: 1,
+        title: "Missing applied time",
+      }),
+    /Applied hours/,
+  );
+
+  const summary = supportPlanSummary(
+    [
+      { actual_hours: 3, allocation: "bank" },
+      { actual_hours: 2.5, allocation: "grace" },
+      { actual_hours: null, allocation: "unreviewed" },
+      { actual_hours: 6, allocation: "bank", voided_at: Date.now() },
+    ],
+    { launch_at: Date.parse("2026-08-01T00:00:00Z") },
+  );
+  assert.equal(summary.bank_remaining_hours, 21);
+  assert.equal(summary.grace_remaining_hours, 17.5);
+  assert.equal(summary.unreviewed_count, 1);
+  assert.equal(
+    summary.grace_ends_at,
+    Date.parse("2026-08-31T00:00:00Z"),
+  );
 });

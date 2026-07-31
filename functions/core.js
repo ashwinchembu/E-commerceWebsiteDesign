@@ -10,11 +10,182 @@ const FEEDBACK_CATEGORIES = new Set([
   "website",
   "other",
 ]);
+const SUPPORT_ALLOCATIONS = new Set([
+  "unreviewed",
+  "grace",
+  "bank",
+  "non_billable",
+]);
+
+export const SUPPORT_PLAN_DEFAULTS = Object.freeze({
+  bank_total_hours: 24,
+  bank_value_dollars: 3000,
+  grace_days: 30,
+  grace_total_hours: 20,
+  hourly_rate: 125,
+  launch_at: null,
+});
 
 export function cleanString(value, maxLength) {
   return typeof value === "string"
     ? value.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, maxLength)
     : "";
+}
+
+function finiteNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function quarterHour(value) {
+  return Math.round(finiteNumber(value) * 4) / 4;
+}
+
+export function estimateDeploymentHours(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const changedFiles = Array.isArray(input.changedFiles)
+    ? input.changedFiles.slice(0, 100)
+    : [];
+  const fileCount = Math.max(
+    changedFiles.length,
+    Math.trunc(finiteNumber(input.filesChanged)),
+  );
+  const additions = Math.max(0, Math.trunc(finiteNumber(input.additions)));
+  const deletions = Math.max(0, Math.trunc(finiteNumber(input.deletions)));
+  const complexFiles = changedFiles.filter((file) => {
+    const name = cleanString(file?.path ?? file, 400).toLowerCase();
+    return (
+      name.startsWith("functions/") ||
+      name.includes("firebase") ||
+      name.includes("shopify") ||
+      name.includes("jacket") ||
+      name.endsWith(".glb") ||
+      name.endsWith(".gltf")
+    );
+  }).length;
+  const raw =
+    0.25 +
+    Math.min(fileCount, 50) * 0.08 +
+    Math.min(additions + deletions, 2500) * 0.002 +
+    Math.min(complexFiles, 10) * 0.12;
+  return Math.min(8, Math.max(0.25, Math.ceil(raw * 4) / 4));
+}
+
+export function normalizeDeploymentLog(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const sha = cleanString(input.sha, 40).toLowerCase();
+  const branch = cleanString(input.branch, 120);
+  if (!/^[0-9a-f]{40}$/.test(sha)) {
+    throw new Error("Deployment commit SHA is invalid.");
+  }
+  if (branch !== "main") {
+    throw new Error("Only main-branch deployments can be logged.");
+  }
+
+  const changedFiles = (Array.isArray(input.changedFiles)
+    ? input.changedFiles
+    : [])
+    .slice(0, 100)
+    .map((file) => ({
+      additions: Math.max(0, Math.trunc(finiteNumber(file?.additions))),
+      deletions: Math.max(0, Math.trunc(finiteNumber(file?.deletions))),
+      path: cleanString(file?.path, 400),
+    }))
+    .filter((file) => file.path);
+  const additions = changedFiles.reduce((total, file) => total + file.additions, 0);
+  const deletions = changedFiles.reduce((total, file) => total + file.deletions, 0);
+  const pushedAt = Date.parse(String(input.pushedAt || ""));
+  const normalized = {
+    additions,
+    author_email: cleanString(input.authorEmail, 180).toLowerCase() || null,
+    author_name: cleanString(input.authorName, 160) || "Unknown author",
+    branch,
+    changed_files: changedFiles,
+    commit_url: cleanString(input.commitUrl, 500) || null,
+    deletions,
+    files_changed: changedFiles.length,
+    message: cleanString(input.message, 1000) || "Main branch update",
+    pushed_at: Number.isFinite(pushedAt) ? pushedAt : Date.now(),
+    repository: cleanString(input.repository, 220) || null,
+    sha,
+  };
+  return {
+    ...normalized,
+    estimate_hours: estimateDeploymentHours({
+      additions,
+      changedFiles,
+      deletions,
+      filesChanged: changedFiles.length,
+    }),
+  };
+}
+
+export function normalizeSupportEntryInput(value, { allowUnreviewed = true } = {}) {
+  const input = value && typeof value === "object" ? value : {};
+  const allocation = SUPPORT_ALLOCATIONS.has(input.allocation)
+    ? input.allocation
+    : "unreviewed";
+  if (!allowUnreviewed && allocation === "unreviewed") {
+    throw new Error("Choose where these hours should be applied.");
+  }
+  const title = cleanString(input.title, 180);
+  if (!title) throw new Error("Work title is required.");
+
+  const estimateHours = quarterHour(input.estimateHours);
+  const actualHours =
+    input.actualHours === "" || input.actualHours === null || input.actualHours === undefined
+      ? null
+      : quarterHour(input.actualHours);
+  if (estimateHours < 0.25 || estimateHours > 24) {
+    throw new Error("Estimated hours must be between 0.25 and 24.");
+  }
+  if (actualHours !== null && (actualHours < 0.25 || actualHours > 24)) {
+    throw new Error("Applied hours must be between 0.25 and 24.");
+  }
+  if (allocation !== "unreviewed" && actualHours === null) {
+    throw new Error("Applied hours are required for a reviewed entry.");
+  }
+
+  const occurredAt = Date.parse(String(input.occurredAt || ""));
+  return {
+    actual_hours: actualHours,
+    allocation,
+    description: cleanString(input.description, 3000) || null,
+    estimate_hours: estimateHours,
+    occurred_at: Number.isFinite(occurredAt) ? occurredAt : Date.now(),
+    title,
+  };
+}
+
+export function supportPlanSummary(entries, plan = {}) {
+  const normalizedPlan = { ...SUPPORT_PLAN_DEFAULTS, ...(plan || {}) };
+  const activeEntries = (Array.isArray(entries) ? entries : []).filter(
+    (entry) => entry?.voided_at == null,
+  );
+  const used = (allocation) =>
+    quarterHour(
+      activeEntries
+        .filter((entry) => entry.allocation === allocation)
+        .reduce((total, entry) => total + finiteNumber(entry.actual_hours), 0),
+    );
+  const bankUsed = used("bank");
+  const graceUsed = used("grace");
+  const launchAt = finiteNumber(normalizedPlan.launch_at, 0) || null;
+  const graceEndsAt = launchAt
+    ? launchAt + normalizedPlan.grace_days * 24 * 60 * 60 * 1000
+    : null;
+  return {
+    bank_remaining_hours: quarterHour(normalizedPlan.bank_total_hours - bankUsed),
+    bank_used_hours: bankUsed,
+    grace_ends_at: graceEndsAt,
+    grace_remaining_hours: quarterHour(
+      normalizedPlan.grace_total_hours - graceUsed,
+    ),
+    grace_used_hours: graceUsed,
+    unreviewed_count: activeEntries.filter(
+      (entry) => entry.allocation === "unreviewed",
+    ).length,
+  };
 }
 
 export function isAuthorizedAdminEmail(value, emailVerified, allowlist) {

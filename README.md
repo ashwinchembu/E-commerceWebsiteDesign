@@ -159,6 +159,13 @@ The `.github/workflows/support-tracker.yml` workflow authenticates to the
 secret. Store the same value in Firebase Secret Manager before deploying the
 Function; never commit it to this repository.
 
+The owner-only guide library also includes the fillable five-page Manoir Kits
+Development & Support Agreement. It records the $8,000 project fee ($4,000 in
+August 2026 and $4,000 in September 2026), the $3,000 bank for 24 future-work
+hours at $125/hour, and a separate 30-day post-launch bug-fix window capped at
+20 hours. Party names, payment dates, launch date, governing state, electronic
+signature consent, signatures, and signing dates are interactive PDF fields.
+
 ### 5. Keep Shopify customers synchronized
 
 After the first admin signs in, select **Sync all customers** in the admin

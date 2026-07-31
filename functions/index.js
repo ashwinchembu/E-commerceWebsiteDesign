@@ -780,6 +780,10 @@ const guideFiles = {
     filename: "firebase-billing-setup-guide.pdf",
     path: "firebase-billing-setup-guide.pdf",
   },
+  agreement: {
+    filename: "Manoir-Kits-Development-Support-Agreement.pdf",
+    path: "Manoir-Kits-Development-Support-Agreement.pdf",
+  },
 };
 
 export const getAdminGuide = onCall(

@@ -80,6 +80,12 @@ const adminGuides = [
     title: 'Firebase Billing Setup Guide',
     description: 'Open the step-by-step Blaze billing setup walkthrough.',
   },
+  {
+    id: 'agreement',
+    category: 'PROJECT AGREEMENT',
+    title: 'Development & Support Agreement',
+    description: 'Open the fillable five-page agreement for review and signature.',
+  },
 ] as const;
 
 type AdminGuideId = (typeof adminGuides)[number]['id'];

@@ -182,7 +182,7 @@ const COUNTRY_CITIES: { country: string; cities: string[] }[] = [
     country: "Italy",
     cities: [
       "Bergamo", "Bologna", "Cagliari", "Como", "Florence", "Frosinone", "Genoa", "Lecce", "Milan",
-      "Monza", "Naples", "Parma", "Rome", "Sassuolo", "Turin", "Udine", "Venice",
+      "Monza", "Naples", "Parma", "Reggio Emilia", "Rome", "Turin", "Udine", "Venice",
     ],
   },
   {

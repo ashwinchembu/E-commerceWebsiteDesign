@@ -182,7 +182,7 @@ const COUNTRY_CITIES: { country: string; cities: string[] }[] = [
     country: "Italy",
     cities: [
       "Bergamo", "Bologna", "Cagliari", "Como", "Florence", "Frosinone", "Genoa", "Lecce", "Milan",
-      "Monza", "Naples", "Parma", "Reggio Emilia", "Rome", "Turin", "Udine", "Venice",
+      "Monza", "Naples", "Parma", "Rome", "Sassuolo", "Turin", "Udine", "Venice",
     ],
   },
   {
@@ -904,7 +904,10 @@ export function JacketBuilderPage({
                     Regular collar
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: "#141414" }} />
+                    <span
+                      className="w-3 h-3 rounded-full shrink-0 border border-gray-300"
+                      style={{ backgroundColor: liningColor }}
+                    />
                     {labelForColor(liningColor)} quilted lining
                   </li>
                   <li className="flex items-center gap-2">

@@ -633,6 +633,16 @@ function applyLeatherType(m: PartMaterials, type: LeatherType, bodyMaterial: Bod
   }
 }
 
+function applyViewerAppearance(m: PartMaterials, props: VarsityJacketViewerProps) {
+  m.body.color.set(props.bodyColor);
+  m.sleeve.color.set(props.sleeveColor);
+  m.trim.color.set(props.trimColor);
+  m.snap.color.set(props.snapColor);
+  m.pocket.color.set(props.pocketColor);
+  m.lining.color.set(props.liningColor);
+  applyLeatherType(m, props.leatherType, props.bodyMaterial);
+}
+
 /**
  * Fabric-lit decal material: the artwork shades with the scene lights like a
  * sewn-on patch instead of glowing like a sticker. polygonOffset pulls it in
@@ -693,13 +703,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
   useEffect(() => {
     const m = loadedRef.current?.materials;
     if (!m) return;
-    m.body.color.set(bodyColor);
-    applyLeatherType(m, leatherType, bodyMaterial);
-    m.sleeve.color.set(sleeveColor);
-    m.trim.color.set(trimColor);
-    m.snap.color.set(snapColor);
-    m.pocket.color.set(pocketColor);
-    m.lining.color.set(liningColor);
+    applyViewerAppearance(m, propsRef.current);
   }, [bodyColor, bodyMaterial, leatherType, sleeveColor, trimColor, snapColor, pocketColor, liningColor]);
 
   useEffect(() => {
@@ -1206,6 +1210,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         back: { canvas: backCanvas, texture: backTexture },
         sleeves: sleeveSets,
       };
+      // A color can change while the GLB is still loading. Reapply the latest
+      // props at handoff so the finished model never reveals stale materials.
+      applyViewerAppearance(materials, propsRef.current);
       redrawDesign();
       modelPrepared = true;
     }, undefined, (error) => {

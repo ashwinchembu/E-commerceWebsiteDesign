@@ -76,9 +76,10 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
 }
 
 /**
- * Separate the light merrowed outline from the crest artwork. Only neutral,
- * bright pixels close to the outer alpha edge are selected, so the inner MK,
- * laurels, lettering, and gold shield stay in the dimensional badge layer.
+ * Separate a clean merrowed outline from the crest artwork. Every opaque pixel
+ * in the outer band belongs to the border, including the photographed dark
+ * fringe; otherwise those pixels remain on the gold layer and show as a fuzzy
+ * halo against pale jacket colors.
  */
 function splitCrestOuterOutline(source: HTMLCanvasElement) {
   const width = source.width;
@@ -121,14 +122,6 @@ function splitCrestOuterOutline(source: HTMLCanvasElement) {
       const index = y * width + x;
       if (!opaque[index]) continue;
 
-      const offset = index * 4;
-      const red = sourcePixels.data[offset];
-      const green = sourcePixels.data[offset + 1];
-      const blue = sourcePixels.data[offset + 2];
-      const brightness = (red + green + blue) / 3;
-      const chroma = Math.max(red, green, blue) - Math.min(red, green, blue);
-      if (brightness < 135 || chroma > 100) continue;
-
       const left = Math.max(0, x - radius);
       const right = Math.min(width - 1, x + radius);
       const top = Math.max(0, y - radius);
@@ -140,6 +133,7 @@ function splitCrestOuterOutline(source: HTMLCanvasElement) {
         || bottom !== y + radius;
       if (!touchesCanvasEdge && outsideCount(left, top, right, bottom) === 0) continue;
 
+      const offset = index * 4;
       mask.data[offset] = 255;
       mask.data[offset + 1] = 255;
       mask.data[offset + 2] = 255;
@@ -160,7 +154,10 @@ function splitCrestOuterOutline(source: HTMLCanvasElement) {
   outline.width = width;
   outline.height = height;
   const outlineContext = outline.getContext("2d")!;
-  outlineContext.drawImage(source, 0, 0);
+  // A single cream fill removes the dark photographic edge and keeps the
+  // border consistent on every selectable body color.
+  outlineContext.fillStyle = CHEST_FILL;
+  outlineContext.fillRect(0, 0, width, height);
   outlineContext.globalCompositeOperation = "destination-in";
   outlineContext.drawImage(maskCanvas, 0, 0);
 

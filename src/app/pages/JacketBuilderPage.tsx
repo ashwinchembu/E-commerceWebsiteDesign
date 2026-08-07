@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react";
-import { Bookmark, Check, ChevronRight, LoaderCircle, SlidersHorizontal, Star, Trash2, X } from "lucide-react";
-import { VarsityJacketViewer, renderNeckLabel, renderInteriorPatch, type BackDesign, type BodyMaterial } from "../components/VarsityJacketViewer";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { ChevronRight, X, Star, SlidersHorizontal } from "lucide-react";
+import type { BackDesign, BodyMaterial } from "../components/VarsityJacketViewer";
 import { useNavigate } from "react-router-dom";
 import { createJacketCheckout, type ShopifyAttribute } from "../lib/shopify";
-import {
-  MAX_SAVED_JACKETS,
-  type JacketConfiguration,
-  type SavedJacket,
-  type ShopifySavedJacketsApi,
-} from "../lib/savedJackets";
 
 const SIZES = ["S", "M", "L", "XL", "2XL", "3XL"];
+
+const VarsityJacketViewer = lazy(() =>
+  import("../components/VarsityJacketViewer").then((module) => ({
+    default: module.VarsityJacketViewer,
+  })),
+);
 
 // Approved jacket body colors. Metallic gold and gold-family shades are not
 // selectable; Champagne is represented as a pale neutral.
@@ -119,12 +119,6 @@ function labelForColor(color: string) {
   }
   const bw = LEATHER_BW.find((s) => s.color.toLowerCase() === color.toLowerCase());
   return bw?.label ?? color;
-}
-
-function savedJacketBodyColor(jacket: SavedJacket) {
-  return jacket.configuration.jacketEdition === "Footballers"
-    ? jacket.configuration.sleeveColor
-    : jacket.configuration.bodyColor;
 }
 
 // 2026–27 top-division club cities for England, France, Germany, Italy,
@@ -238,13 +232,11 @@ interface JacketBuilderPageProps {
   accessRole?: "visitor" | "footballer" | "admin";
   onShopifySignIn?: () => void;
   shopifyAccessStatus?: "checking" | "signed-out" | "eligible" | "ineligible" | "unavailable" | "error";
-  savedJacketsApi?: ShopifySavedJacketsApi;
 }
 
 export function JacketBuilderPage({
   accessRole = "visitor",
   onShopifySignIn,
-  savedJacketsApi,
   shopifyAccessStatus = "signed-out",
 }: JacketBuilderPageProps) {
   const navigate = useNavigate();
@@ -266,22 +258,17 @@ export function JacketBuilderPage({
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [wishlisted, setWishlisted] = useState(false);
   const [showInterior, setShowInterior] = useState(false);
   const [interiorImages, setInteriorImages] = useState<{ label: string; patch: string } | null>(null);
-  const [showSavedJackets, setShowSavedJackets] = useState(false);
-  const [showComparison, setShowComparison] = useState(false);
-  const [savedJackets, setSavedJackets] = useState<SavedJacket[]>([]);
-  const [savedJacketsDigest, setSavedJacketsDigest] = useState<string | null>(null);
-  const [savedJacketsStatus, setSavedJacketsStatus] = useState<"idle" | "loading" | "saving">("idle");
-  const [savedJacketsError, setSavedJacketsError] = useState<string | null>(null);
-  const [activeSavedJacketId, setActiveSavedJacketId] = useState<string | null>(null);
 
   // Render the interior patch artwork (shared with the 3D viewer's canvas
   // painters) into images the first time the Interior Details card opens.
   useEffect(() => {
     if (!showInterior || interiorImages) return;
     let active = true;
-    void renderInteriorPatch().then((patch) => {
+    void import("../components/VarsityJacketViewer").then(async ({ renderInteriorPatch, renderNeckLabel }) => {
+      const patch = await renderInteriorPatch();
       if (!active) return;
       setInteriorImages({ label: renderNeckLabel().toDataURL(), patch: patch.toDataURL() });
     });
@@ -311,7 +298,6 @@ export function JacketBuilderPage({
 
   const isFootballersEdition = jacketEdition === "Footballers";
   const canUseFootballersEdition = accessRole === "footballer" || accessRole === "admin";
-  const shopifySignedIn = shopifyAccessStatus === "eligible" || shopifyAccessStatus === "ineligible";
   const footballersAccessLabel =
     shopifyAccessStatus === "checking"
       ? "Checking account"
@@ -322,140 +308,6 @@ export function JacketBuilderPage({
           : "Shopify account required";
   const renderedBodyColor = isFootballersEdition ? sleeveColor : bodyColor;
   const renderedBodyMaterial: BodyMaterial = isFootballersEdition ? "Leather" : "Wool";
-
-  useEffect(() => {
-    if (!savedJacketsApi || !shopifySignedIn) {
-      setSavedJackets([]);
-      setSavedJacketsDigest(null);
-      setSavedJacketsStatus("idle");
-      return;
-    }
-    let active = true;
-    setSavedJacketsStatus("loading");
-    setSavedJacketsError(null);
-    void savedJacketsApi.load()
-      .then((store) => {
-        if (!active) return;
-        setSavedJackets(store.jackets);
-        setSavedJacketsDigest(store.compareDigest);
-        setSavedJacketsStatus("idle");
-      })
-      .catch((error) => {
-        if (!active) return;
-        setSavedJacketsStatus("idle");
-        setSavedJacketsError(
-          error instanceof Error ? error.message : "Saved jackets could not be loaded.",
-        );
-      });
-    return () => {
-      active = false;
-    };
-  }, [savedJacketsApi, shopifySignedIn]);
-
-  const currentConfiguration = (): JacketConfiguration => ({
-    version: 1,
-    jacketEdition,
-    bodyColor,
-    sleeveColor,
-    leatherType,
-    pocketColor,
-    snapColor,
-    trimColor,
-    liningColor,
-    backStars,
-    backNumber,
-    leftSleeveNumbers,
-    rightSleeveNumbers,
-    backCity,
-    backPrintColor,
-    sleevePrintColor,
-    selectedSize,
-  });
-
-  const loadConfiguration = (jacket: SavedJacket) => {
-    const configuration = jacket.configuration;
-    if (configuration.jacketEdition === "Footballers" && !canUseFootballersEdition) {
-      setSavedJacketsError("Footballers access is required to load this jacket.");
-      return;
-    }
-    setJacketEdition(configuration.jacketEdition);
-    setBodyColor(configuration.bodyColor);
-    setSleeveColor(configuration.sleeveColor);
-    setLeatherType(configuration.leatherType);
-    setPocketColor(configuration.pocketColor);
-    setSnapColor(configuration.snapColor);
-    setTrimColor(configuration.trimColor);
-    setLiningColor(configuration.liningColor);
-    setBackStars(configuration.backStars);
-    setBackNumber(configuration.backNumber);
-    setLeftSleeveNumbers(configuration.leftSleeveNumbers);
-    setRightSleeveNumbers(configuration.rightSleeveNumbers);
-    setBackCity(configuration.backCity);
-    setBackPrintColor(configuration.backPrintColor);
-    setSleevePrintColor(configuration.sleevePrintColor);
-    setSelectedSize(configuration.selectedSize);
-    setActiveSavedJacketId(jacket.id);
-    setSavedJacketsError(null);
-    setShowSavedJackets(false);
-    setShowComparison(false);
-  };
-
-  const persistSavedJackets = async (jackets: SavedJacket[]) => {
-    if (!savedJacketsApi || !shopifySignedIn || savedJacketsStatus === "saving") return false;
-    setSavedJacketsStatus("saving");
-    setSavedJacketsError(null);
-    try {
-      const store = await savedJacketsApi.save(jackets, savedJacketsDigest);
-      setSavedJackets(store.jackets);
-      setSavedJacketsDigest(store.compareDigest);
-      setSavedJacketsStatus("idle");
-      return true;
-    } catch (error) {
-      setSavedJacketsStatus("idle");
-      setSavedJacketsError(
-        error instanceof Error ? error.message : "Shopify could not save these jackets.",
-      );
-      return false;
-    }
-  };
-
-  const saveCurrentJacket = async (asNew = false) => {
-    const now = new Date().toISOString();
-    const active = !asNew
-      ? savedJackets.find((jacket) => jacket.id === activeSavedJacketId)
-      : undefined;
-    if (!active && savedJackets.length >= MAX_SAVED_JACKETS) {
-      setSavedJacketsError(`Delete a saved jacket before adding another. The limit is ${MAX_SAVED_JACKETS}.`);
-      return;
-    }
-    const usedCompNames = new Set(savedJackets.map((jacket) => jacket.name));
-    const nextCompNumber = Array.from({ length: MAX_SAVED_JACKETS }, (_, index) => index + 1)
-      .find((number) => !usedCompNames.has(`Comp ${number}`)) ?? savedJackets.length + 1;
-    const next = active
-      ? savedJackets.map((jacket) =>
-          jacket.id === active.id
-            ? { ...jacket, configuration: currentConfiguration(), updatedAt: now }
-            : jacket,
-        )
-      : [
-          ...savedJackets,
-          {
-            id: typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `jacket-${Date.now()}`,
-            name: `Comp ${nextCompNumber}`,
-            createdAt: now,
-            updatedAt: now,
-            configuration: currentConfiguration(),
-          },
-        ];
-    const saved = await persistSavedJackets(next);
-    if (saved && !active) setActiveSavedJacketId(next[next.length - 1].id);
-  };
-
-  const deleteSavedJacket = async (id: string) => {
-    const next = savedJackets.filter((jacket) => jacket.id !== id);
-    const saved = await persistSavedJackets(next);
-    if (saved && activeSavedJacketId === id) setActiveSavedJacketId(null);
-  };
 
   const onBackNumberChange = (value: string) => setBackNumber(value.replace(/\D/g, "").slice(0, 2));
   const onSleeveNumberChange = (side: "left" | "right", index: number, value: string) => {
@@ -596,22 +448,10 @@ export function JacketBuilderPage({
           </div>
 
           <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
-            <button
-              onClick={() => {
-                setShowSavedJackets(true);
-                setShowComparison(false);
-              }}
-              className="flex items-center gap-1 border border-gray-200 px-2 py-2 text-[9px] tracking-widest uppercase text-gray-700 transition-colors hover:border-black sm:px-3 sm:text-[10px]"
-              aria-label={`Saved jackets ${savedJackets.length} of ${MAX_SAVED_JACKETS}`}
-            >
-              {savedJacketsStatus === "loading" ? (
-                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Bookmark className="h-3.5 w-3.5" />
-              )}
-              <span className="hidden lg:inline">Saved</span>
-              <span>{savedJackets.length}/{MAX_SAVED_JACKETS}</span>
+            <button onClick={() => setWishlisted((w) => !w)} className="text-gray-400 hover:text-black transition-colors">
+              <Star className={`w-4 h-4 ${wishlisted ? "fill-black text-black" : ""}`} />
             </button>
+            <div className="h-5 w-px bg-gray-200" />
             <div className="text-sm font-semibold tracking-wide">${price.toLocaleString()}</div>
             <button
               onClick={() => setShowSizeModal(true)}
@@ -904,10 +744,7 @@ export function JacketBuilderPage({
                     Regular collar
                   </li>
                   <li className="flex items-center gap-2">
-                    <span
-                      className="w-3 h-3 rounded-full shrink-0 border border-gray-300"
-                      style={{ backgroundColor: liningColor }}
-                    />
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: "#141414" }} />
                     {labelForColor(liningColor)} quilted lining
                   </li>
                   <li className="flex items-center gap-2">
@@ -1036,17 +873,25 @@ export function JacketBuilderPage({
             sidebarOpen ? "h-[46dvh] min-h-[260px] flex-none sm:min-h-[340px]" : "min-h-[320px] flex-1"
           }`}
         >
-          <VarsityJacketViewer
-            bodyColor={renderedBodyColor}
-            bodyMaterial={renderedBodyMaterial}
-            sleeveColor={sleeveColor}
-            leatherType={leatherType}
-            trimColor={trimColor}
-            snapColor={snapColor}
-            pocketColor={pocketColor}
-            liningColor={liningColor}
-            backDesign={backDesign}
-          />
+          <Suspense
+            fallback={
+              <div className="flex h-full min-h-[260px] items-center justify-center text-[10px] tracking-[0.22em] text-gray-500 uppercase">
+                Loading jacket preview
+              </div>
+            }
+          >
+            <VarsityJacketViewer
+              bodyColor={renderedBodyColor}
+              bodyMaterial={renderedBodyMaterial}
+              sleeveColor={sleeveColor}
+              leatherType={leatherType}
+              trimColor={trimColor}
+              snapColor={snapColor}
+              pocketColor={pocketColor}
+              liningColor={liningColor}
+              backDesign={backDesign}
+            />
+          </Suspense>
 
           {/* Interior details card */}
           <button
@@ -1116,201 +961,6 @@ export function JacketBuilderPage({
           </div>
         </div>
       </div>
-
-      {/* Shopify-backed saved jacket comparisons */}
-      {showSavedJackets && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-0 sm:items-center sm:p-4"
-          onClick={() => setShowSavedJackets(false)}
-        >
-          <div
-            className="flex max-h-[92dvh] w-full max-w-4xl flex-col bg-white shadow-2xl sm:max-h-[86dvh] sm:rounded"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-4 sm:px-6">
-              <div>
-                <p className="text-[10px] tracking-[0.24em] text-gray-400 uppercase">Saved to Shopify</p>
-                <h2 className="mt-1 text-base font-semibold tracking-widest uppercase">
-                  {showComparison ? "Compare Jackets" : `Saved Jackets ${savedJackets.length}/${MAX_SAVED_JACKETS}`}
-                </h2>
-              </div>
-              <button
-                onClick={() => setShowSavedJackets(false)}
-                className="p-2 text-gray-400 transition-colors hover:text-black"
-                aria-label="Close saved jackets"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="overflow-y-auto p-4 sm:p-6">
-              {!shopifySignedIn ? (
-                <div className="mx-auto max-w-md py-8 text-center">
-                  <Bookmark className="mx-auto h-8 w-8 text-gray-300" />
-                  <h3 className="mt-4 text-sm font-semibold tracking-widest uppercase">Sign in to save jackets</h3>
-                  <p className="mt-2 text-xs leading-relaxed text-gray-500">
-                    Save up to four jacket builds to your Shopify account and open them on another device.
-                  </p>
-                  {onShopifySignIn && (
-                    <button
-                      onClick={onShopifySignIn}
-                      className="mt-5 bg-black px-6 py-3 text-[10px] tracking-widest text-white uppercase transition-colors hover:bg-gray-800"
-                    >
-                      Sign In With Shopify
-                    </button>
-                  )}
-                </div>
-              ) : savedJacketsStatus === "loading" ? (
-                <div className="flex items-center justify-center gap-2 py-12 text-xs tracking-widest text-gray-500 uppercase">
-                  <LoaderCircle className="h-4 w-4 animate-spin" />
-                  Loading saved jackets
-                </div>
-              ) : showComparison ? (
-                <div>
-                  <button
-                    onClick={() => setShowComparison(false)}
-                    className="mb-4 text-[10px] tracking-widest text-gray-500 underline underline-offset-4 uppercase"
-                  >
-                    Back to saved jackets
-                  </button>
-                  <div className="overflow-x-auto">
-                    <div className="grid min-w-[640px] grid-cols-[130px_repeat(4,minmax(120px,1fr))] border-l border-t border-gray-200 text-xs">
-                    <div className="border-b border-r border-gray-200 bg-gray-50 p-3" />
-                    {Array.from({ length: MAX_SAVED_JACKETS }, (_, index) => {
-                      const jacket = savedJackets[index];
-                      return (
-                        <div key={jacket?.id ?? `empty-${index}`} className="border-b border-r border-gray-200 p-3">
-                          {jacket ? (
-                            <>
-                              <div className="mb-2 flex h-12 overflow-hidden border border-gray-200">
-                                <span className="flex-1" style={{ backgroundColor: savedJacketBodyColor(jacket) }} />
-                                <span className="w-1/3" style={{ backgroundColor: jacket.configuration.sleeveColor }} />
-                              </div>
-                              <p className="font-semibold tracking-wide">{jacket.name}</p>
-                            </>
-                          ) : (
-                            <span className="text-gray-300">Empty</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {[
-                      ["Edition", (jacket: SavedJacket) => jacket.configuration.jacketEdition],
-                      ["Body", (jacket: SavedJacket) => labelForColor(savedJacketBodyColor(jacket))],
-                      ["Sleeves", (jacket: SavedJacket) => labelForColor(jacket.configuration.sleeveColor)],
-                      ["Leather", (jacket: SavedJacket) => jacket.configuration.leatherType],
-                      ["City", (jacket: SavedJacket) => jacket.configuration.backCity],
-                      ["Number", (jacket: SavedJacket) => jacket.configuration.backNumber || "None"],
-                      ["Size", (jacket: SavedJacket) => jacket.configuration.selectedSize || "Not picked"],
-                    ].flatMap(([label, read]) => [
-                      <div key={`${String(label)}-label`} className="border-b border-r border-gray-200 bg-gray-50 p-3 font-medium uppercase tracking-wide">
-                        {String(label)}
-                      </div>,
-                      ...Array.from({ length: MAX_SAVED_JACKETS }, (_, index) => {
-                        const jacket = savedJackets[index];
-                        return (
-                          <div key={`${String(label)}-${index}`} className="border-b border-r border-gray-200 p-3 text-gray-600">
-                            {jacket ? (read as (item: SavedJacket) => string)(jacket) : "—"}
-                          </div>
-                        );
-                      }),
-                    ])}
-                    </div>
-                  </div>
-                  <p className="mt-3 text-[10px] leading-relaxed text-gray-400 sm:hidden">
-                    Swipe the comparison table sideways to see every saved jacket.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-wrap gap-2 border-b border-gray-100 pb-4">
-                    <button
-                      disabled={savedJacketsStatus === "saving" || (!activeSavedJacketId && savedJackets.length >= MAX_SAVED_JACKETS)}
-                      onClick={() => void saveCurrentJacket(false)}
-                      className="flex items-center gap-2 bg-black px-4 py-3 text-[10px] tracking-widest text-white uppercase transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {savedJacketsStatus === "saving" ? (
-                        <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Bookmark className="h-3.5 w-3.5" />
-                      )}
-                      {activeSavedJacketId ? "Update Loaded Comp" : "Save Current Jacket"}
-                    </button>
-                    {activeSavedJacketId && savedJackets.length < MAX_SAVED_JACKETS && (
-                      <button
-                        disabled={savedJacketsStatus === "saving"}
-                        onClick={() => void saveCurrentJacket(true)}
-                        className="border border-gray-300 px-4 py-3 text-[10px] tracking-widest uppercase transition-colors hover:border-black disabled:opacity-40"
-                      >
-                        Save As New
-                      </button>
-                    )}
-                    <button
-                      disabled={savedJackets.length < 2}
-                      onClick={() => setShowComparison(true)}
-                      className="border border-gray-300 px-4 py-3 text-[10px] tracking-widest uppercase transition-colors hover:border-black disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Compare All
-                    </button>
-                  </div>
-
-                  {savedJackets.length === 0 ? (
-                    <div className="py-10 text-center">
-                      <p className="text-sm tracking-widest uppercase">No saved jackets yet</p>
-                      <p className="mt-2 text-xs text-gray-500">Save the jacket currently shown in the builder as your first comp.</p>
-                    </div>
-                  ) : (
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      {savedJackets.map((jacket) => {
-                        const loaded = activeSavedJacketId === jacket.id;
-                        return (
-                          <article key={jacket.id} className={`border p-3 ${loaded ? "border-black" : "border-gray-200"}`}>
-                            <div className="flex h-24 overflow-hidden border border-gray-100">
-                              <span className="flex-1" style={{ backgroundColor: savedJacketBodyColor(jacket) }} />
-                              <span className="w-1/3" style={{ backgroundColor: jacket.configuration.sleeveColor }} />
-                            </div>
-                            <div className="mt-3 flex items-start justify-between gap-2">
-                              <div>
-                                <h3 className="text-xs font-semibold tracking-widest uppercase">{jacket.name}</h3>
-                                <p className="mt-1 text-[10px] text-gray-500">
-                                  {jacket.configuration.jacketEdition} · {jacket.configuration.backCity}
-                                </p>
-                              </div>
-                              {loaded && <Check className="h-4 w-4 shrink-0" />}
-                            </div>
-                            <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
-                              <button
-                                onClick={() => loadConfiguration(jacket)}
-                                className="bg-black px-3 py-2 text-[9px] tracking-widest text-white uppercase transition-colors hover:bg-gray-800"
-                              >
-                                {loaded ? "Loaded" : "Load"}
-                              </button>
-                              <button
-                                disabled={savedJacketsStatus === "saving"}
-                                onClick={() => void deleteSavedJacket(jacket.id)}
-                                className="border border-gray-300 p-2 text-gray-500 transition-colors hover:border-red-500 hover:text-red-600 disabled:opacity-40"
-                                aria-label={`Delete ${jacket.name}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {savedJacketsError && (
-                <p role="alert" className="mt-4 border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-700">
-                  {savedJacketsError}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Size picker modal */}
       {showSizeModal && (

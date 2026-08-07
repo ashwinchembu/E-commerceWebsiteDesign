@@ -4,7 +4,7 @@ import type { BackDesign, BodyMaterial } from "../components/VarsityJacketViewer
 import { useNavigate } from "react-router-dom";
 import { createJacketCheckout, type ShopifyAttribute } from "../lib/shopify";
 
-const SIZES = ["S", "M", "L", "XL", "2XL", "3XL"];
+const SIZES = ["S", "M", "L", "XL"];
 
 const VarsityJacketViewer = lazy(() =>
   import("../components/VarsityJacketViewer").then((module) => ({

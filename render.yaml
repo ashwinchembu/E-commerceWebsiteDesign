@@ -5,6 +5,8 @@ services:
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
     autoDeployTrigger: commit
+    previews:
+      generation: automatic
     routes:
       - type: rewrite
         source: /*

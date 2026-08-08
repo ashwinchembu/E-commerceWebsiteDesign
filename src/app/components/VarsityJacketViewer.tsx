@@ -216,6 +216,42 @@ function outlinedText(ctx: CanvasRenderingContext2D, text: string, x: number, y:
   ctx.fillText(text, x, y, maxWidth);
 }
 
+/**
+ * Draw outlined glyphs individually with spacing based on their visible ink
+ * bounds. Canvas advance widths leave very different side bearings on glyphs
+ * such as 0 and 4, which made 00 look split apart while 44 touched.
+ */
+function outlinedTrackedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fontSize: number,
+  fill: string,
+  maxWidth: number,
+  tracking = fontSize * 0.08,
+) {
+  const glyphs = [...text].map((glyph) => {
+    const metrics = ctx.measureText(glyph);
+    const isSpace = glyph.trim() === "";
+    const left = isSpace ? 0 : metrics.actualBoundingBoxLeft;
+    const right = isSpace ? metrics.width : metrics.actualBoundingBoxRight;
+    return { glyph, left, width: Math.max(1, left + right) };
+  });
+  const naturalWidth = glyphs.reduce((sum, glyph) => sum + glyph.width, 0) + tracking * Math.max(0, glyphs.length - 1);
+  const scale = Math.min(1, maxWidth / Math.max(1, naturalWidth));
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, 1);
+  let cursor = -naturalWidth / 2;
+  glyphs.forEach(({ glyph, left, width }) => {
+    outlinedText(ctx, glyph, cursor + left, 0, fontSize, fill);
+    cursor += width + tracking;
+  });
+  ctx.restore();
+}
+
 function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, color: string, rotation = 0) {
   ctx.save();
   ctx.translate(cx, cy);
@@ -267,18 +303,18 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
     ctx.save();
     ctx.translate(w / 2, 0);
     ctx.scale(sx, 1);
-    outlinedText(ctx, city, 0, 200, fontSize, design.backPrintColor, (w * 0.86) / sx);
+    outlinedTrackedText(ctx, city, 0, 200, fontSize, design.backPrintColor, (w * 0.86) / sx, fontSize * 0.035);
     ctx.restore();
   }
 
   const number = design.backNumber.trim();
   if (number) {
     ctx.font = "400 390px 'League Spartan', sans-serif";
-    outlinedText(ctx, number, w / 2, 452, 390, design.backPrintColor, w * 0.92);
+    outlinedTrackedText(ctx, number, w / 2, 452, 390, design.backPrintColor, w * 0.92);
   }
 
   ctx.font = "400 104px 'League Spartan', sans-serif";
-  outlinedText(ctx, "EST. 2026", w / 2, 652, 104, design.backPrintColor, w * 0.96);
+  outlinedTrackedText(ctx, "EST. 2026", w / 2, 652, 104, design.backPrintColor, w * 0.96, 4);
 }
 
 /**
@@ -296,7 +332,7 @@ function drawSleeveNumbers(canvases: HTMLCanvasElement[], numbers: string[], col
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "400 120px 'League Spartan', sans-serif";
-    outlinedText(ctx, value, canvas.width / 2, canvas.height / 2, 120, color, canvas.width * 0.9);
+    outlinedTrackedText(ctx, value, canvas.width / 2, canvas.height / 2, 120, color, canvas.width * 0.9);
   });
 }
 
@@ -885,7 +921,11 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           pb.fromBufferAttribute(pos, t + 1);
           pc.fromBufferAttribute(pos, t + 2);
           fn.crossVectors(e1.subVectors(pb, pa), e2.subVectors(pc, pa)).normalize();
-          if (fn.dot(outward) <= -0.3) continue;
+          // Keep the artwork on surfaces that actually face the projector.
+          // Near-tangent triangles stretch a tiny strip of the canvas into a
+          // large wedge at the jacket seams, which reads as the name or number
+          // bleeding sideways across the garment when the model rotates.
+          if (fn.dot(outward) <= 0.15) continue;
           for (let k = 0; k < 3; k++) {
             p.push(pos.getX(t + k), pos.getY(t + k), pos.getZ(t + k));
             n.push(nor.getX(t + k), nor.getY(t + k), nor.getZ(t + k));

@@ -1014,7 +1014,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           // cull keeps the extra depth from catching anything else.
           new THREE.Vector3(bw, bh, ws.z * 2),
           new THREE.Vector3(0, 0, -1),
-          0.65,
         );
       }
 

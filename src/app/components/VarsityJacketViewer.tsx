@@ -313,7 +313,9 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
   const number = design.backNumber.trim();
   if (number) {
     ctx.font = "400 390px 'League Spartan', sans-serif";
-    outlinedTrackedText(ctx, number, w / 2, 452, 390, design.backPrintColor, w * 0.92);
+    // Keep both edges on the jacket's flat back panel. Letting double digits
+    // reach the curved side seams can stretch a sliver of the decal outward.
+    outlinedTrackedText(ctx, number, w / 2, 452, 390, design.backPrintColor, w * 0.82);
   }
 
   ctx.font = "400 104px 'League Spartan', sans-serif";

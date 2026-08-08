@@ -925,7 +925,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           // Near-tangent triangles stretch a tiny strip of the canvas into a
           // large wedge at the jacket seams, which reads as the name or number
           // bleeding sideways across the garment when the model rotates.
-          if (fn.dot(outward) <= 0.15) continue;
+          if (fn.dot(outward) <= 0.3) continue;
           for (let k = 0; k < 3; k++) {
             p.push(pos.getX(t + k), pos.getY(t + k), pos.getZ(t + k));
             n.push(nor.getX(t + k), nor.getY(t + k), nor.getZ(t + k));

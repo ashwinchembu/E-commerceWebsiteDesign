@@ -903,7 +903,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       // plane in front of it. Triangles whose surface faces away from the
       // projection are dropped: on a closed shape like an arm, the far side
       // would otherwise catch a mirrored copy of the art.
-      const cullAwayFacing = (g: THREE.BufferGeometry, outward: THREE.Vector3) => {
+      const cullAwayFacing = (g: THREE.BufferGeometry, outward: THREE.Vector3, minFacingDot = 0.3) => {
         const pos = g.attributes.position;
         const nor = g.attributes.normal;
         const uv = g.attributes.uv;
@@ -930,7 +930,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           // Near-tangent triangles stretch a tiny strip of the canvas into a
           // large wedge at the jacket seams, which reads as the name or number
           // bleeding sideways across the garment when the model rotates.
-          if (fn.dot(outward) <= 0.3) continue;
+          if (fn.dot(outward) <= minFacingDot) continue;
           for (let k = 0; k < 3; k++) {
             p.push(pos.getX(t + k), pos.getY(t + k), pos.getZ(t + k));
             n.push(nor.getX(t + k), nor.getY(t + k), nor.getZ(t + k));
@@ -950,8 +950,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         orientation: THREE.Euler,
         size: THREE.Vector3,
         outward: THREE.Vector3,
+        minFacingDot = 0.3,
       ) => {
-        const geometry = cullAwayFacing(new DecalGeometry(mesh, position, orientation, size), outward);
+        const geometry = cullAwayFacing(new DecalGeometry(mesh, position, orientation, size), outward, minFacingDot);
         const addEmbroideryStack = (
           stackGeometry: THREE.BufferGeometry,
           stackTexture: THREE.CanvasTexture,
@@ -1011,6 +1012,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           // cull keeps the extra depth from catching anything else.
           new THREE.Vector3(bw, bh, ws.z * 2),
           new THREE.Vector3(0, 0, -1),
+          0.65,
         );
       }
 

@@ -999,7 +999,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const wb = new THREE.Box3().setFromObject(backMesh);
         const ws = wb.getSize(new THREE.Vector3());
         const wcB = wb.getCenter(new THREE.Vector3());
-        const bw = ws.x * 0.74;
+        // Keep the full artwork footprint inside the uninterrupted back panel;
+        // the outer shell triangles turn sharply into the sleeve seams.
+        const bw = ws.x * 0.64;
         const bh = bw * (backCanvas.height / backCanvas.width);
         addDecal(
           backMesh,

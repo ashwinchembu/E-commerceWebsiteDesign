@@ -231,6 +231,10 @@ function outlinedTrackedText(
   maxWidth: number,
   tracking = fontSize * 0.08,
 ) {
+  // Each glyph is positioned from its visible left edge. Keeping the caller's
+  // centered alignment here makes independently drawn glyphs overlap in Safari.
+  ctx.save();
+  ctx.textAlign = "left";
   const glyphs = [...text].map((glyph) => {
     const metrics = ctx.measureText(glyph);
     const isSpace = glyph.trim() === "";
@@ -241,7 +245,6 @@ function outlinedTrackedText(
   const naturalWidth = glyphs.reduce((sum, glyph) => sum + glyph.width, 0) + tracking * Math.max(0, glyphs.length - 1);
   const scale = Math.min(1, maxWidth / Math.max(1, naturalWidth));
 
-  ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale, 1);
   let cursor = -naturalWidth / 2;

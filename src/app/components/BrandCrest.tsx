@@ -1,4 +1,4 @@
-import crestImage from 'figma:asset/65260e3ff07725a684ad1d29eb3db00cb66a8976.png';
+import crestImage from '../../assets/manoir-kits-crest.png';
 
 interface BrandCrestProps {
   width?: number;
@@ -6,14 +6,12 @@ interface BrandCrestProps {
 }
 
 export function BrandCrest({ width = 80, className = "" }: BrandCrestProps) {
-  const height = (width * 611) / 408;
-  
   return (
     <img
       src={crestImage}
       alt="Manoir Kits Crest"
       className={className}
-      style={{ width: `${width}px`, height: `${height}px`, objectFit: 'contain' }}
+      style={{ width: `${width}px`, height: `${width}px`, objectFit: 'contain' }}
     />
   );
 }

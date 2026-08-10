@@ -4,7 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { DecalGeometry } from "three/examples/jsm/geometries/DecalGeometry.js";
-import crestImage from "figma:asset/49db8db3192aa070a09b2e638fd91cfc6cf1ca1e.png";
+import crestImage from "../../assets/manoir-kits-crest.png";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#c9a24a";

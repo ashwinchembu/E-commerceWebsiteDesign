@@ -323,7 +323,10 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
   }
 
   ctx.font = "400 104px 'League Spartan', sans-serif";
-  outlinedTrackedText(ctx, "EST. 2026", w / 2, 652, 104, design.backPrintColor, w * 0.96, 4);
+  // Keep the first year digit off the model's center-back seam. Centering the
+  // full label put the 2 directly over the narrow geometry break, where it
+  // disappeared at both desktop and mobile camera distances.
+  outlinedTrackedText(ctx, "EST. 2026", w / 2 - 12, 652, 104, design.backPrintColor, w * 0.92, 4);
 }
 
 /**

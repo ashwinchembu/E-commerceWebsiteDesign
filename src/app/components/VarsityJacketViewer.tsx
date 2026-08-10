@@ -230,6 +230,7 @@ function outlinedTrackedText(
   fill: string,
   maxWidth: number,
   tracking = fontSize * 0.08,
+  outlineScale = 0.055,
 ) {
   // Each glyph is positioned from its visible left edge. Keeping the caller's
   // centered alignment here makes independently drawn glyphs overlap in Safari.
@@ -249,7 +250,7 @@ function outlinedTrackedText(
   ctx.scale(scale, 1);
   let cursor = -naturalWidth / 2;
   glyphs.forEach(({ glyph, left, width }) => {
-    outlinedText(ctx, glyph, cursor + left, 0, fontSize, fill);
+    outlinedText(ctx, glyph, cursor + left, 0, fontSize, fill, undefined, outlineScale);
     cursor += width + tracking;
   });
   ctx.restore();
@@ -1245,8 +1246,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       wctx.textAlign = "center";
       wctx.textBaseline = "middle";
       wctx.font = "400 68px 'League Spartan', sans-serif";
-      outlinedText(wctx, "MANOIR", wordCanvas.width / 2, 76, 68, CHEST_FILL, 320, 0.15);
-      outlinedText(wctx, "KITS", wordCanvas.width / 2, 154, 68, CHEST_FILL, 320, 0.15);
+      outlinedTrackedText(wctx, "MANOIR", wordCanvas.width / 2, 76, 68, CHEST_FILL, 320, 14, 0.15);
+      outlinedTrackedText(wctx, "KITS", wordCanvas.width / 2, 154, 68, CHEST_FILL, 320, 14, 0.15);
       // Same height as the chest badge on the opposite panel.
       addFrontDecal("front_body_R", wordCanvas, 0.62, -0.05, 0.2);
 

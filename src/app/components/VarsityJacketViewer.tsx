@@ -243,7 +243,10 @@ function outlinedTrackedText(
     const right = isSpace ? metrics.width : metrics.actualBoundingBoxRight;
     return { glyph, left, width: Math.max(1, left + right) };
   });
-  const naturalWidth = glyphs.reduce((sum, glyph) => sum + glyph.width, 0) + tracking * Math.max(0, glyphs.length - 1);
+  // Reserve room for both neighbouring outline strokes. Low-tracking labels
+  // otherwise merge again once their raised gold edges are projected in 3D.
+  const safeTracking = Math.max(tracking, fontSize * outlineScale * 1.35);
+  const naturalWidth = glyphs.reduce((sum, glyph) => sum + glyph.width, 0) + safeTracking * Math.max(0, glyphs.length - 1);
   const scale = Math.min(1, maxWidth / Math.max(1, naturalWidth));
 
   ctx.translate(x, y);
@@ -251,7 +254,7 @@ function outlinedTrackedText(
   let cursor = -naturalWidth / 2;
   glyphs.forEach(({ glyph, left, width }) => {
     outlinedText(ctx, glyph, cursor + left, 0, fontSize, fill, undefined, outlineScale);
-    cursor += width + tracking;
+    cursor += width + safeTracking;
   });
   ctx.restore();
 }
@@ -866,6 +869,11 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const loader = new GLTFLoader();
     loader.setDRACOLoader(dracoLoader);
     loader.load(MODEL_PATH, async (gltf) => {
+      if (disposed) return;
+      // Canvas text permanently captures the font available at draw time.
+      // Waiting here prevents a slow font download from changing spacing
+      // between visits or leaving fallback-font artwork until the next reload.
+      await document.fonts.load("400 390px 'League Spartan'");
       if (disposed) return;
       const root = gltf.scene;
       const byName: Record<string, THREE.Mesh> = {};

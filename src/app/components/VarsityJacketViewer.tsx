@@ -863,6 +863,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     const modelRoot = new THREE.Group();
     scene.add(modelRoot);
+    const clock = new THREE.Clock();
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
     const surfaces = makeSurfaceTextures();
     const materials = makeMaterials(propsRef.current, surfaces);
     applyLeatherType(materials, propsRef.current.leatherType, propsRef.current.bodyMaterial);
@@ -1471,6 +1474,15 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     const animate = () => {
       const d = dragRef.current;
+      const elapsedSinceInteraction = performance.now() - d.lastInteraction;
+      // Keep the hidden canvas at its front-facing pose while the fallback
+      // poster is visible. Rotating it before the handoff made the two jacket
+      // images visibly diverge during the initial reveal.
+      if (readyReported && !reduceMotion && !d.active && elapsedSinceInteraction > 1800) {
+        d.rotY += clock.getDelta() * 0.176;
+      } else {
+        clock.getDelta();
+      }
       // DecalGeometry is projected in world space. Keep the model at identity
       // until every asynchronous chest layer has been attached; otherwise the
       // later wordmark projection can be generated inside the jacket shell.

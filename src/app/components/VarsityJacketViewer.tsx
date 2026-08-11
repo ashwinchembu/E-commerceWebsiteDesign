@@ -245,7 +245,10 @@ function outlinedTrackedText(
   });
   // Reserve room for both neighbouring outline strokes. Low-tracking labels
   // otherwise merge again once their raised gold edges are projected in 3D.
-  const safeTracking = Math.max(tracking, fontSize * outlineScale * 1.35);
+  // The physical chenille patches leave a clear fabric gap between letters
+  // and digits. Match that breathing room instead of stopping as soon as the
+  // gold outlines no longer touch.
+  const safeTracking = Math.max(tracking, fontSize * outlineScale * 2.2);
   const naturalWidth = glyphs.reduce((sum, glyph) => sum + glyph.width, 0) + safeTracking * Math.max(0, glyphs.length - 1);
   const scale = Math.min(1, maxWidth / Math.max(1, naturalWidth));
 

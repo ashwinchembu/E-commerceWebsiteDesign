@@ -37,7 +37,7 @@ export function TermsPage() {
             <div>
               <h3 className="text-xl tracking-wide mb-4 font-light">4. Shipping and Delivery</h3>
               <p className="text-sm leading-relaxed">
-                Available shipping rates and estimated delivery windows are shown at checkout and depend on the destination, shipping origin, package, and selected carrier service. International orders may be subject to import duties, taxes, or customs fees charged by the destination country unless checkout states that they are included. Customs and carrier delays may affect delivery estimates.
+                We currently ship within the United States and to Europe only. Available shipping rates and estimated delivery windows are shown at checkout and depend on the destination, shipping origin, package, and selected carrier service. European orders may be subject to import duties, taxes, or customs fees charged by the destination country unless checkout states that they are included. Customs and carrier delays may affect delivery estimates.
               </p>
             </div>
 

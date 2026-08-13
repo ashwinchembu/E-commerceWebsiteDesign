@@ -222,14 +222,14 @@ export function ContactPage() {
             <div className="bg-white p-6">
               <h3 className="text-sm tracking-wide mb-2">How long does shipping take?</h3>
               <p className="text-sm text-gray-600">
-                The available delivery methods and estimated arrival window are calculated at checkout from the destination, shipping origin, package, and carrier service.
+                We currently ship within the United States and to Europe only. Available delivery methods and estimated arrival windows are calculated at checkout.
               </p>
             </div>
 
             <div className="bg-white p-6">
               <h3 className="text-sm tracking-wide mb-2">Do you ship internationally?</h3>
               <p className="text-sm text-gray-600">
-                Yes, we ship to select countries worldwide. Shipping rates are calculated at checkout. Import duties, taxes, or customs fees may be charged by the destination country unless checkout states that they are included.
+                We currently ship within the United States and to Europe only. Shipping rates are calculated at checkout. European orders may be subject to import duties, taxes, or customs fees unless checkout states that they are included.
               </p>
             </div>
 

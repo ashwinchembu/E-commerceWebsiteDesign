@@ -1014,7 +1014,10 @@ export function JacketBuilderPage({
 
             <div className="mt-3 bg-amber-50 border border-amber-200 p-3 text-center">
               <p className="text-[10px] tracking-wide text-amber-800 uppercase">
-                Final Sale — No Returns or Exchanges · 4–6 Week Production Time
+                Final Sale — No Returns or Exchanges
+              </p>
+              <p className="mt-1 text-[10px] leading-relaxed tracking-wide text-amber-800 uppercase">
+                Shipping Time — 4–6 Weeks on Average · 6–8 Weeks Due to Unforeseen Circumstances · Conditions May Vary
               </p>
             </div>
           </div>

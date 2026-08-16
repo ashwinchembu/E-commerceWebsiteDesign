@@ -378,10 +378,7 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, jacketEdi
     cursiveEmbroidery(ctx, "Est. 2026", w / 2, 652, 89.6, w * 0.88);
   } else {
     ctx.font = "400 83.2px 'League Spartan', sans-serif";
-    // Keep the first year digit off the model's center-back seam. Centering the
-    // full label put the 2 directly over the narrow geometry break, where it
-    // disappeared at both desktop and mobile camera distances.
-    outlinedTrackedText(ctx, "EST. 2026", w / 2 - 12, 652, 83.2, design.backPrintColor, w * 0.92, 4);
+    outlinedTrackedText(ctx, "EST. 2026", w / 2, 652, 83.2, design.backPrintColor, w * 0.92, 4);
   }
 }
 

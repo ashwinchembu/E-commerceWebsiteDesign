@@ -1534,12 +1534,12 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
 
     const animate = () => {
       const d = dragRef.current;
-      const elapsedSinceInteraction = performance.now() - d.lastInteraction;
       // Keep the hidden canvas at its front-facing pose while the fallback
       // poster is visible. Rotating it before the handoff made the two jacket
-      // images visibly diverge during the initial reveal.
-      if (readyReported && !reduceMotion && !d.active && elapsedSinceInteraction > 1800) {
-        d.rotY += clock.getDelta() * 0.176;
+      // images visibly diverge during the initial reveal. Once ready, keep the
+      // full jacket turning slowly whenever the customer is not dragging it.
+      if (readyReported && !reduceMotion && !d.active) {
+        d.rotY += clock.getDelta() * 0.105;
       } else {
         clock.getDelta();
       }

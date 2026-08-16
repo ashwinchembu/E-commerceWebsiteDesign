@@ -7,8 +7,8 @@ import { DecalGeometry } from "three/examples/jsm/geometries/DecalGeometry.js";
 import crestImage from "../../assets/manoir-kits-crest.png";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
-const BRAND_GOLD = "#c9a24a";
-const CHEST_FILL = "#f2ede2";
+const BRAND_GOLD = "#EFBF04";
+const CHEST_FILL = "#FFFFFF";
 const COMPACT_VIEW_MAX_WIDTH = 640;
 const MAX_RENDER_PIXELS = 2_000_000;
 
@@ -73,6 +73,39 @@ function loadCrest(): Promise<HTMLCanvasElement | null> {
     image.src = crestImage;
   });
   return crestLoading;
+}
+
+/** Match the photographed crest field to the fixed brand gold without flattening its fibres. */
+function normalizeCrestGold(source: HTMLCanvasElement): HTMLCanvasElement {
+  const normalized = document.createElement("canvas");
+  normalized.width = source.width;
+  normalized.height = source.height;
+  const ctx = normalized.getContext("2d")!;
+  ctx.drawImage(source, 0, 0);
+  const image = ctx.getImageData(0, 0, normalized.width, normalized.height);
+  const { data } = image;
+  const target = { r: 0xef, g: 0xbf, b: 0x04 };
+
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 24) continue;
+    const red = data[i];
+    const green = data[i + 1];
+    const blue = data[i + 2];
+    const max = Math.max(red, green, blue);
+    const min = Math.min(red, green, blue);
+    // Preserve the neutral white threadwork and dark stitched edge. Only the
+    // warm, saturated shield fibres are recolored.
+    if (red <= green || green <= blue || max - min < 45 || blue > green * 0.72) continue;
+
+    // Use the exact same pixels as the generated wordmark. The raised crest
+    // geometry and material lighting still supply the realistic depth.
+    data[i] = target.r;
+    data[i + 1] = target.g;
+    data[i + 2] = target.b;
+  }
+
+  ctx.putImageData(image, 0, 0);
+  return normalized;
 }
 
 /**
@@ -204,6 +237,7 @@ function extractCrestThreadwork(source: HTMLCanvasElement): HTMLCanvasElement {
 
 export type LeatherType = "Nappa" | "Cowhide";
 export type BodyMaterial = "Wool" | "Leather";
+export type JacketEdition = "Classic" | "Footballers";
 
 /** Varsity chenille lettering: colored fill with a gold outline. */
 function outlinedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontSize: number, fill: string, maxWidth?: number, outlineScale = 0.055) {
@@ -214,6 +248,21 @@ function outlinedText(ctx: CanvasRenderingContext2D, text: string, x: number, y:
   ctx.strokeText(text, x, y, maxWidth);
   ctx.fillStyle = fill;
   ctx.fillText(text, x, y, maxWidth);
+}
+
+/** Gold cursive embroidery used for the fixed Manoir wordmark details. */
+function cursiveEmbroidery(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontSize: number, maxWidth: number) {
+  ctx.save();
+  ctx.font = `700 ${fontSize}px 'Snell Roundhand', 'Brush Script MT', cursive`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = BRAND_GOLD;
+  ctx.lineWidth = Math.max(1.5, fontSize * 0.025);
+  ctx.strokeText(text, x, y, maxWidth);
+  ctx.fillStyle = BRAND_GOLD;
+  ctx.fillText(text, x, y, maxWidth);
+  ctx.restore();
 }
 
 /**
@@ -282,7 +331,7 @@ function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius:
 }
 
 /** Draws the back print onto a 512×720 canvas: stars → city → number → EST. */
-function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
+function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, jacketEdition: JacketEdition) {
   const ctx = canvas.getContext("2d")!;
   const w = canvas.width;
   const h = canvas.height;
@@ -325,11 +374,15 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign) {
     outlinedTrackedText(ctx, number, w / 2, 452, 390, design.backPrintColor, w * 0.82);
   }
 
-  ctx.font = "400 104px 'League Spartan', sans-serif";
-  // Keep the first year digit off the model's center-back seam. Centering the
-  // full label put the 2 directly over the narrow geometry break, where it
-  // disappeared at both desktop and mobile camera distances.
-  outlinedTrackedText(ctx, "EST. 2026", w / 2 - 12, 652, 104, design.backPrintColor, w * 0.92, 4);
+  if (jacketEdition === "Footballers") {
+    cursiveEmbroidery(ctx, "Est. 2026", w / 2 + 28, 652, 112, w * 0.88);
+  } else {
+    ctx.font = "400 104px 'League Spartan', sans-serif";
+    // Keep the first year digit off the model's center-back seam. Centering the
+    // full label put the 2 directly over the narrow geometry break, where it
+    // disappeared at both desktop and mobile camera distances.
+    outlinedTrackedText(ctx, "EST. 2026", w / 2 - 12, 652, 104, design.backPrintColor, w * 0.92, 4);
+  }
 }
 
 /**
@@ -438,6 +491,7 @@ export interface BackDesign {
 }
 
 interface VarsityJacketViewerProps {
+  jacketEdition: JacketEdition;
   bodyColor: string;
   bodyMaterial: BodyMaterial;
   sleeveColor: string;
@@ -763,7 +817,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const loaded = loadedRef.current;
     if (!loaded) return;
     const design = propsRef.current.backDesign;
-    drawBackDesign(loaded.back.canvas, design);
+    drawBackDesign(loaded.back.canvas, design, propsRef.current.jacketEdition);
     loaded.back.texture.needsUpdate = true;
     drawSleeveNumbers(loaded.sleeves.left.canvases, design.leftSleeveNumbers, design.sleevePrintColor);
     drawSleeveNumbers(loaded.sleeves.right.canvases, design.rightSleeveNumbers, design.sleevePrintColor);
@@ -1188,12 +1242,13 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       if (crest) {
         const bctx = badgeCanvas.getContext("2d")!;
         bctx.clearRect(0, 0, badgeCanvas.width, badgeCanvas.height);
-        const { body: crestBody, outline: crestOutline } = splitCrestOuterOutline(crest);
+        const normalizedCrest = normalizeCrestGold(crest);
+        const { body: crestBody, outline: crestOutline } = splitCrestOuterOutline(normalizedCrest);
         const cw = badgeCanvas.width * 0.9;
-        const chh = cw * (crest.height / crest.width);
+        const chh = cw * (normalizedCrest.height / normalizedCrest.width);
         const cx = (badgeCanvas.width - cw) / 2;
         const cy = (badgeCanvas.height - chh) / 2;
-        bctx.drawImage(crestBody, cx, cy, cw, chh);
+        bctx.drawImage(normalizeCrestGold(crestBody), cx, cy, cw, chh);
         if (badgeArt) {
           badgeArt.texture.needsUpdate = true;
 
@@ -1259,9 +1314,14 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const wctx = wordCanvas.getContext("2d")!;
       wctx.textAlign = "center";
       wctx.textBaseline = "middle";
-      wctx.font = "400 68px 'League Spartan', sans-serif";
-      outlinedTrackedText(wctx, "MANOIR", wordCanvas.width / 2, 76, 68, CHEST_FILL, 320, 14, 0.15);
-      outlinedTrackedText(wctx, "KITS", wordCanvas.width / 2, 154, 68, CHEST_FILL, 320, 14, 0.15);
+      if (propsRef.current.jacketEdition === "Footballers") {
+        cursiveEmbroidery(wctx, "Manoir", wordCanvas.width / 2, 76, 86, 320);
+        cursiveEmbroidery(wctx, "Kits", wordCanvas.width / 2, 154, 86, 320);
+      } else {
+        wctx.font = "400 68px 'League Spartan', sans-serif";
+        outlinedTrackedText(wctx, "MANOIR", wordCanvas.width / 2, 76, 68, CHEST_FILL, 320, 14, 0.15);
+        outlinedTrackedText(wctx, "KITS", wordCanvas.width / 2, 154, 68, CHEST_FILL, 320, 14, 0.15);
+      }
       // Same height as the chest badge on the opposite panel.
       addFrontDecal("front_body_R", wordCanvas, 0.62, -0.05, 0.2);
 

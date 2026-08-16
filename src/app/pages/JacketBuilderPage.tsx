@@ -224,8 +224,8 @@ const WORLD_CUP_COUNTRIES = [
 ].sort((a, b) => a.localeCompare(b));
 
 const PRINT_COLORS = [
-  { label: "White", color: "#f4f2ea" },
-  { label: "Black", color: "#1a1a1a" },
+  { label: "White", color: "#FFFFFF" },
+  { label: "Black", color: "#000000" },
 ];
 
 interface JacketBuilderPageProps {
@@ -881,6 +881,8 @@ export function JacketBuilderPage({
             }
           >
             <VarsityJacketViewer
+              key={jacketEdition}
+              jacketEdition={jacketEdition}
               bodyColor={renderedBodyColor}
               bodyMaterial={renderedBodyMaterial}
               sleeveColor={sleeveColor}

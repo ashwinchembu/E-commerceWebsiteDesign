@@ -378,7 +378,9 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, jacketEdi
     cursiveEmbroidery(ctx, "Est. 2026", w / 2, 652, 89.6, w * 0.88);
   } else {
     ctx.font = "400 83.2px 'League Spartan', sans-serif";
-    outlinedTrackedText(ctx, "EST. 2026", w / 2, 652, 83.2, design.backPrintColor, w * 0.92, 4);
+    // This is a fixed brand mark, so match the Classic chest wordmark instead
+    // of recoloring it with the customer's city and number selection.
+    outlinedTrackedText(ctx, "EST. 2026", w / 2, 652, 83.2, CHEST_FILL, w * 0.92, 4);
   }
 }
 
@@ -1118,8 +1120,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         // Scan the arm's outer surface at each slot height first...
         const slotPoints: (THREE.Vector3 | null)[] = [];
         for (let slot = 0; slot < SLEEVE_SLOTS; slot++) {
-          // Evenly spaced from just below the shoulder seam to above the cuff.
-          const yi = wc.y + wsz.y * (0.28 - 0.13 * slot);
+          // Keep the fifth patch comfortably above the cuff, where the sleeve
+          // narrows and near-tangent triangles can stretch its bottom edge.
+          const yi = wc.y + wsz.y * (0.28 - 0.12 * slot);
           const yTol = wsz.y * 0.06;
           // The arm leans, so find its depth range at this height first...
           let zMin = Infinity;
@@ -1177,7 +1180,17 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         for (const { i } of anchors) {
           const t = first.i === last.i ? 0 : (i - first.i) / (last.i - first.i);
           const point = first.p.clone().lerp(last.p, t);
-          addDecal(s, set.textures[i], point, orientation, new THREE.Vector3(pw, pw * 0.85, pw * 1.2), facing);
+          addDecal(
+            s,
+            set.textures[i],
+            point,
+            orientation,
+            new THREE.Vector3(pw, pw * 0.76, pw),
+            facing,
+            // Sleeve projections sit on a tight cylinder. Cull the oblique
+            // triangles that otherwise smear the lowest number around it.
+            0.55,
+          );
         }
       }
 

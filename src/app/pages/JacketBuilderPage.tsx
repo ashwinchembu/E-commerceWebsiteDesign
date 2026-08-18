@@ -306,7 +306,7 @@ export function JacketBuilderPage({
         : shopifyAccessStatus === "error" || shopifyAccessStatus === "unavailable"
           ? "Account check unavailable"
           : "Shopify account required";
-  const renderedBodyColor = isFootballersEdition ? sleeveColor : bodyColor;
+  const renderedBodyColor = bodyColor;
   const renderedBodyMaterial: BodyMaterial = isFootballersEdition ? "Leather" : "Wool";
 
   const onBackNumberChange = (value: string) => setBackNumber(value.replace(/\D/g, "").slice(0, 2));
@@ -516,7 +516,7 @@ export function JacketBuilderPage({
               <div className="border-b border-gray-100">
                 {accordionHeader(
                   "Jacket",
-                  isFootballersEdition ? sleeveColor : bodyColor,
+                  bodyColor,
                   isFootballersEdition ? `${leatherType} Footballers Leather` : "Classic Wool + Leather",
                 )}
                 {expandedSection === "Jacket" && (
@@ -595,7 +595,7 @@ export function JacketBuilderPage({
 
               {/* Body — grouped wool color picker */}
               <div className="border-b border-gray-100">
-                {accordionHeader("Body", isFootballersEdition ? sleeveColor : bodyColor, isFootballersEdition ? `${leatherType} Leather` : "Wool")}
+                {accordionHeader("Body", bodyColor, isFootballersEdition ? `${leatherType} Leather` : "Wool")}
                 {expandedSection === "Body" && (
                   isFootballersEdition ? (
                     <div className="bg-gray-50 border-t border-gray-100 px-5 py-3 space-y-3">
@@ -603,12 +603,12 @@ export function JacketBuilderPage({
                         <div className="text-[10px] tracking-widest uppercase text-gray-400 mb-1.5">Full Leather Color</div>
                         <div className="flex gap-2">
                           {LEATHER_BW.map((opt) => {
-                            const active = sleeveColor.toLowerCase() === opt.color.toLowerCase();
+                            const active = bodyColor.toLowerCase() === opt.color.toLowerCase();
                             return (
                               <button
                                 key={opt.color}
                                 title={opt.label}
-                                onClick={() => setSleeveColor(opt.color)}
+                                onClick={() => setBodyColor(opt.color)}
                                 className={`w-8 h-8 rounded-full border shrink-0 transition-transform hover:scale-110 ${
                                   active ? "border-black ring-2 ring-black ring-offset-1" : "border-gray-300"
                                 }`}

@@ -1116,13 +1116,16 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const wsz = wb.getSize(new THREE.Vector3());
         const pos = s.geometry.attributes.position;
         const v = new THREE.Vector3();
-        const pw = wsz.x * 0.5;
+        // Keep each patch well inside the sleeve's uninterrupted outer face.
+        // A wider projector can still catch the curved side seam at oblique
+        // viewing angles even when its front-facing triangles are culled.
+        const pw = wsz.x * 0.44;
         // Scan the arm's outer surface at each slot height first...
         const slotPoints: (THREE.Vector3 | null)[] = [];
         for (let slot = 0; slot < SLEEVE_SLOTS; slot++) {
           // Keep the fifth patch comfortably above the cuff, where the sleeve
           // narrows and near-tangent triangles can stretch its bottom edge.
-          const yi = wc.y + wsz.y * (0.28 - 0.12 * slot);
+          const yi = wc.y + wsz.y * (0.27 - 0.105 * slot);
           const yTol = wsz.y * 0.06;
           // The arm leans, so find its depth range at this height first...
           let zMin = Infinity;
@@ -1171,7 +1174,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             : first.p.clone().sub(last.p).normalize();
         // Face mostly sideways with a slight forward bias, kept perpendicular
         // to the arm's measured axis.
-        const facing = new THREE.Vector3(dir, 0, 0.35).normalize();
+        const facing = new THREE.Vector3(dir, 0, 0.22).normalize();
         facing.addScaledVector(armUp, -facing.dot(armUp)).normalize();
         // Matrix4.lookAt points +z from target toward eye, and DecalGeometry's
         // readable face is the projector's +z — so the eye sits outward.
@@ -1185,11 +1188,11 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             set.textures[i],
             point,
             orientation,
-            new THREE.Vector3(pw, pw * 0.76, pw),
+            new THREE.Vector3(pw, pw * 0.72, pw * 0.86),
             facing,
             // Sleeve projections sit on a tight cylinder. Cull the oblique
             // triangles that otherwise smear the lowest number around it.
-            0.55,
+            0.72,
           );
         }
       }

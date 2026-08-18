@@ -1055,6 +1055,29 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         return top;
       };
 
+      // Sleeve numbers are narrow chenille patches on a tight cylinder. A
+      // volume projection can intersect two differently angled parts of that
+      // cylinder, causing the two digits in one slot to split, stretch, or
+      // duplicate as the jacket turns. Keep each slot together on one small
+      // tangent patch instead.
+      const addSleevePatch = (
+        texture: THREE.CanvasTexture,
+        position: THREE.Vector3,
+        orientation: THREE.Euler,
+        width: number,
+        height: number,
+        outward: THREE.Vector3,
+      ) => {
+        const patch = new THREE.Mesh(new THREE.PlaneGeometry(width, height), makeDecalMaterial(texture));
+        patch.position.copy(position).addScaledVector(outward, 0.0105);
+        patch.rotation.copy(orientation);
+        patch.renderOrder = 7;
+        patch.castShadow = true;
+        patch.receiveShadow = true;
+        modelRoot.add(patch);
+        return patch;
+      };
+
       // Back design: projected straight onto the back panel.
       const backCanvas = document.createElement("canvas");
       backCanvas.width = 512;
@@ -1086,10 +1109,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       }
 
       // Sleeve numbers: five small patches down the OUTER face of each arm,
-      // like the physical jacket. Each number is its own decal projected at
-      // its own height, so it lies flat on the local surface instead of one
-      // tall strip smearing around the arm's curve. Each arm has its own
-      // canvases so the two sleeves can carry different numbers.
+      // like the physical jacket. Each number is its own tangent patch at its
+      // own height instead of one tall strip smearing around the arm's curve.
+      // Each arm has its own canvases so the sleeves can differ.
       const SLEEVE_SLOTS = 5;
       const makeSleeveSet = (): SleeveSet => {
         const canvases: HTMLCanvasElement[] = [];
@@ -1116,10 +1138,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const wsz = wb.getSize(new THREE.Vector3());
         const pos = s.geometry.attributes.position;
         const v = new THREE.Vector3();
-        // Keep each patch well inside the sleeve's uninterrupted outer face.
-        // A wider projector can still catch the curved side seam at oblique
-        // viewing angles even when its front-facing triangles are culled.
-        const pw = wsz.x * 0.44;
+        // Keep each patch well inside the sleeve's uninterrupted outer face
+        // so its edges stay close to the leather at oblique viewing angles.
+        const pw = wsz.x * 0.4;
         // Scan the arm's outer surface at each slot height first...
         const slotPoints: (THREE.Vector3 | null)[] = [];
         for (let slot = 0; slot < SLEEVE_SLOTS; slot++) {
@@ -1183,16 +1204,13 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         for (const { i } of anchors) {
           const t = first.i === last.i ? 0 : (i - first.i) / (last.i - first.i);
           const point = first.p.clone().lerp(last.p, t);
-          addDecal(
-            s,
+          addSleevePatch(
             set.textures[i],
             point,
             orientation,
-            new THREE.Vector3(pw, pw * 0.72, pw * 0.86),
+            pw,
+            pw * 0.8,
             facing,
-            // Sleeve projections sit on a tight cylinder. Cull the oblique
-            // triangles that otherwise smear the lowest number around it.
-            0.72,
           );
         }
       }

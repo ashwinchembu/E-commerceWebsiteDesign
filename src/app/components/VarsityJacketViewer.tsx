@@ -377,10 +377,10 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, jacketEdi
   if (jacketEdition === "Footballers") {
     cursiveEmbroidery(ctx, "Est. 2026", w / 2, 652, 89.6, w * 0.88);
   } else {
-    ctx.font = "400 83.2px 'League Spartan', sans-serif";
+    ctx.font = "400 66.6px 'League Spartan', sans-serif";
     // This is a fixed brand mark, so match the Classic chest wordmark instead
     // of recoloring it with the customer's city and number selection.
-    outlinedTrackedText(ctx, "EST. 2026", w / 2, 652, 83.2, CHEST_FILL, w * 0.92, 4);
+    outlinedTrackedText(ctx, "EST. 2026", w / 2, 652, 66.6, CHEST_FILL, w * 0.92, 4);
   }
 }
 

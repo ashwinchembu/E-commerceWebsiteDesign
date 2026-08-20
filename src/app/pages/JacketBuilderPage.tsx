@@ -744,7 +744,7 @@ export function JacketBuilderPage({
                     Regular collar
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: "#141414" }} />
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: liningColor }} />
                     {labelForColor(liningColor)} quilted lining
                   </li>
                   <li className="flex items-center gap-2">

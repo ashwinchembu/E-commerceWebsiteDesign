@@ -20,6 +20,7 @@ import {
   grantState,
   isAuthorizedAdminEmail,
   normalizeClientMeta,
+  normalizeChangeRequestLog,
   normalizeContactInput,
   normalizeDeploymentLog,
   normalizeFeedbackInput,
@@ -67,6 +68,7 @@ const shopifyApiVersion = defineString("SHOPIFY_API_VERSION", {
 });
 const shopifyClientSecret = defineSecret("SHOPIFY_CLIENT_SECRET");
 const deploymentTrackerSecret = defineSecret("DEPLOYMENT_TRACKER_SECRET");
+const changeRequestTrackerSecret = defineSecret("CHANGE_REQUEST_TRACKER_SECRET");
 const newsletterDiscountCode = defineString("NEWSLETTER_DISCOUNT_CODE", {
   default: "",
   description:
@@ -83,6 +85,7 @@ const system = db.collection("system");
 const webhookReceipts = db.collection("shopifyWebhookReceipts");
 const supportEntries = db.collection("supportEntries");
 const supportAuditEvents = db.collection("supportAuditEvents");
+const changeRequests = db.collection("changeRequests");
 const supportPlanReference = system.doc("supportPlan");
 const FEEDBACK_METAOBJECT_TYPE = "$app:customer_feedback";
 const FEEDBACK_RATE_WINDOW_MS = 5 * 60 * 1000;
@@ -331,10 +334,11 @@ export const listAccessEvents = onCall(async (request) => {
 
 export const getSupportTracker = onCall(async (request) => {
   assertAdmin(request);
-  const [planSnapshot, entrySnapshot, auditSnapshot] = await Promise.all([
+  const [planSnapshot, entrySnapshot, auditSnapshot, requestSnapshot] = await Promise.all([
     supportPlanReference.get(),
     supportEntries.orderBy("created_at", "desc").limit(500).get(),
     supportAuditEvents.orderBy("occurred_at", "desc").limit(100).get(),
+    changeRequests.orderBy("occurred_at", "desc").limit(500).get(),
   ]);
   const plan = {
     ...SUPPORT_PLAN_DEFAULTS,
@@ -348,9 +352,71 @@ export const getSupportTracker = onCall(async (request) => {
     })),
     entries,
     plan,
+    requests: requestSnapshot.docs.map((document) => ({
+      id: document.id,
+      ...document.data(),
+    })),
     summary: supportPlanSummary(entries, plan),
   };
 });
+
+export const logChangeRequest = onRequest(
+  {
+    maxInstances: 2,
+    secrets: [changeRequestTrackerSecret],
+  },
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    if (request.method !== "POST") {
+      response.set("Allow", "POST").status(405).json({ error: "Method not allowed" });
+      return;
+    }
+    const suppliedSecret = cleanString(request.get("x-change-request-tracker-secret"), 200);
+    if (!secureEqual(suppliedSecret, changeRequestTrackerSecret.value())) {
+      response.status(401).json({ error: "Invalid tracker secret" });
+      return;
+    }
+    let changeRequest;
+    try {
+      changeRequest = normalizeChangeRequestLog(request.body);
+    } catch (error) {
+      response.status(400).json({
+        error: error instanceof Error ? error.message : "Change request is invalid.",
+      });
+      return;
+    }
+    const digest = createHash("sha256").update(changeRequest.external_id).digest("hex").slice(0, 24);
+    const reference = changeRequests.doc(`request_${digest}`);
+    const now = Date.now();
+    const result = await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      const existing = snapshot.exists ? snapshot.data() : null;
+      const record = {
+        ...(existing || {}),
+        ...changeRequest,
+        created_at: existing?.created_at || now,
+        source: "message_daemon",
+        updated_at: now,
+      };
+      transaction.set(reference, record, { merge: true });
+      transaction.set(
+        supportAuditEvents.doc(),
+        supportAuditRecord(
+          existing ? "change_request_updated" : "change_request_logged",
+          { email: null, uid: null },
+          { entry_id: reference.id, status: record.status, title: record.title },
+          now,
+        ),
+      );
+      return { created: !existing };
+    });
+    response.status(result.created ? 201 : 200).json({
+      ...result,
+      id: reference.id,
+      logged: true,
+    });
+  },
+);
 
 export const setSupportLaunchDate = onCall(async (request) => {
   assertAdmin(request);

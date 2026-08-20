@@ -143,6 +143,15 @@ type SupportTracker = {
   audit: SupportAuditEvent[];
   entries: SupportEntry[];
   plan: SupportPlan;
+  requests: Array<{
+    id: string;
+    completed_at?: number | null;
+    description?: string | null;
+    occurred_at: number;
+    status: 'requested' | 'in_progress' | 'completed' | 'blocked' | 'superseded';
+    title: string;
+    updated_at: number;
+  }>;
   summary: {
     bank_remaining_hours: number;
     bank_used_hours: number;
@@ -465,6 +474,38 @@ function SupportTrackerSection() {
           </button>
         )}
       </form>
+
+      <div className="mt-6 border border-white/15 p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] tracking-[0.18em] text-white/45">CHANGE REQUESTS</p>
+            <h3 className="mt-2 text-xl font-light">Requested website work</h3>
+          </div>
+          <p className="text-xs text-white/45">{tracker.requests.length} logged</p>
+        </div>
+        {tracker.requests.length === 0 ? (
+          <p className="mt-4 text-sm text-white/50">No website requests have been logged yet.</p>
+        ) : (
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {tracker.requests.map((request) => (
+              <article className="border border-white/10 p-4" key={request.id}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="border border-white/20 px-2 py-1 text-[10px] tracking-[0.14em] text-white/60">
+                    {request.status.replaceAll('_', ' ').toUpperCase()}
+                  </span>
+                  <span className="text-[11px] text-white/35">{dateTime(request.occurred_at)}</span>
+                </div>
+                <h4 className="mt-3 text-base font-normal">{request.title}</h4>
+                {request.description && (
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/55">
+                    {request.description}
+                  </p>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
 
       <details className="mt-6 border border-white/15 p-5">
         <summary className="cursor-pointer text-sm tracking-[0.12em] text-white/75">

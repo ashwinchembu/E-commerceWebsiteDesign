@@ -7,6 +7,7 @@ import {
   grantState,
   isAuthorizedAdminEmail,
   normalizeContactInput,
+  normalizeChangeRequestLog,
   normalizeDeploymentLog,
   normalizeFeedbackInput,
   normalizeFeedbackRecord,
@@ -321,6 +322,24 @@ test("deployment logs are normalized and receive a bounded effort estimate", () 
   assert.equal(
     estimateDeploymentHours({ additions: 100000, filesChanged: 500 }),
     8,
+  );
+});
+
+test("change request logs are normalized and require stable identifiers", () => {
+  const request = normalizeChangeRequestLog({
+    completedAt: "2026-08-20T19:45:00Z",
+    description: " Keep the signature details synchronized with quilt color. ",
+    externalId: "imessage-273035",
+    occurredAt: "2026-08-20T19:39:35Z",
+    status: "completed",
+    title: " Synchronize signature and quilt colors ",
+  });
+  assert.equal(request.external_id, "imessage-273035");
+  assert.equal(request.status, "completed");
+  assert.equal(request.title, "Synchronize signature and quilt colors");
+  assert.throws(
+    () => normalizeChangeRequestLog({ externalId: "bad id", status: "requested", title: "x" }),
+    /ID is invalid/,
   );
 });
 

@@ -16,6 +16,13 @@ const SUPPORT_ALLOCATIONS = new Set([
   "bank",
   "non_billable",
 ]);
+const CHANGE_REQUEST_STATUSES = new Set([
+  "requested",
+  "in_progress",
+  "completed",
+  "blocked",
+  "superseded",
+]);
 
 export const SUPPORT_PLAN_DEFAULTS = Object.freeze({
   bank_total_hours: 24,
@@ -117,6 +124,39 @@ export function normalizeDeploymentLog(value) {
       deletions,
       filesChanged: changedFiles.length,
     }),
+  };
+}
+
+export function normalizeChangeRequestLog(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const externalId = cleanString(input.externalId, 180);
+  const title = cleanString(input.title, 180);
+  const description = cleanString(input.description, 3000) || null;
+  const status = cleanString(input.status, 40).toLowerCase();
+  const occurredAt = Date.parse(String(input.occurredAt || ""));
+  const completedAt = input.completedAt
+    ? Date.parse(String(input.completedAt))
+    : null;
+  if (!externalId || !/^[A-Za-z0-9._:-]+$/.test(externalId)) {
+    throw new Error("Change request ID is invalid.");
+  }
+  if (!title) throw new Error("Change request title is required.");
+  if (!CHANGE_REQUEST_STATUSES.has(status)) {
+    throw new Error("Change request status is invalid.");
+  }
+  if (!Number.isFinite(occurredAt)) {
+    throw new Error("Change request date is invalid.");
+  }
+  if (input.completedAt && !Number.isFinite(completedAt)) {
+    throw new Error("Change request completion date is invalid.");
+  }
+  return {
+    completed_at: Number.isFinite(completedAt) ? completedAt : null,
+    description,
+    external_id: externalId,
+    occurred_at: occurredAt,
+    status,
+    title,
   };
 }
 

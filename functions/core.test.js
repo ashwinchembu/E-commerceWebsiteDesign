@@ -332,6 +332,7 @@ test("change request logs are normalized and require stable identifiers", () => 
   const request = normalizeChangeRequestLog({
     completedAt: "2026-08-20T19:45:00Z",
     description: " Keep the signature details synchronized with quilt color. ",
+    estimateHours: 10,
     externalId: "imessage-273035",
     occurredAt: "2026-08-20T19:39:35Z",
     status: "completed",
@@ -340,6 +341,7 @@ test("change request logs are normalized and require stable identifiers", () => 
   assert.equal(request.external_id, "imessage-273035");
   assert.equal(request.status, "completed");
   assert.equal(request.estimate_hours, 0.75);
+  assert.equal("actual_hours" in request, false);
   assert.equal(request.title, "Synchronize signature and quilt colors");
   assert.throws(
     () => normalizeChangeRequestLog({ externalId: "bad id", status: "requested", title: "x" }),

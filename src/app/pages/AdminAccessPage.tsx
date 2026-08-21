@@ -147,6 +147,7 @@ type SupportTracker = {
     id: string;
     completed_at?: number | null;
     description?: string | null;
+    estimate_hours: number;
     occurred_at: number;
     status: 'requested' | 'in_progress' | 'completed' | 'blocked' | 'superseded';
     title: string;
@@ -278,6 +279,7 @@ function SupportTrackerSection() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [launchDate, setLaunchDate] = useState('');
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
 
   const loadTracker = useCallback(async () => {
     setLoading(true);
@@ -349,6 +351,7 @@ function SupportTrackerSection() {
         { ...values, id },
       );
       toast.success('Hours reviewed and saved.');
+      setEditingEntryId(null);
       await loadTracker();
     } catch (error) {
       toast.error(firebaseErrorMessage(error, 'The work entry could not be updated.'));
@@ -496,6 +499,9 @@ function SupportTrackerSection() {
                   <span className="text-[11px] text-white/35">{dateTime(request.occurred_at)}</span>
                 </div>
                 <h4 className="mt-3 text-base font-normal">{request.title}</h4>
+                <p className="mt-2 text-xs text-white/45">
+                  Estimated time {hours(request.estimate_hours)}
+                </p>
                 {request.description && (
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/55">
                     {request.description}
@@ -608,50 +614,69 @@ function SupportTrackerSection() {
               </div>
 
               {!entry.voided_at && (
-                <form
-                  className="grid shrink-0 gap-3 border border-white/10 p-4 sm:grid-cols-2 lg:w-[520px]"
-                  onSubmit={(event) => void updateEntry(event, entry.id)}
-                >
-                  <label className="text-[10px] tracking-[0.12em] text-white/55">
-                    APPLY TO
-                    <select className={input} defaultValue={entry.allocation} name="allocation">
-                      {Object.entries(allocationLabels).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-[10px] tracking-[0.12em] text-white/55">
-                    APPLIED HOURS
-                    <input
-                      className={input}
-                      defaultValue={entry.actual_hours ?? entry.estimate_hours}
-                      min="0.25"
-                      name="actualHours"
-                      required
-                      step="0.25"
-                      type="number"
-                    />
-                  </label>
-                  <label className="text-[10px] tracking-[0.12em] text-white/55 sm:col-span-2">
-                    REVIEW NOTES
-                    <textarea
-                      className={input}
-                      defaultValue={entry.description || ''}
-                      maxLength={3000}
-                      name="description"
-                      rows={2}
-                    />
-                  </label>
-                  <button className={button} disabled={working} type="submit">SAVE REVIEW</button>
+                editingEntryId === entry.id ? (
+                  <form
+                    className="grid shrink-0 gap-3 border border-white/10 p-4 sm:grid-cols-2 lg:w-[520px]"
+                    onSubmit={(event) => void updateEntry(event, entry.id)}
+                  >
+                    <label className="text-[10px] tracking-[0.12em] text-white/55">
+                      APPLY TO
+                      <select className={input} defaultValue={entry.allocation} name="allocation">
+                        {Object.entries(allocationLabels).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-[10px] tracking-[0.12em] text-white/55">
+                      APPLIED HOURS
+                      <input
+                        className={input}
+                        defaultValue={entry.actual_hours ?? entry.estimate_hours}
+                        min="0.25"
+                        name="actualHours"
+                        required
+                        step="0.25"
+                        type="number"
+                      />
+                    </label>
+                    <label className="text-[10px] tracking-[0.12em] text-white/55 sm:col-span-2">
+                      REVIEW NOTES
+                      <textarea
+                        className={input}
+                        defaultValue={entry.description || ''}
+                        maxLength={3000}
+                        name="description"
+                        rows={2}
+                      />
+                    </label>
+                    <button className={button} disabled={working} type="submit">SAVE REVIEW</button>
+                    <button
+                      className={secondaryButton}
+                      disabled={working}
+                      onClick={() => setEditingEntryId(null)}
+                      type="button"
+                    >
+                      CANCEL
+                    </button>
+                    <button
+                      className="border border-red-300/30 px-4 py-3 text-xs tracking-[0.14em] text-red-200 hover:border-red-200 sm:col-span-2"
+                      disabled={working}
+                      onClick={() => void voidEntry(entry.id)}
+                      type="button"
+                    >
+                      VOID ENTRY
+                    </button>
+                  </form>
+                ) : (
                   <button
-                    className="border border-red-300/30 px-4 py-3 text-xs tracking-[0.14em] text-red-200 hover:border-red-200"
+                    className={`${secondaryButton} shrink-0 self-start`}
                     disabled={working}
-                    onClick={() => void voidEntry(entry.id)}
+                    onClick={() => setEditingEntryId(entry.id)}
                     type="button"
                   >
-                    VOID ENTRY
+                    EDIT ENTRY
                   </button>
-                </form>
+                )
               )}
             </div>
           </article>

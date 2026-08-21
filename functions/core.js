@@ -78,6 +78,32 @@ export function estimateDeploymentHours(value) {
   return Math.min(8, Math.max(0.25, Math.ceil(raw * 4) / 4));
 }
 
+export function estimateChangeRequestHours(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const supplied = quarterHour(input.estimateHours);
+  if (supplied >= 0.25 && supplied <= 24) return supplied;
+
+  const text = `${cleanString(input.title, 180)} ${cleanString(input.description, 3000)}`
+    .toLowerCase();
+  const words = text.split(/\s+/).filter(Boolean).length;
+  const complexSignals = [
+    "checkout",
+    "shopify",
+    "authentication",
+    "login",
+    "deploy",
+    "mobile",
+    "performance",
+    "3d",
+    "jacket builder",
+    "integration",
+    "contact form",
+    "newsletter",
+  ].filter((signal) => text.includes(signal)).length;
+  const raw = 0.5 + Math.min(words, 120) * 0.01 + Math.min(complexSignals, 4) * 0.25;
+  return Math.min(8, Math.max(0.25, Math.ceil(raw * 4) / 4));
+}
+
 export function normalizeDeploymentLog(value) {
   const input = value && typeof value === "object" ? value : {};
   const sha = cleanString(input.sha, 40).toLowerCase();
@@ -154,6 +180,7 @@ export function normalizeChangeRequestLog(value) {
     completed_at: Number.isFinite(completedAt) ? completedAt : null,
     description,
     external_id: externalId,
+    estimate_hours: estimateChangeRequestHours(input),
     occurred_at: occurredAt,
     status,
     title,

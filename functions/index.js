@@ -16,6 +16,7 @@ import {
   SUPPORT_PLAN_DEFAULTS,
   cleanString,
   createAccessCode,
+  estimateChangeRequestHours,
   evaluateGrantUse,
   grantState,
   isAuthorizedAdminEmail,
@@ -352,10 +353,18 @@ export const getSupportTracker = onCall(async (request) => {
     })),
     entries,
     plan,
-    requests: requestSnapshot.docs.map((document) => ({
-      id: document.id,
-      ...document.data(),
-    })),
+    requests: requestSnapshot.docs.map((document) => {
+      const data = document.data();
+      return {
+        id: document.id,
+        ...data,
+        estimate_hours: estimateChangeRequestHours({
+          description: data.description,
+          estimateHours: data.estimate_hours,
+          title: data.title,
+        }),
+      };
+    }),
     summary: supportPlanSummary(entries, plan),
   };
 });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createAccessCode,
+  estimateChangeRequestHours,
   estimateDeploymentHours,
   evaluateGrantUse,
   grantState,
@@ -332,15 +333,28 @@ test("change request logs are normalized and require stable identifiers", () => 
     externalId: "imessage-273035",
     occurredAt: "2026-08-20T19:39:35Z",
     status: "completed",
+    estimateHours: 1.1,
     title: " Synchronize signature and quilt colors ",
   });
   assert.equal(request.external_id, "imessage-273035");
   assert.equal(request.status, "completed");
+  assert.equal(request.estimate_hours, 1);
   assert.equal(request.title, "Synchronize signature and quilt colors");
   assert.throws(
     () => normalizeChangeRequestLog({ externalId: "bad id", status: "requested", title: "x" }),
     /ID is invalid/,
   );
+});
+
+test("change request estimates use a bounded fallback for historical records", () => {
+  assert.equal(
+    estimateChangeRequestHours({
+      description: "Connect the checkout to Shopify and verify it on mobile",
+      title: "Finish checkout integration",
+    }),
+    1.75,
+  );
+  assert.equal(estimateChangeRequestHours({ estimateHours: 100, title: "Small copy fix" }), 0.75);
 });
 
 test("support entries require reviewed hours and summarize both separate banks", () => {

@@ -395,6 +395,11 @@ export function supportPlanSummary(entries, plan = {}) {
       normalizedPlan.grace_total_hours - graceUsed,
     ),
     grace_used_hours: graceUsed,
+    projected_unreviewed_hours: quarterHour(
+      activeEntries
+        .filter((entry) => entry.allocation === "unreviewed")
+        .reduce((total, entry) => total + finiteNumber(entry.estimate_hours), 0),
+    ),
     unreviewed_count: activeEntries.filter(
       (entry) => entry.allocation === "unreviewed",
     ).length,

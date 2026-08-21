@@ -190,6 +190,7 @@ type SupportTracker = {
     grace_ends_at?: number | null;
     grace_remaining_hours: number;
     grace_used_hours: number;
+    projected_unreviewed_hours: number;
     unreviewed_count: number;
   };
 };
@@ -492,6 +493,9 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
           <p className="mt-2 text-xs leading-5 text-white/45">
             {hours(summary.grace_used_hours)} used of {hours(plan.grace_total_hours)} · separate
             from the paid bank
+          </p>
+          <p className="mt-2 border-t border-emerald-300/15 pt-2 text-xs leading-5 text-emerald-100/60">
+            {hours(summary.projected_unreviewed_hours)} projected from unreviewed requests
           </p>
         </div>
         <div className="border border-white/15 p-5">

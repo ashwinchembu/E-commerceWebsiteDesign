@@ -366,6 +366,7 @@ export const getSupportTracker = onCall(async (request) => {
       cards.map((card) => ({
         actual_hours: card.actual_hours,
         allocation: card.allocation,
+        estimate_hours: card.estimate_hours,
         voided_at: card.voided_at,
       })),
       plan,

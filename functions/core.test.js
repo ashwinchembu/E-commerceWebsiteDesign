@@ -427,7 +427,7 @@ test("support entries require reviewed hours and summarize both separate banks",
     [
       { actual_hours: 3, allocation: "bank" },
       { actual_hours: 2.5, allocation: "grace" },
-      { actual_hours: null, allocation: "unreviewed" },
+      { actual_hours: null, allocation: "unreviewed", estimate_hours: 4.25 },
       { actual_hours: 6, allocation: "bank", voided_at: Date.now() },
     ],
     { launch_at: Date.parse("2026-08-01T00:00:00Z") },
@@ -435,6 +435,7 @@ test("support entries require reviewed hours and summarize both separate banks",
   assert.equal(summary.bank_remaining_hours, 21);
   assert.equal(summary.grace_remaining_hours, 17.5);
   assert.equal(summary.unreviewed_count, 1);
+  assert.equal(summary.projected_unreviewed_hours, 4.25);
   assert.equal(
     summary.grace_ends_at,
     Date.parse("2026-08-31T00:00:00Z"),

@@ -717,13 +717,6 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
                         ))}
                       </select>
                     </label>
-                    <label className="text-[10px] tracking-[0.12em] text-white/55 sm:col-span-2">
-                      PROJECT UNREVIEWED WORK TO
-                      <select className={input} defaultValue={card.projected_allocation || 'bank'} name="projectedAllocation">
-                        <option value="bank">Future-work bank</option>
-                        <option value="grace">30-day bug-fix window</option>
-                      </select>
-                    </label>
                     <label className="text-[10px] tracking-[0.12em] text-white/55">
                       ESTIMATED HOURS
                       <input

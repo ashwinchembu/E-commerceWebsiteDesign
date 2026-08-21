@@ -1055,12 +1055,13 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         return top;
       };
 
-      // Sleeve numbers are narrow chenille patches on a tight cylinder. A
-      // volume projection can intersect two differently angled parts of that
-      // cylinder, causing the two digits in one slot to split, stretch, or
-      // duplicate as the jacket turns. Keep each slot together on one small
-      // tangent patch instead.
+      // Sleeve numbers are narrow chenille patches on a tight cylinder. Cast
+      // a subdivided grid onto the actual sleeve so the whole number follows
+      // the leather instead of hovering on a flat tangent plane. Clipping
+      // grid cells that miss the sleeve also prevents the old projected decal
+      // from wrapping around the seam and splitting two-digit numbers.
       const addSleevePatch = (
+        mesh: THREE.Mesh,
         texture: THREE.CanvasTexture,
         position: THREE.Vector3,
         orientation: THREE.Euler,
@@ -1068,9 +1069,65 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         height: number,
         outward: THREE.Vector3,
       ) => {
-        const patch = new THREE.Mesh(new THREE.PlaneGeometry(width, height), makeDecalMaterial(texture));
-        patch.position.copy(position).addScaledVector(outward, 0.0105);
-        patch.rotation.copy(orientation);
+        const columns = 12;
+        const rows = 8;
+        const rotation = new THREE.Quaternion().setFromEuler(orientation);
+        const across = new THREE.Vector3(1, 0, 0).applyQuaternion(rotation).normalize();
+        const along = new THREE.Vector3(0, 1, 0).applyQuaternion(rotation).normalize();
+        const castDirection = outward.clone().normalize().negate();
+        const rayStart = Math.max(width, height) * 1.6;
+        const raycaster = new THREE.Raycaster();
+        raycaster.far = rayStart * 3;
+        const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+        const positions: number[] = [];
+        const normals: number[] = [];
+        const uvs: number[] = [];
+        const projected: boolean[] = [];
+
+        for (let row = 0; row <= rows; row += 1) {
+          const v = 1 - row / rows;
+          const y = (v - 0.5) * height;
+          for (let column = 0; column <= columns; column += 1) {
+            const u = column / columns;
+            const x = (u - 0.5) * width;
+            const sample = position.clone().addScaledVector(across, x).addScaledVector(along, y);
+            raycaster.set(sample.clone().addScaledVector(outward, rayStart), castDirection);
+            const hit = raycaster.intersectObject(mesh, false)[0];
+            const surfaceNormal = hit?.face
+              ? hit.face.normal.clone().applyMatrix3(normalMatrix).normalize()
+              : outward.clone();
+            if (surfaceNormal.dot(outward) < 0) surfaceNormal.negate();
+            const point = hit ? hit.point.clone().addScaledVector(surfaceNormal, 0.0015) : sample;
+            positions.push(point.x, point.y, point.z);
+            normals.push(surfaceNormal.x, surfaceNormal.y, surfaceNormal.z);
+            uvs.push(u, v);
+            projected.push(Boolean(hit));
+          }
+        }
+
+        const indices: number[] = [];
+        const rowWidth = columns + 1;
+        for (let row = 0; row < rows; row += 1) {
+          for (let column = 0; column < columns; column += 1) {
+            const a = row * rowWidth + column;
+            const b = (row + 1) * rowWidth + column;
+            const c = b + 1;
+            const d = a + 1;
+            if (!projected[a] || !projected[b] || !projected[c] || !projected[d]) continue;
+            indices.push(a, b, d, b, c, d);
+          }
+        }
+
+        if (!indices.length) return null;
+        const geometry = new THREE.BufferGeometry();
+        geometry.setIndex(indices);
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+        geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+
+        const patch = new THREE.Mesh(geometry, makeDecalMaterial(texture));
         patch.renderOrder = 7;
         patch.castShadow = true;
         patch.receiveShadow = true;
@@ -1205,6 +1262,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           const t = first.i === last.i ? 0 : (i - first.i) / (last.i - first.i);
           const point = first.p.clone().lerp(last.p, t);
           addSleevePatch(
+            s,
             set.textures[i],
             point,
             orientation,

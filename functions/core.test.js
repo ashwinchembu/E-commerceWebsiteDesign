@@ -383,6 +383,7 @@ test("unified request cards merge matching deployments without duplicate cards",
   );
   assert.equal(cards.length, 1);
   assert.equal(cards[0].request_id, "request_signature");
+  assert.equal(cards[0].projected_allocation, "bank");
   assert.equal(cards[0].artifacts.length, 1);
 });
 
@@ -391,11 +392,13 @@ test("request card reviews require owner-entered approval details", () => {
     actualHours: 1.25,
     allocation: "bank",
     estimateHours: 1.5,
+    projectedAllocation: "grace",
     reviewState: "approved",
     verifiedWork: "Verified on the live storefront.",
   });
   assert.equal(review.actual_hours, 1.25);
   assert.equal(review.review_state, "approved");
+  assert.equal(review.projected_allocation, "grace");
   assert.throws(
     () => normalizeRequestCardReview({ estimateHours: 1, reviewState: "approved" }),
     /allocation and actual hours/,

@@ -265,6 +265,7 @@ export function buildUnifiedRequestCards(requests, entries) {
       }),
       id: `request:${request.id}`,
       occurred_at: request.occurred_at,
+      projected_allocation: request.projected_allocation === "grace" ? "grace" : "bank",
       request_id: request.id,
       review_state: REQUEST_REVIEW_STATES.has(request.review_state)
         ? request.review_state
@@ -288,6 +289,7 @@ export function buildUnifiedRequestCards(requests, entries) {
       estimate_hours: entry.estimate_hours,
       id: `entry:${entry.id}`,
       occurred_at: entry.occurred_at || entry.created_at,
+      projected_allocation: entry.projected_allocation === "grace" ? "grace" : "bank",
       request_id: null,
       review_state: REQUEST_REVIEW_STATES.has(entry.review_state)
         ? entry.review_state
@@ -311,6 +313,7 @@ export function normalizeRequestCardReview(value) {
   const allocation = SUPPORT_ALLOCATIONS.has(input.allocation)
     ? input.allocation
     : "unreviewed";
+  const projectedAllocation = input.projectedAllocation === "grace" ? "grace" : "bank";
   const estimateHours = quarterHour(input.estimateHours);
   const actualHours = input.actualHours === "" || input.actualHours == null
     ? null
@@ -328,6 +331,7 @@ export function normalizeRequestCardReview(value) {
     actual_hours: actualHours,
     allocation: reviewState === "rejected" ? "non_billable" : allocation,
     estimate_hours: estimateHours,
+    projected_allocation: projectedAllocation,
     review_state: reviewState,
     verified_work: cleanString(input.verifiedWork, 3000) || null,
   };

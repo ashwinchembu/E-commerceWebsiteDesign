@@ -160,6 +160,7 @@ type UnifiedRequestCard = {
   entry_id?: string | null;
   estimate_hours: number;
   occurred_at: number;
+  projected_allocation: 'bank' | 'grace';
   request_id?: string | null;
   review_state: 'pending' | 'approved' | 'rejected';
   status: 'requested' | 'in_progress' | 'completed' | 'blocked' | 'superseded';
@@ -450,8 +451,11 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
 
   if (!tracker) return null;
   const { plan, summary } = tracker;
-  const projectedUnreviewedHours = tracker.cards
-    .filter((card) => !card.voided_at && card.allocation === 'unreviewed')
+  const projectedFutureHours = tracker.cards
+    .filter((card) => !card.voided_at && card.allocation === 'unreviewed' && (card.projected_allocation || 'bank') === 'bank')
+    .reduce((total, card) => total + Number(card.estimate_hours || 0), 0);
+  const projectedGraceHours = tracker.cards
+    .filter((card) => !card.voided_at && card.allocation === 'unreviewed' && card.projected_allocation === 'grace')
     .reduce((total, card) => total + Number(card.estimate_hours || 0), 0);
   const graceWindowStatus = !plan.launch_at
     ? 'Starts when the official launch date is recorded'
@@ -489,6 +493,9 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
             {hours(summary.bank_used_hours)} used of {hours(plan.bank_total_hours)} · $
             {plan.bank_value_dollars.toLocaleString()} at ${plan.hourly_rate}/hr
           </p>
+          <p className="mt-2 border-t border-sky-300/15 pt-2 text-xs leading-5 text-sky-100/60">
+            {hours(projectedFutureHours)} projected from unreviewed requests
+          </p>
         </div>
         <div className="border border-emerald-400/25 bg-emerald-400/[0.06] p-5">
           <p className="text-[10px] tracking-[0.18em] text-emerald-100/60">BUG-FIX GRACE</p>
@@ -498,7 +505,7 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
             from the paid bank
           </p>
           <p className="mt-2 border-t border-emerald-300/15 pt-2 text-xs leading-5 text-emerald-100/60">
-            {hours(projectedUnreviewedHours)} projected from unreviewed requests
+            {hours(projectedGraceHours)} projected from unreviewed requests
           </p>
         </div>
         <div className="border border-white/15 p-5">
@@ -708,6 +715,13 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
                         {Object.entries(allocationLabels).map(([value, label]) => (
                           <option key={value} value={value}>{label}</option>
                         ))}
+                      </select>
+                    </label>
+                    <label className="text-[10px] tracking-[0.12em] text-white/55 sm:col-span-2">
+                      PROJECT UNREVIEWED WORK TO
+                      <select className={input} defaultValue={card.projected_allocation || 'bank'} name="projectedAllocation">
+                        <option value="bank">Future-work bank</option>
+                        <option value="grace">30-day bug-fix window</option>
                       </select>
                     </label>
                     <label className="text-[10px] tracking-[0.12em] text-white/55">

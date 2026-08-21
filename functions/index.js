@@ -410,6 +410,7 @@ export const logChangeRequest = onRequest(
         ...changeRequest,
         created_at: existing?.created_at || now,
         estimate_hours: existing?.estimate_hours || changeRequest.estimate_hours,
+        projected_allocation: existing?.projected_allocation || "bank",
         source: "message_daemon",
         updated_at: now,
       };
@@ -517,6 +518,7 @@ export const updateRequestCard = onCall(async (request) => {
         description: review.verified_work,
         estimate_hours: review.estimate_hours,
         occurred_at: current.occurred_at || current.created_at || now,
+        projected_allocation: review.projected_allocation,
         request_external_id: current.external_id,
         request_id: requestId,
         source: "manual",

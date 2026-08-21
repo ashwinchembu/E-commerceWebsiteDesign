@@ -14,9 +14,9 @@ import {
 } from "firebase-functions/params";
 import {
   SUPPORT_PLAN_DEFAULTS,
+  buildUnifiedRequestCards,
   cleanString,
   createAccessCode,
-  estimateChangeRequestHours,
   evaluateGrantUse,
   grantState,
   isAuthorizedAdminEmail,
@@ -28,6 +28,7 @@ import {
   normalizeFeedbackRecord,
   normalizeGrantInput,
   normalizeNewsletterInput,
+  normalizeRequestCardReview,
   normalizeShopifyCustomer,
   normalizeSupportEntryInput,
   parseAccessCode,
@@ -101,6 +102,7 @@ const ADMIN_EMAIL_ALLOWLIST = [
   "manoirkits@gmail.com",
   "skpbains@gmail.com",
 ];
+const REQUEST_CARD_OWNER_EMAIL = "ashchembu@gmail.com";
 
 function assertAdmin(request) {
   if (!request.auth) {
@@ -346,26 +348,28 @@ export const getSupportTracker = onCall(async (request) => {
     ...(planSnapshot.exists ? planSnapshot.data() : {}),
   };
   const entries = entrySnapshot.docs.map(supportEntryForAdmin);
+  const requests = requestSnapshot.docs.map((document) => ({
+    id: document.id,
+    ...document.data(),
+  }));
+  const cards = buildUnifiedRequestCards(requests, entries);
   return {
     audit: auditSnapshot.docs.map((document) => ({
       id: document.id,
       ...document.data(),
     })),
+    cards,
     entries,
     plan,
-    requests: requestSnapshot.docs.map((document) => {
-      const data = document.data();
-      return {
-        id: document.id,
-        ...data,
-        estimate_hours: estimateChangeRequestHours({
-          description: data.description,
-          estimateHours: data.estimate_hours,
-          title: data.title,
-        }),
-      };
-    }),
-    summary: supportPlanSummary(entries, plan),
+    requests,
+    summary: supportPlanSummary(
+      cards.map((card) => ({
+        actual_hours: card.actual_hours,
+        allocation: card.allocation,
+        voided_at: card.voided_at,
+      })),
+      plan,
+    ),
   };
 });
 
@@ -404,6 +408,7 @@ export const logChangeRequest = onRequest(
         ...(existing || {}),
         ...changeRequest,
         created_at: existing?.created_at || now,
+        estimate_hours: existing?.estimate_hours || changeRequest.estimate_hours,
         source: "message_daemon",
         updated_at: now,
       };
@@ -426,6 +431,195 @@ export const logChangeRequest = onRequest(
     });
   },
 );
+
+export const updateRequestCard = onCall(async (request) => {
+  assertAdmin(request);
+  const actor = supportActor(request);
+  const isCardOwner = actor.email === REQUEST_CARD_OWNER_EMAIL;
+  if (!isCardOwner) {
+    const reviewState = cleanString(request.data?.reviewState, 40).toLowerCase();
+    if (reviewState !== "approved" && reviewState !== "rejected") {
+      throw new HttpsError("permission-denied", "Administrators may only approve or deny request cards.");
+    }
+    const requestId = request.data?.requestId
+      ? validSupportDocumentId(request.data.requestId)
+      : null;
+    const entryId = request.data?.entryId
+      ? validSupportDocumentId(request.data.entryId)
+      : null;
+    if (!requestId && !entryId) {
+      throw new HttpsError("invalid-argument", "A request card ID is required.");
+    }
+    const now = Date.now();
+    const reference = requestId ? changeRequests.doc(requestId) : supportEntries.doc(entryId);
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(reference);
+      if (!snapshot.exists) {
+        throw new HttpsError("not-found", "The request card was not found.");
+      }
+      if (snapshot.data().voided_at) {
+        throw new HttpsError("failed-precondition", "Voided request cards cannot be reviewed.");
+      }
+      transaction.update(reference, {
+        review_state: reviewState,
+        updated_at: now,
+        updated_by_email: actor.email,
+        updated_by_uid: actor.uid,
+      });
+      transaction.set(
+        supportAuditEvents.doc(),
+        supportAuditRecord("request_card_decided", actor, {
+          entry_id: entryId,
+          request_id: requestId,
+          review_state: reviewState,
+        }, now),
+      );
+    });
+    return { ok: true };
+  }
+  let review;
+  try {
+    review = normalizeRequestCardReview(request.data);
+  } catch (error) {
+    throw invalidArgument(error);
+  }
+  const requestId = request.data?.requestId
+    ? validSupportDocumentId(request.data.requestId)
+    : null;
+  const entryId = request.data?.entryId
+    ? validSupportDocumentId(request.data.entryId)
+    : null;
+  if (!requestId && !entryId) {
+    throw new HttpsError("invalid-argument", "A request card ID is required.");
+  }
+  const now = Date.now();
+
+  await db.runTransaction(async (transaction) => {
+    if (requestId) {
+      const requestReference = changeRequests.doc(requestId);
+      const requestSnapshot = await transaction.get(requestReference);
+      if (!requestSnapshot.exists) {
+        throw new HttpsError("not-found", "The request card was not found.");
+      }
+      const current = requestSnapshot.data();
+      if (current.voided_at) {
+        throw new HttpsError("failed-precondition", "Voided request cards cannot be edited.");
+      }
+      const canonicalEntry = supportEntries.doc(`request_${requestId}`);
+      const canonicalSnapshot = await transaction.get(canonicalEntry);
+      const entryRecord = {
+        actual_hours: review.actual_hours,
+        allocation: review.allocation,
+        created_at: canonicalSnapshot.data()?.created_at || now,
+        created_by_email: canonicalSnapshot.data()?.created_by_email || actor.email,
+        created_by_uid: canonicalSnapshot.data()?.created_by_uid || actor.uid,
+        description: review.verified_work,
+        estimate_hours: review.estimate_hours,
+        occurred_at: current.occurred_at || current.created_at || now,
+        request_external_id: current.external_id,
+        request_id: requestId,
+        source: "manual",
+        title: current.title,
+        updated_at: now,
+        updated_by_email: actor.email,
+        updated_by_uid: actor.uid,
+        voided_at: null,
+      };
+      transaction.set(requestReference, {
+        ...review,
+        updated_at: now,
+        updated_by_email: actor.email,
+        updated_by_uid: actor.uid,
+      }, { merge: true });
+      transaction.set(canonicalEntry, entryRecord, { merge: true });
+      transaction.set(
+        supportAuditEvents.doc(),
+        supportAuditRecord("request_card_reviewed", actor, {
+          actual_hours: review.actual_hours,
+          allocation: review.allocation,
+          estimate_hours: review.estimate_hours,
+          request_id: requestId,
+          review_state: review.review_state,
+        }, now),
+      );
+      return;
+    }
+
+    const entryReference = supportEntries.doc(entryId);
+    const entrySnapshot = await transaction.get(entryReference);
+    if (!entrySnapshot.exists) {
+      throw new HttpsError("not-found", "The work card was not found.");
+    }
+    if (entrySnapshot.data().voided_at) {
+      throw new HttpsError("failed-precondition", "Voided work cards cannot be edited.");
+    }
+    transaction.update(entryReference, {
+      actual_hours: review.actual_hours,
+      allocation: review.allocation,
+      description: review.verified_work,
+      estimate_hours: review.estimate_hours,
+      review_state: review.review_state,
+      updated_at: now,
+      updated_by_email: actor.email,
+      updated_by_uid: actor.uid,
+    });
+    transaction.set(
+      supportAuditEvents.doc(),
+      supportAuditRecord("request_card_reviewed", actor, {
+        entry_id: entryId,
+        review_state: review.review_state,
+      }, now),
+    );
+  });
+  return { ok: true };
+});
+
+export const voidRequestCard = onCall(async (request) => {
+  assertAdmin(request);
+  const actor = supportActor(request);
+  if (actor.email !== REQUEST_CARD_OWNER_EMAIL) {
+    throw new HttpsError("permission-denied", "Only the request-card owner may void cards.");
+  }
+  const requestId = request.data?.requestId
+    ? validSupportDocumentId(request.data.requestId)
+    : null;
+  const entryId = request.data?.entryId
+    ? validSupportDocumentId(request.data.entryId)
+    : null;
+  const reason = cleanString(request.data?.reason, 500);
+  if ((!requestId && !entryId) || !reason) {
+    throw new HttpsError("invalid-argument", "A card and void reason are required.");
+  }
+  const now = Date.now();
+  const batch = db.batch();
+  if (requestId) {
+    batch.set(changeRequests.doc(requestId), {
+      updated_at: now,
+      updated_by_email: actor.email,
+      updated_by_uid: actor.uid,
+      void_reason: reason,
+      voided_at: now,
+    }, { merge: true });
+  } else {
+    batch.set(supportEntries.doc(entryId), {
+      updated_at: now,
+      updated_by_email: actor.email,
+      updated_by_uid: actor.uid,
+      void_reason: reason,
+      voided_at: now,
+    }, { merge: true });
+  }
+  batch.set(
+    supportAuditEvents.doc(),
+    supportAuditRecord("request_card_voided", actor, {
+      entry_id: entryId,
+      reason,
+      request_id: requestId,
+    }, now),
+  );
+  await batch.commit();
+  return { ok: true };
+});
 
 export const setSupportLaunchDate = onCall(async (request) => {
   assertAdmin(request);

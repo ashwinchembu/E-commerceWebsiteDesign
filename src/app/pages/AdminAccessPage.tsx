@@ -139,8 +139,39 @@ type SupportAuditEvent = {
   occurred_at: number;
 };
 
+type UnifiedRequestCard = {
+  id: string;
+  actual_hours?: number | null;
+  allocation: SupportAllocation;
+  artifacts: Array<{
+    additions: number;
+    author_name?: string | null;
+    changed_files: Array<{ additions: number; deletions: number; path: string }>;
+    commit_url?: string | null;
+    deletions: number;
+    id: string;
+    occurred_at: number;
+    sha?: string | null;
+    source: 'deployment' | 'manual';
+    title: string;
+  }>;
+  completed_at?: number | null;
+  description?: string | null;
+  entry_id?: string | null;
+  estimate_hours: number;
+  occurred_at: number;
+  request_id?: string | null;
+  review_state: 'pending' | 'approved' | 'rejected';
+  status: 'requested' | 'in_progress' | 'completed' | 'blocked' | 'superseded';
+  title: string;
+  verified_work?: string | null;
+  void_reason?: string | null;
+  voided_at?: number | null;
+};
+
 type SupportTracker = {
   audit: SupportAuditEvent[];
+  cards: UnifiedRequestCard[];
   entries: SupportEntry[];
   plan: SupportPlan;
   requests: Array<{
@@ -274,12 +305,13 @@ const button =
 const secondaryButton =
   'border border-white/30 px-4 py-3 text-xs tracking-[0.16em] text-white transition hover:border-white disabled:cursor-not-allowed disabled:opacity-40';
 
-function SupportTrackerSection() {
+function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
   const [tracker, setTracker] = useState<SupportTracker | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [launchDate, setLaunchDate] = useState('');
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const isCardOwner = adminEmail.toLowerCase() === 'ashchembu@gmail.com';
 
   const loadTracker = useCallback(async () => {
     setLoading(true);
@@ -341,38 +373,66 @@ function SupportTrackerSection() {
     }
   }
 
-  async function updateEntry(event: FormEvent<HTMLFormElement>, id: string) {
+  async function updateCard(event: FormEvent<HTMLFormElement>, card: UnifiedRequestCard) {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
     setWorking(true);
     try {
       await callFirebaseFunction<Record<string, FormDataEntryValue | string>, { ok: boolean }>(
-        'updateSupportEntry',
-        { ...values, id },
+        'updateRequestCard',
+        {
+          ...values,
+          entryId: card.entry_id || '',
+          requestId: card.request_id || '',
+        },
       );
-      toast.success('Hours reviewed and saved.');
+      toast.success('Request review saved.');
       setEditingEntryId(null);
       await loadTracker();
     } catch (error) {
-      toast.error(firebaseErrorMessage(error, 'The work entry could not be updated.'));
+      toast.error(firebaseErrorMessage(error, 'The request card could not be updated.'));
     } finally {
       setWorking(false);
     }
   }
 
-  async function voidEntry(id: string) {
-    const reason = window.prompt('Why should this entry be voided? The audit record will remain.');
+  async function voidCard(card: UnifiedRequestCard) {
+    const reason = window.prompt('Why should this request card be voided? The audit record will remain.');
     if (!reason?.trim()) return;
     setWorking(true);
     try {
       await callFirebaseFunction<{ id: string; reason: string }, { ok: boolean }>(
-        'voidSupportEntry',
-        { id, reason },
+        'voidRequestCard',
+        {
+          entryId: card.entry_id || '',
+          reason,
+          requestId: card.request_id || '',
+        },
       );
-      toast.success('Entry voided; its audit history was preserved.');
+      toast.success('Request card voided; its audit history was preserved.');
       await loadTracker();
     } catch (error) {
-      toast.error(firebaseErrorMessage(error, 'The work entry could not be voided.'));
+      toast.error(firebaseErrorMessage(error, 'The request card could not be voided.'));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function decideCard(card: UnifiedRequestCard, reviewState: 'approved' | 'rejected') {
+    setWorking(true);
+    try {
+      await callFirebaseFunction<Record<string, string>, { ok: boolean }>(
+        'updateRequestCard',
+        {
+          entryId: card.entry_id || '',
+          requestId: card.request_id || '',
+          reviewState,
+        },
+      );
+      toast.success(reviewState === 'approved' ? 'Request approved.' : 'Request denied.');
+      await loadTracker();
+    } catch (error) {
+      toast.error(firebaseErrorMessage(error, 'The request decision could not be saved.'));
     } finally {
       setWorking(false);
     }
@@ -400,7 +460,7 @@ function SupportTrackerSection() {
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs tracking-[0.2em] text-white/45">SUPPORT & MAINTENANCE</p>
-          <h2 className="mt-2 text-2xl font-light">Project work ledger</h2>
+          <h2 className="mt-2 text-2xl font-light">Website requests and work ledger</h2>
           <p className="mt-3 max-w-4xl text-sm leading-6 text-white/55">
             Every push to <span className="font-mono text-white/75">main</span> is logged with
             its commit, change totals, and an initial effort estimate. An administrator reviews
@@ -450,7 +510,7 @@ function SupportTrackerSection() {
         </div>
       </div>
 
-      <form
+      {isCardOwner && <form
         className="mt-6 flex flex-col gap-4 border border-white/15 p-5 sm:flex-row sm:items-end"
         onSubmit={saveLaunchDate}
       >
@@ -476,44 +536,9 @@ function SupportTrackerSection() {
             CLEAR FIELD
           </button>
         )}
-      </form>
+      </form>}
 
-      <div className="mt-6 border border-white/15 p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[10px] tracking-[0.18em] text-white/45">CHANGE REQUESTS</p>
-            <h3 className="mt-2 text-xl font-light">Requested website work</h3>
-          </div>
-          <p className="text-xs text-white/45">{tracker.requests.length} logged</p>
-        </div>
-        {tracker.requests.length === 0 ? (
-          <p className="mt-4 text-sm text-white/50">No website requests have been logged yet.</p>
-        ) : (
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            {tracker.requests.map((request) => (
-              <article className="border border-white/10 p-4" key={request.id}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="border border-white/20 px-2 py-1 text-[10px] tracking-[0.14em] text-white/60">
-                    {request.status.replaceAll('_', ' ').toUpperCase()}
-                  </span>
-                  <span className="text-[11px] text-white/35">{dateTime(request.occurred_at)}</span>
-                </div>
-                <h4 className="mt-3 text-base font-normal">{request.title}</h4>
-                <p className="mt-2 text-xs text-white/45">
-                  Estimated time {hours(request.estimate_hours)}
-                </p>
-                {request.description && (
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/55">
-                    {request.description}
-                  </p>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <details className="mt-6 border border-white/15 p-5">
+      {isCardOwner && <details className="mt-6 border border-white/15 p-5">
         <summary className="cursor-pointer text-sm tracking-[0.12em] text-white/75">
           LOG WORK MANUALLY
         </summary>
@@ -548,105 +573,165 @@ function SupportTrackerSection() {
           </label>
           <button className={button} disabled={working} type="submit">ADD WORK ENTRY</button>
         </form>
-      </details>
+      </details>}
 
-      <div className="mt-6 grid gap-4">
-        {tracker.entries.length === 0 ? (
+      <div className="mt-6 border border-white/15 p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] tracking-[0.18em] text-white/45">REQUESTS & VERIFIED WORK</p>
+            <h3 className="mt-2 text-xl font-light">One card per website request</h3>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/50">
+              Messages update the request. Approved administrators can approve or deny it. Only
+              the primary owner can edit hours, record verified work, or void the card. Related
+              commits and deployments stay read-only.
+            </p>
+          </div>
+          <p className="text-xs text-white/45">{tracker.cards.length} deduplicated cards</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4">
+        {tracker.cards.length === 0 ? (
           <p className="border border-white/10 p-5 text-sm text-white/50">
-            No work has been logged yet. The next push to main will appear automatically.
+            No requests or project work have been logged yet.
           </p>
-        ) : tracker.entries.map((entry) => (
+        ) : tracker.cards.map((card) => (
           <article
-            className={`border p-5 ${entry.voided_at ? 'border-red-400/25 opacity-55' : 'border-white/15'}`}
-            key={entry.id}
+            className={`border p-5 ${card.voided_at ? 'border-red-400/25 opacity-55' : 'border-white/15'}`}
+            key={card.id}
           >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`border px-2 py-1 text-[10px] tracking-[0.14em] ${allocationClasses(entry.allocation)}`}>
-                    {entry.voided_at ? 'VOIDED' : allocationLabels[entry.allocation].toUpperCase()}
+                  <span className={`border px-2 py-1 text-[10px] tracking-[0.14em] ${allocationClasses(card.allocation)}`}>
+                    {card.voided_at ? 'VOIDED' : card.review_state.toUpperCase()}
                   </span>
                   <span className="border border-white/15 px-2 py-1 text-[10px] tracking-[0.14em] text-white/45">
-                    {entry.source.toUpperCase()}
+                    {card.status.replaceAll('_', ' ').toUpperCase()}
                   </span>
                 </div>
-                <h3 className="mt-3 break-words text-lg font-normal">{entry.title}</h3>
+                <h3 className="mt-3 break-words text-lg font-normal">{card.title}</h3>
                 <p className="mt-2 text-xs leading-5 text-white/45">
-                  {dateTime(entry.occurred_at)} · estimate {hours(entry.estimate_hours)} · applied{' '}
-                  {entry.actual_hours == null ? 'not reviewed' : hours(entry.actual_hours)}
+                  {dateTime(card.occurred_at)} · estimate {hours(card.estimate_hours)} · actual{' '}
+                  {card.actual_hours == null ? 'not reviewed' : hours(card.actual_hours)} ·{' '}
+                  {allocationLabels[card.allocation]}
                 </p>
-                {entry.description && (
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/60">{entry.description}</p>
+                {card.description && (
+                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/60">{card.description}</p>
                 )}
-                {entry.source === 'deployment' && (
-                  <div className="mt-4 text-xs leading-5 text-white/45">
-                    <p>
-                      {entry.files_changed || 0} files · +{entry.additions || 0} / −{entry.deletions || 0}
-                      {entry.author_name ? ` · ${entry.author_name}` : ''}
-                    </p>
-                    {entry.commit_url && (
-                      <a
-                        className="mt-1 inline-block break-all font-mono text-white/65 underline underline-offset-4 hover:text-white"
-                        href={entry.commit_url}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        {entry.sha?.slice(0, 10)} ↗
-                      </a>
-                    )}
-                    {entry.changed_files && entry.changed_files.length > 0 && (
-                      <details className="mt-3">
-                        <summary className="cursor-pointer text-white/60">VIEW CHANGED FILES</summary>
-                        <ul className="mt-2 grid gap-1 font-mono text-[11px]">
-                          {entry.changed_files.map((file) => (
-                            <li className="break-all" key={file.path}>
-                              +{file.additions} −{file.deletions} {file.path}
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
+                {card.verified_work && (
+                  <div className="mt-4 border-l border-emerald-300/35 pl-4">
+                    <p className="text-[10px] tracking-[0.14em] text-emerald-100/65">VERIFIED WORK COMPLETED</p>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/65">{card.verified_work}</p>
                   </div>
                 )}
-                {entry.voided_at && (
-                  <p className="mt-3 text-xs text-red-200">Voided: {entry.void_reason || 'No reason recorded'}</p>
+                {card.artifacts.length > 0 && (
+                  <details className="mt-4 border-t border-white/10 pt-3">
+                    <summary className="cursor-pointer text-xs tracking-[0.12em] text-white/60">
+                      RELATED WORK ({card.artifacts.length})
+                    </summary>
+                    <div className="mt-3 grid gap-3">
+                      {card.artifacts.map((artifact) => (
+                        <div className="border border-white/10 p-3 text-xs leading-5 text-white/45" key={artifact.id}>
+                          <p className="text-white/65">{artifact.title}</p>
+                          <p>
+                            {dateTime(artifact.occurred_at)} · {artifact.source}
+                            {artifact.changed_files.length > 0
+                              ? ` · ${artifact.changed_files.length} files · +${artifact.additions} / −${artifact.deletions}`
+                              : ''}
+                          </p>
+                          {artifact.commit_url && (
+                            <a
+                              className="mt-1 inline-block break-all font-mono text-white/65 underline underline-offset-4 hover:text-white"
+                              href={artifact.commit_url}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              {artifact.sha?.slice(0, 10)} ↗
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+                {card.voided_at && (
+                  <p className="mt-3 text-xs text-red-200">Voided: {card.void_reason || 'No reason recorded'}</p>
                 )}
               </div>
 
-              {!entry.voided_at && (
-                editingEntryId === entry.id ? (
+              {!card.voided_at && (
+                !isCardOwner ? (
+                  <div className="grid shrink-0 gap-3 sm:grid-cols-2">
+                    <button
+                      className={button}
+                      disabled={working}
+                      onClick={() => void decideCard(card, 'approved')}
+                      type="button"
+                    >
+                      APPROVE
+                    </button>
+                    <button
+                      className="border border-red-300/30 px-4 py-3 text-xs tracking-[0.14em] text-red-200 hover:border-red-200"
+                      disabled={working}
+                      onClick={() => void decideCard(card, 'rejected')}
+                      type="button"
+                    >
+                      DENY
+                    </button>
+                  </div>
+                ) : editingEntryId === card.id ? (
                   <form
                     className="grid shrink-0 gap-3 border border-white/10 p-4 sm:grid-cols-2 lg:w-[520px]"
-                    onSubmit={(event) => void updateEntry(event, entry.id)}
+                    onSubmit={(event) => void updateCard(event, card)}
                   >
                     <label className="text-[10px] tracking-[0.12em] text-white/55">
+                      REVIEW DECISION
+                      <select className={input} defaultValue={card.review_state} name="reviewState">
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    </label>
+                    <label className="text-[10px] tracking-[0.12em] text-white/55">
                       APPLY TO
-                      <select className={input} defaultValue={entry.allocation} name="allocation">
+                      <select className={input} defaultValue={card.allocation} name="allocation">
                         {Object.entries(allocationLabels).map(([value, label]) => (
                           <option key={value} value={value}>{label}</option>
                         ))}
                       </select>
                     </label>
                     <label className="text-[10px] tracking-[0.12em] text-white/55">
-                      APPLIED HOURS
+                      ESTIMATED HOURS
                       <input
                         className={input}
-                        defaultValue={entry.actual_hours ?? entry.estimate_hours}
+                        defaultValue={card.estimate_hours}
                         min="0.25"
-                        name="actualHours"
+                        name="estimateHours"
                         required
                         step="0.25"
                         type="number"
                       />
                     </label>
+                    <label className="text-[10px] tracking-[0.12em] text-white/55">
+                      ACTUAL HOURS
+                      <input
+                        className={input}
+                        defaultValue={card.actual_hours ?? ''}
+                        min="0.25"
+                        name="actualHours"
+                        step="0.25"
+                        type="number"
+                      />
+                    </label>
                     <label className="text-[10px] tracking-[0.12em] text-white/55 sm:col-span-2">
-                      REVIEW NOTES
+                      ACTUAL WORK COMPLETED
                       <textarea
                         className={input}
-                        defaultValue={entry.description || ''}
+                        defaultValue={card.verified_work || ''}
                         maxLength={3000}
-                        name="description"
-                        rows={2}
+                        name="verifiedWork"
+                        rows={4}
                       />
                     </label>
                     <button className={button} disabled={working} type="submit">SAVE REVIEW</button>
@@ -661,20 +746,20 @@ function SupportTrackerSection() {
                     <button
                       className="border border-red-300/30 px-4 py-3 text-xs tracking-[0.14em] text-red-200 hover:border-red-200 sm:col-span-2"
                       disabled={working}
-                      onClick={() => void voidEntry(entry.id)}
+                      onClick={() => void voidCard(card)}
                       type="button"
                     >
-                      VOID ENTRY
+                      VOID CARD
                     </button>
                   </form>
                 ) : (
                   <button
                     className={`${secondaryButton} shrink-0 self-start`}
                     disabled={working}
-                    onClick={() => setEditingEntryId(entry.id)}
+                    onClick={() => setEditingEntryId(card.id)}
                     type="button"
                   >
-                    EDIT ENTRY
+                    EDIT REQUEST
                   </button>
                 )
               )}
@@ -1058,7 +1143,7 @@ export function AdminAccessPage() {
           </div>
         </section>
 
-        <SupportTrackerSection />
+        <SupportTrackerSection adminEmail={admin.email || ''} />
 
         <section className={panel}>
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">

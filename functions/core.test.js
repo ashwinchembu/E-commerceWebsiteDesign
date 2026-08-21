@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildUnifiedRequestCards,
   createAccessCode,
   estimateChangeRequestHours,
   estimateDeploymentHours,
@@ -14,6 +15,7 @@ import {
   normalizeFeedbackRecord,
   normalizeGrantInput,
   normalizeNewsletterInput,
+  normalizeRequestCardReview,
   normalizeShopifyCustomer,
   normalizeSupportEntryInput,
   parseAccessCode,
@@ -333,12 +335,11 @@ test("change request logs are normalized and require stable identifiers", () => 
     externalId: "imessage-273035",
     occurredAt: "2026-08-20T19:39:35Z",
     status: "completed",
-    estimateHours: 1.1,
     title: " Synchronize signature and quilt colors ",
   });
   assert.equal(request.external_id, "imessage-273035");
   assert.equal(request.status, "completed");
-  assert.equal(request.estimate_hours, 1);
+  assert.equal(request.estimate_hours, 0.75);
   assert.equal(request.title, "Synchronize signature and quilt colors");
   assert.throws(
     () => normalizeChangeRequestLog({ externalId: "bad id", status: "requested", title: "x" }),
@@ -355,6 +356,48 @@ test("change request estimates use a bounded fallback for historical records", (
     1.75,
   );
   assert.equal(estimateChangeRequestHours({ estimateHours: 100, title: "Small copy fix" }), 0.75);
+});
+
+test("unified request cards merge matching deployments without duplicate cards", () => {
+  const cards = buildUnifiedRequestCards(
+    [{
+      external_id: "imessage-273035",
+      id: "request_signature",
+      occurred_at: 100,
+      status: "completed",
+      title: "Synchronize signature and quilt colors",
+    }],
+    [{
+      actual_hours: null,
+      allocation: "unreviewed",
+      created_at: 200,
+      estimate_hours: 1,
+      id: "deploy_signature",
+      occurred_at: 200,
+      sha: "a".repeat(40),
+      source: "deployment",
+      title: "Sync signature detail with lining color",
+    }],
+  );
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].request_id, "request_signature");
+  assert.equal(cards[0].artifacts.length, 1);
+});
+
+test("request card reviews require owner-entered approval details", () => {
+  const review = normalizeRequestCardReview({
+    actualHours: 1.25,
+    allocation: "bank",
+    estimateHours: 1.5,
+    reviewState: "approved",
+    verifiedWork: "Verified on the live storefront.",
+  });
+  assert.equal(review.actual_hours, 1.25);
+  assert.equal(review.review_state, "approved");
+  assert.throws(
+    () => normalizeRequestCardReview({ estimateHours: 1, reviewState: "approved" }),
+    /allocation and actual hours/,
+  );
 });
 
 test("support entries require reviewed hours and summarize both separate banks", () => {

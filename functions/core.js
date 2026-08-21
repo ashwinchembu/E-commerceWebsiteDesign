@@ -23,6 +23,7 @@ const CHANGE_REQUEST_STATUSES = new Set([
   "blocked",
   "superseded",
 ]);
+const REQUEST_REVIEW_STATES = new Set(["pending", "approved", "rejected"]);
 
 export const SUPPORT_PLAN_DEFAULTS = Object.freeze({
   bank_total_hours: 24,
@@ -180,10 +181,155 @@ export function normalizeChangeRequestLog(value) {
     completed_at: Number.isFinite(completedAt) ? completedAt : null,
     description,
     external_id: externalId,
-    estimate_hours: estimateChangeRequestHours(input),
+    estimate_hours: estimateChangeRequestHours({
+      description,
+      title,
+    }),
     occurred_at: occurredAt,
     status,
     title,
+  };
+}
+
+function requestAliasForWorkEntry(value) {
+  const text = `${cleanString(value?.title, 180)} ${cleanString(value?.description, 3000)}`.toLowerCase();
+  const matches = (...terms) => terms.some((term) => text.includes(term));
+  if (matches("signature detail", "signature and quilt")) return "imessage-273035";
+  if (matches("sleeve color control", "sleeve decals")) return "imessage-271237";
+  if (matches("sleeve number", "sleeve digits", "edge distortion")) return "imessage-271271";
+  if (text.includes("est") && matches("color", "word mark", "wordmark")) return "imessage-271270";
+  if (text.includes("est")) return "imessage-270176";
+  if (matches("gold tone", "gold color")) return "imessage-270006";
+  if (matches("footballer jacket artwork", "colors and materials")) return "imessage-269677";
+  if (matches("shipping timeline", "shipping policy", "shipping guidance")) return "imessage-268474";
+  if (matches("preview rotating", "preview still", "zoom and spin", "jacket interaction")) return "imessage-267318";
+  if (matches("lettering", "number decal", "back panel", "back seam", "glyph alignment", "wordmark letters", "text spacing")) return "imessage-266530";
+  if (matches("jacket sizes", "limit jacket sizes")) return "imessage-265785";
+  if (matches("newsletter")) return "legacy-newsletter-discount";
+  if (matches("contact form")) return "legacy-contact-form";
+  if (matches("feedback")) return "legacy-feedback-system";
+  if (matches("footballer access", "footballer login")) return "legacy-footballer-login";
+  if (matches("search settings", "search-engine", "site title")) return "legacy-search-settings";
+  if (matches("broken", "footer icon", "footer social")) return "legacy-broken-links";
+  if (matches("mobile loading", "lazy-load", "mobile navigation")) return "legacy-mobile-performance";
+  if (matches("order flow")) return "legacy-jacket-order-flow";
+  if (matches("cart button")) return "legacy-cart-buttons";
+  return null;
+}
+
+function workArtifact(entry) {
+  return {
+    additions: entry.additions || 0,
+    author_name: entry.author_name || null,
+    changed_files: Array.isArray(entry.changed_files) ? entry.changed_files : [],
+    commit_url: entry.commit_url || null,
+    deletions: entry.deletions || 0,
+    id: entry.id,
+    occurred_at: entry.occurred_at || entry.created_at,
+    sha: entry.sha || null,
+    source: entry.source,
+    title: entry.title,
+  };
+}
+
+export function buildUnifiedRequestCards(requests, entries) {
+  const requestList = Array.isArray(requests) ? requests : [];
+  const entryList = Array.isArray(entries) ? entries : [];
+  const requestByExternalId = new Map(
+    requestList.map((request) => [request.external_id, request]),
+  );
+  const linkedEntries = new Map(requestList.map((request) => [request.id, []]));
+  const unmatchedEntries = [];
+
+  for (const entry of entryList) {
+    const externalId = cleanString(entry.request_external_id, 180) || requestAliasForWorkEntry(entry);
+    const request = requestByExternalId.get(externalId);
+    if (request) linkedEntries.get(request.id).push(entry);
+    else unmatchedEntries.push(entry);
+  }
+
+  const cards = requestList.map((request) => {
+    const related = linkedEntries.get(request.id) || [];
+    const reviewed = related.find((entry) => entry.actual_hours != null && !entry.voided_at);
+    const primary = reviewed || related.find((entry) => !entry.voided_at) || related[0] || null;
+    return {
+      actual_hours: request.actual_hours ?? primary?.actual_hours ?? null,
+      allocation: request.allocation || primary?.allocation || "unreviewed",
+      artifacts: related.map(workArtifact),
+      completed_at: request.completed_at || null,
+      description: request.description || null,
+      estimate_hours: estimateChangeRequestHours({
+        description: request.description,
+        estimateHours: request.estimate_hours,
+        title: request.title,
+      }),
+      id: `request:${request.id}`,
+      occurred_at: request.occurred_at,
+      request_id: request.id,
+      review_state: REQUEST_REVIEW_STATES.has(request.review_state)
+        ? request.review_state
+        : "pending",
+      status: request.status,
+      title: request.title,
+      verified_work: request.verified_work || null,
+      void_reason: request.void_reason || null,
+      voided_at: request.voided_at || null,
+    };
+  });
+
+  for (const entry of unmatchedEntries) {
+    cards.push({
+      actual_hours: entry.actual_hours ?? null,
+      allocation: entry.allocation || "unreviewed",
+      artifacts: [workArtifact(entry)],
+      completed_at: null,
+      description: entry.source === "manual" ? entry.description || null : null,
+      entry_id: entry.id,
+      estimate_hours: entry.estimate_hours,
+      id: `entry:${entry.id}`,
+      occurred_at: entry.occurred_at || entry.created_at,
+      request_id: null,
+      review_state: REQUEST_REVIEW_STATES.has(entry.review_state)
+        ? entry.review_state
+        : entry.allocation === "unreviewed" ? "pending" : "approved",
+      status: entry.voided_at ? "superseded" : "completed",
+      title: entry.title,
+      verified_work: entry.source === "manual" ? entry.description || null : null,
+      void_reason: entry.void_reason || null,
+      voided_at: entry.voided_at || null,
+    });
+  }
+  return cards.sort((left, right) => right.occurred_at - left.occurred_at);
+}
+
+export function normalizeRequestCardReview(value) {
+  const input = value && typeof value === "object" ? value : {};
+  const reviewState = cleanString(input.reviewState, 40).toLowerCase();
+  if (!REQUEST_REVIEW_STATES.has(reviewState)) {
+    throw new Error("Review decision is invalid.");
+  }
+  const allocation = SUPPORT_ALLOCATIONS.has(input.allocation)
+    ? input.allocation
+    : "unreviewed";
+  const estimateHours = quarterHour(input.estimateHours);
+  const actualHours = input.actualHours === "" || input.actualHours == null
+    ? null
+    : quarterHour(input.actualHours);
+  if (estimateHours < 0.25 || estimateHours > 24) {
+    throw new Error("Estimated hours must be between 0.25 and 24.");
+  }
+  if (actualHours !== null && (actualHours < 0.25 || actualHours > 24)) {
+    throw new Error("Actual hours must be between 0.25 and 24.");
+  }
+  if (reviewState === "approved" && (allocation === "unreviewed" || actualHours === null)) {
+    throw new Error("Approved work needs an allocation and actual hours.");
+  }
+  return {
+    actual_hours: actualHours,
+    allocation: reviewState === "rejected" ? "non_billable" : allocation,
+    estimate_hours: estimateHours,
+    review_state: reviewState,
+    verified_work: cleanString(input.verifiedWork, 3000) || null,
   };
 }
 

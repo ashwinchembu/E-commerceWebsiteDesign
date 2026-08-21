@@ -398,7 +398,7 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
   }
 
   async function voidCard(card: UnifiedRequestCard) {
-    const reason = window.prompt('Why should this request card be voided? The audit record will remain.');
+    const reason = window.prompt('Confirm why this request was deleted. The verified deletion record will remain visible.');
     if (!reason?.trim()) return;
     setWorking(true);
     try {
@@ -410,7 +410,7 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
           requestId: card.request_id || '',
         },
       );
-      toast.success('Request card voided; its audit history was preserved.');
+      toast.success('Request marked as verified deleted; its audit history remains visible.');
       await loadTracker();
     } catch (error) {
       toast.error(firebaseErrorMessage(error, 'The request card could not be voided.'));
@@ -611,7 +611,7 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`border px-2 py-1 text-[10px] tracking-[0.14em] ${allocationClasses(card.allocation)}`}>
-                    {card.voided_at ? 'VOIDED' : card.review_state.toUpperCase()}
+                    {card.voided_at ? 'VERIFIED DELETED' : card.review_state.toUpperCase()}
                   </span>
                   <span className="border border-white/15 px-2 py-1 text-[10px] tracking-[0.14em] text-white/45">
                     {card.status.replaceAll('_', ' ').toUpperCase()}
@@ -663,7 +663,9 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
                   </details>
                 )}
                 {card.voided_at && (
-                  <p className="mt-3 text-xs text-red-200">Voided: {card.void_reason || 'No reason recorded'}</p>
+                  <p className="mt-3 text-xs text-red-200">
+                    Verified deleted: {card.void_reason || 'No reason recorded'} · retained for audit only and not counted
+                  </p>
                 )}
               </div>
 
@@ -756,7 +758,7 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
                       onClick={() => void voidCard(card)}
                       type="button"
                     >
-                      VOID CARD
+                      MARK VERIFIED DELETED
                     </button>
                   </form>
                 ) : (

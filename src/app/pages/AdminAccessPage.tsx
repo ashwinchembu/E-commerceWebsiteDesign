@@ -307,6 +307,17 @@ const button =
 const secondaryButton =
   'border border-white/30 px-4 py-3 text-xs tracking-[0.16em] text-white transition hover:border-white disabled:cursor-not-allowed disabled:opacity-40';
 
+const dashboardSections = [
+  { href: '#overview', label: 'Overview', detail: 'Dashboard totals' },
+  { href: '#requests-work', label: 'Requests & work', detail: 'Hours, reviews, and delivery' },
+  { href: '#customer-messages', label: 'Customer messages', detail: 'Feedback and contact forms' },
+  { href: '#customer-sync', label: 'Customer sync', detail: 'Protected Shopify backup' },
+  { href: '#operations-guides', label: 'Operations guides', detail: 'Owner reference files' },
+  { href: '#create-access', label: 'Create access', detail: 'Issue a personal code' },
+  { href: '#access-grants', label: 'Access grants', detail: 'Review and revoke codes' },
+  { href: '#security-activity', label: 'Security activity', detail: 'Recent sign-in events' },
+];
+
 function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
   const [tracker, setTracker] = useState<SupportTracker | null>(null);
   const [loading, setLoading] = useState(true);
@@ -442,7 +453,7 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
 
   if (loading && !tracker) {
     return (
-      <section className={panel}>
+      <section className={panel} id="requests-work">
         <p className="text-xs tracking-[0.2em] text-white/45">SUPPORT & MAINTENANCE</p>
         <p className="mt-4 text-sm text-white/55">Loading the work ledger…</p>
       </section>
@@ -464,7 +475,7 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
       : `Ended ${summary.grace_ends_at ? new Date(summary.grace_ends_at).toLocaleDateString() : '—'}`;
 
   return (
-    <section className={panel}>
+    <section className={`${panel} scroll-mt-8`} id="requests-work">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs tracking-[0.2em] text-white/45">SUPPORT & MAINTENANCE</p>
@@ -1139,8 +1150,25 @@ export function AdminAccessPage() {
         </div>
       </header>
 
-      <main className="mx-auto mt-7 grid max-w-[1500px] gap-7">
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <main className="mx-auto mt-7 max-w-[1500px] lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start lg:gap-7">
+        <aside className="mb-7 border border-white/15 bg-white/[0.035] p-4 lg:sticky lg:top-6 lg:mb-0">
+          <p className="px-2 text-[10px] tracking-[0.22em] text-white/40">DASHBOARD</p>
+          <nav aria-label="Dashboard sections" className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
+            {dashboardSections.map((section) => (
+              <a
+                className="group min-w-[190px] border border-transparent px-3 py-3 transition hover:border-white/20 hover:bg-white/[0.05] lg:min-w-0"
+                href={section.href}
+                key={section.href}
+              >
+                <span className="block text-sm text-white/85 group-hover:text-white">{section.label}</span>
+                <span className="mt-1 block text-[11px] leading-4 text-white/35">{section.detail}</span>
+              </a>
+            ))}
+          </nav>
+        </aside>
+
+        <div className="grid min-w-0 gap-7">
+        <section className="grid scroll-mt-8 gap-4 sm:grid-cols-2 xl:grid-cols-4" id="overview">
           <div className={panel}>
             <p className="text-xs tracking-[0.2em] text-white/45">ACTIVE CODES</p>
             <p className="mt-3 text-4xl font-light">{activeCount.toLocaleString()}</p>
@@ -1161,7 +1189,7 @@ export function AdminAccessPage() {
 
         <SupportTrackerSection adminEmail={admin.email || ''} />
 
-        <section className={panel}>
+        <section className={`${panel} scroll-mt-8`} id="customer-messages">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs tracking-[0.2em] text-white/45">CUSTOMER MESSAGES</p>
@@ -1247,7 +1275,7 @@ export function AdminAccessPage() {
           )}
         </section>
 
-        <section className={panel}>
+        <section className={`${panel} scroll-mt-8`} id="customer-sync">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs tracking-[0.2em] text-white/45">CUSTOMER BACKUP</p>
@@ -1268,7 +1296,7 @@ export function AdminAccessPage() {
           </div>
         </section>
 
-        <section className={panel}>
+        <section className={`${panel} scroll-mt-8`} id="operations-guides">
           <p className="text-xs tracking-[0.2em] text-white/45">OWNER REFERENCE</p>
           <h2 className="mt-2 text-2xl font-light">Operations guides</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-white/55">
@@ -1294,7 +1322,7 @@ export function AdminAccessPage() {
           </div>
         </section>
 
-        <section className={panel}>
+        <section className={`${panel} scroll-mt-8`} id="create-access">
           <p className="text-xs tracking-[0.2em] text-white/45">ISSUE ACCESS</p>
           <h2 className="mt-2 text-2xl font-light">Create a personal code</h2>
           <form className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" onSubmit={createGrant}>
@@ -1365,7 +1393,7 @@ export function AdminAccessPage() {
           )}
         </section>
 
-        <section className={panel}>
+        <section className={`${panel} scroll-mt-8`} id="access-grants">
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-xs tracking-[0.2em] text-white/45">ACCESS CODES</p>
@@ -1427,7 +1455,7 @@ export function AdminAccessPage() {
           </div>
         </section>
 
-        <section className={panel}>
+        <section className={`${panel} scroll-mt-8`} id="security-activity">
           <p className="text-xs tracking-[0.2em] text-white/45">SECURITY LOG</p>
           <h2 className="mt-2 text-2xl font-light">Recent access activity</h2>
           <p className="mt-3 text-sm leading-6 text-white/50">
@@ -1466,6 +1494,7 @@ export function AdminAccessPage() {
             </table>
           </div>
         </section>
+        </div>
       </main>
       <Toaster position="bottom-right" theme="dark" />
     </div>

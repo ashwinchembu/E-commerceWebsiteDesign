@@ -450,6 +450,9 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
 
   if (!tracker) return null;
   const { plan, summary } = tracker;
+  const projectedUnreviewedHours = tracker.cards
+    .filter((card) => !card.voided_at && card.allocation === 'unreviewed')
+    .reduce((total, card) => total + Number(card.estimate_hours || 0), 0);
   const graceWindowStatus = !plan.launch_at
     ? 'Starts when the official launch date is recorded'
     : summary.grace_ends_at && Date.now() <= summary.grace_ends_at
@@ -495,7 +498,7 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
             from the paid bank
           </p>
           <p className="mt-2 border-t border-emerald-300/15 pt-2 text-xs leading-5 text-emerald-100/60">
-            {hours(summary.projected_unreviewed_hours)} projected from unreviewed requests
+            {hours(projectedUnreviewedHours)} projected from unreviewed requests
           </p>
         </div>
         <div className="border border-white/15 p-5">

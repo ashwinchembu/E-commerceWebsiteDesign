@@ -414,7 +414,11 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
     if (!reason?.trim()) return;
     setWorking(true);
     try {
-      await callFirebaseFunction<{ id: string; reason: string }, { ok: boolean }>(
+      await callFirebaseFunction<{
+        entryId: string;
+        reason: string;
+        requestId: string;
+      }, { ok: boolean }>(
         'voidRequestCard',
         {
           entryId: card.entry_id || '',
@@ -610,6 +614,19 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
               the primary owner can edit hours, record verified work, or void the card. Related
               commits and deployments stay read-only.
             </p>
+            <div className="mt-4 grid max-w-4xl gap-3 text-xs leading-5 text-white/55 md:grid-cols-2">
+              <p className="border border-white/10 p-3">
+                <span className="block tracking-[0.12em] text-white/75">REVISION ACCOUNTING</span>
+                Repeated attempts to resolve the same defect remain one request card. The owner
+                records one conservative total for that request, not a separate charge for every
+                commit or deployment.
+              </p>
+              <p className="border border-white/10 p-3">
+                <span className="block tracking-[0.12em] text-white/75">WHAT AFFECTS HOURS</span>
+                Pending estimates are planning only. Hours affect the support balance after review
+                and approval. A genuinely new scope item receives its own card.
+              </p>
+            </div>
           </div>
           <p className="text-xs text-white/45">{tracker.cards.length} deduplicated cards</p>
         </div>
@@ -962,7 +979,9 @@ export function AdminAccessPage() {
     try {
       const { auth, persistenceReady } = getFirebaseServices();
       await persistenceReady;
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, provider);
     } catch (error) {
       setAuthError(firebaseErrorMessage(error, 'Google sign-in failed.'));
     } finally {

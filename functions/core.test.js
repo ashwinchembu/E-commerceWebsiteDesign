@@ -9,6 +9,7 @@ import {
   grantState,
   historicalRequestWorkEntries,
   isAuthorizedAdminEmail,
+  isRequestCardOwnerEmail,
   normalizeContactInput,
   normalizeChangeRequestLog,
   normalizeDeploymentLog,
@@ -39,6 +40,21 @@ test("admin bootstrap requires an exact verified allowlisted email", () => {
   );
   assert.equal(
     isAuthorizedAdminEmail("ashchembu@gmail.com.evil.test", true, allowlist),
+    false,
+  );
+});
+
+test("request-card ownership is exact and case insensitive", () => {
+  assert.equal(
+    isRequestCardOwnerEmail(" ASHCHEMBU@GMAIL.COM ", "ashchembu@gmail.com"),
+    true,
+  );
+  assert.equal(
+    isRequestCardOwnerEmail("skpbains@gmail.com", "ashchembu@gmail.com"),
+    false,
+  );
+  assert.equal(
+    isRequestCardOwnerEmail("ashchembu@gmail.com.evil.test", "ashchembu@gmail.com"),
     false,
   );
 });

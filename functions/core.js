@@ -40,6 +40,11 @@ export function cleanString(value, maxLength) {
     : "";
 }
 
+export function isRequestCardOwnerEmail(value, ownerEmail) {
+  return cleanString(value, 320).toLowerCase()
+    === cleanString(ownerEmail, 320).toLowerCase();
+}
+
 function finiteNumber(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;

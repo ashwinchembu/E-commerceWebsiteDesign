@@ -21,6 +21,7 @@ import {
   grantState,
   historicalRequestWorkEntries,
   isAuthorizedAdminEmail,
+  isRequestCardOwnerEmail,
   normalizeClientMeta,
   normalizeChangeRequestLog,
   normalizeContactInput,
@@ -109,7 +110,11 @@ function assertAdmin(request) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Administrator sign-in is required.");
   }
-  if (request.auth.token.admin !== true) {
+  const email = cleanString(request.auth.token.email, 320).toLowerCase();
+  if (
+    request.auth.token.admin !== true
+    || !ADMIN_EMAIL_ALLOWLIST.includes(email)
+  ) {
     throw new HttpsError(
       "permission-denied",
       "This account does not have administrator access.",
@@ -442,7 +447,7 @@ export const logChangeRequest = onRequest(
 export const updateRequestCard = onCall(async (request) => {
   assertAdmin(request);
   const actor = supportActor(request);
-  const isCardOwner = actor.email === REQUEST_CARD_OWNER_EMAIL;
+  const isCardOwner = isRequestCardOwnerEmail(actor.email, REQUEST_CARD_OWNER_EMAIL);
   if (!isCardOwner) {
     const reviewState = cleanString(request.data?.reviewState, 40).toLowerCase();
     if (reviewState !== "approved" && reviewState !== "rejected") {
@@ -585,7 +590,7 @@ export const updateRequestCard = onCall(async (request) => {
 export const voidRequestCard = onCall(async (request) => {
   assertAdmin(request);
   const actor = supportActor(request);
-  if (actor.email !== REQUEST_CARD_OWNER_EMAIL) {
+  if (!isRequestCardOwnerEmail(actor.email, REQUEST_CARD_OWNER_EMAIL)) {
     throw new HttpsError("permission-denied", "Only the request-card owner may void cards.");
   }
   const requestId = request.data?.requestId

@@ -148,7 +148,6 @@ function StorefrontRoutes({
           <JacketBuilderPage
             accessRole={jacketAccessRole}
             onShopifySignIn={() => void account.signIn('/jacket-builder')}
-            savedJacketsApi={account.savedJackets}
             shopifyAccessStatus={shopifyAccessStatus}
           />
         }

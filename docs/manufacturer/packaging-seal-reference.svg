@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-labelledby="title desc">
+  <title id="title">Manoir Kits packaging seal reference</title>
+  <desc id="desc">Matte-black circular seal with the two-line brand wordmark in gold.</desc>
+  <circle cx="400" cy="400" r="382" fill="#28282B"/>
+  <g fill="#EFBF04" font-family="League Spartan, Arial, sans-serif" font-size="112" font-weight="700" letter-spacing="4" text-anchor="middle">
+    <text x="400" y="382">MANOIR</text>
+    <text x="400" y="500">KITS</text>
+  </g>
+</svg>

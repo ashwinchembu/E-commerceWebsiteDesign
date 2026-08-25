@@ -310,6 +310,10 @@ function workEntryMatchesNamedRequest(entry, request) {
   const workText = `${cleanString(entry?.title, 180)} ${cleanString(entry?.message, 1000)}`.toLowerCase();
   const requestText = `${cleanString(request?.title, 180)} ${cleanString(request?.description, 3000)}`.toLowerCase();
   if (
+    requestText.includes("manufacturer packaging") &&
+    workText.includes("manufacturer handoff")
+  ) return true;
+  if (
     requestText.includes("manufacturer artwork") &&
     ["fit sleeve numbers", "sleeve number", "sleeve digits"].some((term) => workText.includes(term))
   ) return true;

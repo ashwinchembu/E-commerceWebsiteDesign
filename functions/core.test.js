@@ -441,6 +441,26 @@ test("new named artwork requests receive matching historical work", () => {
   assert.deepEqual(cards[0].artifacts.map((artifact) => artifact.id), ["surface-deploy"]);
 });
 
+test("manufacturer packaging request links to its handoff deployment", () => {
+  const cards = buildUnifiedRequestCards(
+    [{
+      description: "Prepare manufacturer packaging and accessory artwork handoff.",
+      external_id: "imessage-274115-274121",
+      id: "packaging",
+      occurred_at: 1,
+      title: "Prepare manufacturer packaging and accessory artwork handoff",
+    }],
+    [{
+      id: "packaging-deploy",
+      occurred_at: 2,
+      source: "deployment",
+      title: "Harden admin review and add manufacturer handoff",
+    }],
+  );
+  assert.equal(cards.length, 1);
+  assert.deepEqual(cards[0].artifacts.map((artifact) => artifact.id), ["packaging-deploy"]);
+});
+
 test("the word estimate does not match an EST 2026 request", () => {
   const cards = buildUnifiedRequestCards(
     [{

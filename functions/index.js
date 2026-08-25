@@ -19,6 +19,7 @@ import {
   createAccessCode,
   evaluateGrantUse,
   grantState,
+  historicalRequestWorkEntries,
   isAuthorizedAdminEmail,
   normalizeClientMeta,
   normalizeChangeRequestLog,
@@ -352,7 +353,11 @@ export const getSupportTracker = onCall(async (request) => {
     id: document.id,
     ...document.data(),
   }));
-  const cards = buildUnifiedRequestCards(requests, entries);
+  const loggedShas = new Set(entries.map((entry) => entry.sha).filter(Boolean));
+  const historicalEntries = historicalRequestWorkEntries().filter(
+    (entry) => !loggedShas.has(entry.sha),
+  );
+  const cards = buildUnifiedRequestCards(requests, [...entries, ...historicalEntries]);
   return {
     audit: auditSnapshot.docs.map((document) => ({
       id: document.id,

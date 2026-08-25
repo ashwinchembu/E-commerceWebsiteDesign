@@ -7,6 +7,7 @@ import {
   estimateDeploymentHours,
   evaluateGrantUse,
   grantState,
+  historicalRequestWorkEntries,
   isAuthorizedAdminEmail,
   normalizeContactInput,
   normalizeChangeRequestLog,
@@ -422,6 +423,41 @@ test("new named artwork requests receive matching historical work", () => {
   );
   assert.equal(cards.length, 1);
   assert.deepEqual(cards[0].artifacts.map((artifact) => artifact.id), ["surface-deploy"]);
+});
+
+test("the word estimate does not match an EST 2026 request", () => {
+  const cards = buildUnifiedRequestCards(
+    [{
+      external_id: "imessage-270176",
+      id: "est-mark",
+      occurred_at: 1,
+      title: "Adjust EST 2026 sizing and alignment",
+    }],
+    [{
+      description: "Review the estimate before applying hours.",
+      id: "unrelated",
+      occurred_at: 2,
+      source: "deployment",
+      title: "Add admin dashboard section sidebar",
+    }],
+  );
+  assert.equal(cards.length, 2);
+  assert.equal(cards.find((card) => card.request_id === "est-mark").artifacts.length, 0);
+});
+
+test("verified historical commits backfill legacy request cards", () => {
+  const requests = [
+    { external_id: "legacy-cart-buttons", id: "cart", occurred_at: 1, title: "Fix cart buttons" },
+    { external_id: "legacy-contact-form", id: "contact", occurred_at: 1, title: "Connect contact form" },
+    { external_id: "legacy-feedback-system", id: "feedback", occurred_at: 1, title: "Deploy feedback system" },
+    { external_id: "legacy-footballer-login", id: "footballer", occurred_at: 1, title: "Finish footballer access" },
+    { external_id: "legacy-jacket-order-flow", id: "order", occurred_at: 1, title: "Test complete order flow" },
+    { external_id: "legacy-shopify-products", id: "products", occurred_at: 1, title: "Connect real Shopify products" },
+    { external_id: "imessage-270006", id: "gold", occurred_at: 1, title: "Keep gold tones consistent" },
+  ];
+  const cards = buildUnifiedRequestCards(requests, historicalRequestWorkEntries());
+  assert.equal(cards.length, requests.length);
+  for (const card of cards) assert.ok(card.artifacts.length > 0, card.title);
 });
 
 test("request card reviews require owner-entered approval details", () => {

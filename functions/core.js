@@ -206,10 +206,11 @@ function requestAliasesForWorkEntry(value) {
   add("imessage-273035", "signature detail", "signature and quilt", "lining color updates");
   add("imessage-271237", "sleeve color control", "sleeve decals", "sleeve color changes");
   add("imessage-271271", "sleeve number", "sleeve digits", "edge distortion", "number decal bleeding");
-  if (text.includes("est") && matches("color", "word mark", "wordmark")) {
+  const mentionsEstMark = /\best\b/.test(text);
+  if (mentionsEstMark && matches("color", "word mark", "wordmark")) {
     aliases.add("imessage-271270");
   }
-  if (text.includes("est")) aliases.add("imessage-270176");
+  if (mentionsEstMark) aliases.add("imessage-270176");
   add("imessage-270006", "gold tone", "gold color", "jacket color palette", "50-color shade");
   add(
     "imessage-269677",
@@ -327,6 +328,34 @@ function workArtifact(entry) {
     source: entry.source,
     title: entry.title,
   };
+}
+
+const HISTORICAL_COMMIT_BASE_URL =
+  "https://github.com/ashwinchembu/E-commerceWebsiteDesign/commit/";
+
+const HISTORICAL_REQUEST_WORK = [
+  ["2de83f5345cc241b30e913ad17a91be549dc4a10", "2026-07-30T09:20:58-07:00", "Add secure feedback inbox and Firebase backend"],
+  ["6c3452a45543c1e762512ccc9f18cea5d8313bfb", "2026-07-30T20:05:17-07:00", "Replace prototype commerce with Shopify-backed customer flows"],
+  ["f08c059d5404e5cd7e5badcde666ff2d33a68f1d", "2026-07-31T00:38:08-07:00", "Require contact details on feedback"],
+  ["9b079125254339ccca4662e1e42915be9046b7f0", "2026-07-16T19:29:09-07:00", "Add player jacket access and builder updates"],
+  ["daddccda6e7d432a63e18715b077ed75b1d1a668", "2026-07-16T20:30:18-07:00", "Rename players section to footballers"],
+  ["397430abd977e297e7797aa2afac93a512df8a25", "2026-07-18T18:14:32-07:00", "Add video hero and Shopify jacket checkout"],
+  ["82b1caffb6f5a3fdb19d32a7aed822bf40cad554", "2026-07-23T16:52:05-07:00", "Configure production Shopify checkout"],
+  ["46c8637e4d52d545adc7b3a613530a80dcc0cc98", "2026-07-23T18:45:34-07:00", "Move commerce accounts and checkout to Shopify"],
+  ["daa7c9292286a5bf08c02c4f737c13ed64b8d773", "2026-07-28T23:01:54-07:00", "Gate Footballers jackets with Shopify accounts"],
+  ["2db764429bc5bbf25ed9f08988b3f268f40ac99b", "2026-07-29T22:27:52-07:00", "Update jacket color palette"],
+  ["464dbc47b5cc8f21241c244a94eb388bd66e679d", "2026-07-30T07:39:41-07:00", "Finalize 50-color shade order"],
+];
+
+export function historicalRequestWorkEntries() {
+  return HISTORICAL_REQUEST_WORK.map(([sha, occurredAt, title]) => ({
+    commit_url: `${HISTORICAL_COMMIT_BASE_URL}${sha}`,
+    id: `historical_${sha}`,
+    occurred_at: Date.parse(occurredAt),
+    sha,
+    source: "deployment",
+    title,
+  }));
 }
 
 export function buildUnifiedRequestCards(requests, entries) {

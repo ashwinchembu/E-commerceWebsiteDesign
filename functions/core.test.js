@@ -453,6 +453,7 @@ test("verified historical commits backfill legacy request cards", () => {
     { external_id: "legacy-footballer-login", id: "footballer", occurred_at: 1, title: "Finish footballer access" },
     { external_id: "legacy-jacket-order-flow", id: "order", occurred_at: 1, title: "Test complete order flow" },
     { external_id: "legacy-shopify-products", id: "products", occurred_at: 1, title: "Connect real Shopify products" },
+    { external_id: "legacy-search-settings", id: "search", occurred_at: 1, title: "Update site title and search settings" },
     { external_id: "imessage-270006", id: "gold", occurred_at: 1, title: "Keep gold tones consistent" },
   ];
   const cards = buildUnifiedRequestCards(requests, historicalRequestWorkEntries());

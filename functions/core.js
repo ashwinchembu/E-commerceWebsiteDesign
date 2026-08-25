@@ -335,7 +335,7 @@ const HISTORICAL_COMMIT_BASE_URL =
 
 const HISTORICAL_REQUEST_WORK = [
   ["2de83f5345cc241b30e913ad17a91be549dc4a10", "2026-07-30T09:20:58-07:00", "Add secure feedback inbox and Firebase backend"],
-  ["6c3452a45543c1e762512ccc9f18cea5d8313bfb", "2026-07-30T20:05:17-07:00", "Replace prototype commerce with Shopify-backed customer flows"],
+  ["6c3452a45543c1e762512ccc9f18cea5d8313bfb", "2026-07-30T20:05:17-07:00", "Replace prototype commerce with Shopify-backed customer flows", "Includes the site title, description, robots, and social metadata."],
   ["f08c059d5404e5cd7e5badcde666ff2d33a68f1d", "2026-07-31T00:38:08-07:00", "Require contact details on feedback"],
   ["9b079125254339ccca4662e1e42915be9046b7f0", "2026-07-16T19:29:09-07:00", "Add player jacket access and builder updates"],
   ["daddccda6e7d432a63e18715b077ed75b1d1a668", "2026-07-16T20:30:18-07:00", "Rename players section to footballers"],
@@ -348,8 +348,9 @@ const HISTORICAL_REQUEST_WORK = [
 ];
 
 export function historicalRequestWorkEntries() {
-  return HISTORICAL_REQUEST_WORK.map(([sha, occurredAt, title]) => ({
+  return HISTORICAL_REQUEST_WORK.map(([sha, occurredAt, title, description]) => ({
     commit_url: `${HISTORICAL_COMMIT_BASE_URL}${sha}`,
+    description: description || null,
     id: `historical_${sha}`,
     occurred_at: Date.parse(occurredAt),
     sha,

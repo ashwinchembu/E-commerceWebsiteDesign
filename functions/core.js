@@ -161,6 +161,7 @@ export function normalizeDeploymentLog(value) {
 
 export function normalizeChangeRequestLog(value) {
   const input = value && typeof value === "object" ? value : {};
+  const replaceEstimate = input.replaceEstimate === true;
   const externalId = cleanString(input.externalId, 180);
   const title = cleanString(input.title, 180);
   const description = cleanString(input.description, 3000) || null;
@@ -188,9 +189,11 @@ export function normalizeChangeRequestLog(value) {
     external_id: externalId,
     estimate_hours: estimateChangeRequestHours({
       description,
+      estimateHours: replaceEstimate ? input.estimateHours : null,
       title,
     }),
     occurred_at: occurredAt,
+    replace_estimate: replaceEstimate,
     status,
     title,
   };

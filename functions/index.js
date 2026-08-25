@@ -415,11 +415,14 @@ export const logChangeRequest = onRequest(
     const result = await db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(reference);
       const existing = snapshot.exists ? snapshot.data() : null;
+      const { replace_estimate: replaceEstimate, ...storedRequest } = changeRequest;
       const record = {
         ...(existing || {}),
-        ...changeRequest,
+        ...storedRequest,
         created_at: existing?.created_at || now,
-        estimate_hours: existing?.estimate_hours || changeRequest.estimate_hours,
+        estimate_hours: replaceEstimate
+          ? storedRequest.estimate_hours
+          : existing?.estimate_hours || storedRequest.estimate_hours,
         projected_allocation: existing?.projected_allocation || "bank",
         source: "message_daemon",
         updated_at: now,

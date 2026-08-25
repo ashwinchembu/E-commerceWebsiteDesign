@@ -358,12 +358,24 @@ test("change request logs are normalized and require stable identifiers", () => 
   assert.equal(request.external_id, "imessage-273035");
   assert.equal(request.status, "completed");
   assert.equal(request.estimate_hours, 0.75);
+  assert.equal(request.replace_estimate, false);
   assert.equal("actual_hours" in request, false);
   assert.equal(request.title, "Synchronize signature and quilt colors");
   assert.throws(
     () => normalizeChangeRequestLog({ externalId: "bad id", status: "requested", title: "x" }),
     /ID is invalid/,
   );
+
+  const ownerEstimated = normalizeChangeRequestLog({
+    estimateHours: 4,
+    externalId: "manual-production-scope",
+    occurredAt: "2026-08-20T19:39:35Z",
+    replaceEstimate: true,
+    status: "requested",
+    title: "Prepare production artwork",
+  });
+  assert.equal(ownerEstimated.estimate_hours, 4);
+  assert.equal(ownerEstimated.replace_estimate, true);
 });
 
 test("change request estimates use a bounded fallback for historical records", () => {

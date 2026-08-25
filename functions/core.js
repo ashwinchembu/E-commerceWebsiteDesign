@@ -191,30 +191,127 @@ export function normalizeChangeRequestLog(value) {
   };
 }
 
-function requestAliasForWorkEntry(value) {
-  const text = `${cleanString(value?.title, 180)} ${cleanString(value?.description, 3000)}`.toLowerCase();
+function requestAliasesForWorkEntry(value) {
+  const text = [
+    cleanString(value?.title, 180),
+    cleanString(value?.description, 3000),
+    cleanString(value?.message, 1000),
+  ].join(" ").toLowerCase();
   const matches = (...terms) => terms.some((term) => text.includes(term));
-  if (matches("signature detail", "signature and quilt")) return "imessage-273035";
-  if (matches("sleeve color control", "sleeve decals")) return "imessage-271237";
-  if (matches("sleeve number", "sleeve digits", "edge distortion")) return "imessage-271271";
-  if (text.includes("est") && matches("color", "word mark", "wordmark")) return "imessage-271270";
-  if (text.includes("est")) return "imessage-270176";
-  if (matches("gold tone", "gold color")) return "imessage-270006";
-  if (matches("footballer jacket artwork", "colors and materials")) return "imessage-269677";
-  if (matches("shipping timeline", "shipping policy", "shipping guidance")) return "imessage-268474";
-  if (matches("preview rotating", "preview still", "zoom and spin", "jacket interaction")) return "imessage-267318";
-  if (matches("lettering", "number decal", "back panel", "back seam", "glyph alignment", "wordmark letters", "text spacing")) return "imessage-266530";
-  if (matches("jacket sizes", "limit jacket sizes")) return "imessage-265785";
-  if (matches("newsletter")) return "legacy-newsletter-discount";
-  if (matches("contact form")) return "legacy-contact-form";
-  if (matches("feedback")) return "legacy-feedback-system";
-  if (matches("footballer access", "footballer login")) return "legacy-footballer-login";
-  if (matches("search settings", "search-engine", "site title")) return "legacy-search-settings";
-  if (matches("broken", "footer icon", "footer social")) return "legacy-broken-links";
-  if (matches("mobile loading", "lazy-load", "mobile navigation")) return "legacy-mobile-performance";
-  if (matches("order flow")) return "legacy-jacket-order-flow";
-  if (matches("cart button")) return "legacy-cart-buttons";
-  return null;
+  const aliases = new Set();
+  const add = (externalId, ...terms) => {
+    if (matches(...terms)) aliases.add(externalId);
+  };
+
+  add("imessage-273035", "signature detail", "signature and quilt", "lining color updates");
+  add("imessage-271237", "sleeve color control", "sleeve decals", "sleeve color changes");
+  add("imessage-271271", "sleeve number", "sleeve digits", "edge distortion", "number decal bleeding");
+  if (text.includes("est") && matches("color", "word mark", "wordmark")) {
+    aliases.add("imessage-271270");
+  }
+  if (text.includes("est")) aliases.add("imessage-270176");
+  add("imessage-270006", "gold tone", "gold color", "jacket color palette", "50-color shade");
+  add(
+    "imessage-269677",
+    "footballer jacket artwork",
+    "footballer jacket colors",
+    "classic and footballer jacket artwork",
+    "colors and materials",
+    "embroidery details",
+  );
+  add("imessage-268474", "shipping timeline", "shipping policy", "shipping guidance");
+  add(
+    "imessage-267318",
+    "preview rotating",
+    "preview still",
+    "zoom and spin",
+    "jacket interaction",
+    "pinch zoom",
+    "jacket rotation",
+  );
+  add(
+    "imessage-266530",
+    "lettering",
+    "number decal",
+    "back panel",
+    "back seam",
+    "glyph alignment",
+    "wordmark letters",
+    "text spacing",
+    "chest bleed",
+  );
+  add("imessage-265785", "jacket sizes", "limit jacket sizes", "checkout size range");
+  add("legacy-newsletter-discount", "newsletter");
+  add("legacy-contact-form", "contact form", "contact details on feedback");
+  add("legacy-feedback-system", "feedback", "customer message");
+  add(
+    "legacy-footballer-login",
+    "footballer access",
+    "footballer login",
+    "player jacket access",
+    "footballers jackets with shopify accounts",
+    "players section to footballers",
+  );
+  add("legacy-search-settings", "search settings", "search-engine", "site title", "metadata");
+  add(
+    "legacy-broken-links",
+    "broken link",
+    "footer icon",
+    "footer social",
+    "snapchat footer",
+    "social links",
+  );
+  add(
+    "legacy-mobile-performance",
+    "mobile loading",
+    "lazy-load",
+    "preload jacket",
+    "first load",
+    "first visit",
+    "mobile navigation",
+    "mobile builder",
+    "mobile hero",
+    "iphone hero",
+  );
+  add(
+    "legacy-jacket-order-flow",
+    "order flow",
+    "shopify checkout",
+    "jacket checkout",
+    "commerce accounts and checkout",
+    "customer flows",
+  );
+  add(
+    "legacy-cart-buttons",
+    "cart button",
+    "shopify checkout",
+    "jacket checkout",
+    "commerce accounts and checkout",
+  );
+  add(
+    "legacy-shopify-products",
+    "shopify-backed customer flows",
+    "shopify checkout",
+    "jacket checkout",
+    "production shopify checkout",
+    "commerce accounts and checkout",
+    "shopify catalog",
+  );
+  return [...aliases];
+}
+
+function workEntryMatchesNamedRequest(entry, request) {
+  const workText = `${cleanString(entry?.title, 180)} ${cleanString(entry?.message, 1000)}`.toLowerCase();
+  const requestText = `${cleanString(request?.title, 180)} ${cleanString(request?.description, 3000)}`.toLowerCase();
+  if (
+    requestText.includes("manufacturer artwork") &&
+    ["fit sleeve numbers", "sleeve number", "sleeve digits"].some((term) => workText.includes(term))
+  ) return true;
+  if (
+    requestText.includes("cursive artwork png") &&
+    ["footballer jacket artwork", "classic and footballer jacket artwork"].some((term) => workText.includes(term))
+  ) return true;
+  return false;
 }
 
 function workArtifact(entry) {
@@ -242,10 +339,19 @@ export function buildUnifiedRequestCards(requests, entries) {
   const unmatchedEntries = [];
 
   for (const entry of entryList) {
-    const externalId = cleanString(entry.request_external_id, 180) || requestAliasForWorkEntry(entry);
-    const request = requestByExternalId.get(externalId);
-    if (request) linkedEntries.get(request.id).push(entry);
-    else unmatchedEntries.push(entry);
+    const aliases = new Set(requestAliasesForWorkEntry(entry));
+    const explicitExternalId = cleanString(entry.request_external_id, 180);
+    if (explicitExternalId) aliases.add(explicitExternalId);
+    const matchedRequestIds = new Set();
+    for (const externalId of aliases) {
+      const request = requestByExternalId.get(externalId);
+      if (request) matchedRequestIds.add(request.id);
+    }
+    for (const request of requestList) {
+      if (workEntryMatchesNamedRequest(entry, request)) matchedRequestIds.add(request.id);
+    }
+    for (const requestId of matchedRequestIds) linkedEntries.get(requestId).push(entry);
+    if (matchedRequestIds.size === 0) unmatchedEntries.push(entry);
   }
 
   const cards = requestList.map((request) => {

@@ -387,6 +387,43 @@ test("unified request cards merge matching deployments without duplicate cards",
   assert.equal(cards[0].artifacts.length, 1);
 });
 
+test("one deployment can be related to every request it completed", () => {
+  const requests = [
+    { external_id: "legacy-cart-buttons", id: "cart", occurred_at: 1, title: "Fix cart buttons" },
+    { external_id: "legacy-shopify-products", id: "products", occurred_at: 1, title: "Connect real Shopify products" },
+    { external_id: "legacy-jacket-order-flow", id: "order", occurred_at: 1, title: "Test the complete jacket order flow" },
+  ];
+  const cards = buildUnifiedRequestCards(requests, [{
+    id: "checkout-deploy",
+    occurred_at: 2,
+    source: "deployment",
+    title: "Configure production Shopify checkout",
+  }]);
+  assert.equal(cards.length, 3);
+  for (const card of cards) {
+    assert.deepEqual(card.artifacts.map((artifact) => artifact.id), ["checkout-deploy"]);
+  }
+});
+
+test("new named artwork requests receive matching historical work", () => {
+  const cards = buildUnifiedRequestCards(
+    [{
+      external_id: "imessage-new-artwork",
+      id: "artwork",
+      occurred_at: 2,
+      title: "Fit sleeve numbers and provide manufacturer artwork",
+    }],
+    [{
+      id: "surface-deploy",
+      occurred_at: 3,
+      source: "deployment",
+      title: "Fit sleeve numbers to jacket surface",
+    }],
+  );
+  assert.equal(cards.length, 1);
+  assert.deepEqual(cards[0].artifacts.map((artifact) => artifact.id), ["surface-deploy"]);
+});
+
 test("request card reviews require owner-entered approval details", () => {
   const review = normalizeRequestCardReview({
     actualHours: 1.25,

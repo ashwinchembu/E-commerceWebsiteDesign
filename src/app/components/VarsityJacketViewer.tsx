@@ -928,6 +928,9 @@ function makeEmbroideryEdgeMaterial(texture: THREE.CanvasTexture): THREE.MeshSta
     transparent: true,
     alphaTest: 0.06,
     depthWrite: true,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
     roughness: 0.94,
     metalness: 0,
     envMapIntensity: 0.18,
@@ -1198,11 +1201,11 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           return top;
         };
 
-        // Start virtually flush with the garment and build outward in very
-        // small connected steps. The lower layers form the embroidered edge;
-        // because they share the projected curvature, nothing hovers away
-        // from the jacket around the shoulders or sleeves.
-        const top = addEmbroideryStack(geometry, texture, outward, [0.0022, 0.0038, 0.0054, 0.007], 0.0086, 3);
+        // Keep the embroidered edge close enough to read as sewn into the
+        // garment at grazing angles. Polygon offset prevents z-fighting, so
+        // the physical layer spacing can stay sub-millimetre at jacket scale
+        // instead of making the artwork appear to hover above the fabric.
+        const top = addEmbroideryStack(geometry, texture, outward, [0.0006, 0.0011, 0.0016, 0.0021], 0.0026, 3);
         top.userData.addEmbroideryStack = addEmbroideryStack;
         return top;
       };
@@ -1522,7 +1525,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             outlineTexture,
             new THREE.Vector3(0, 0, 1),
             [],
-            0.0087,
+            0.0027,
             9,
           );
           const outlineMaterial = outlineTop.material as THREE.MeshStandardMaterial;
@@ -1537,8 +1540,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             badgeArt.decal.geometry,
             threadTexture,
             new THREE.Vector3(0, 0, 1),
-            [0.0092, 0.0103, 0.0114, 0.0125, 0.0136, 0.0147],
-            0.0158,
+            [0.0029, 0.0032, 0.0035, 0.0038],
+            0.0041,
             10,
           );
           const threadMaterial = threadTop.material as THREE.MeshStandardMaterial;

@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { DecalGeometry } from "three/examples/jsm/geometries/DecalGeometry.js";
+import classicEstMarkImage from "../../assets/manoir-kits-classic-est-2026.png";
 import classicWordmarkImage from "../../assets/manoir-kits-classic-wordmark.png";
 import crestImage from "../../assets/manoir-kits-crest.png";
 
@@ -32,8 +33,50 @@ THREE.Cache.enabled = true;
 
 let crestElement: HTMLCanvasElement | null = null;
 let crestLoading: Promise<HTMLCanvasElement | null> | null = null;
+let classicEstMarkElement: HTMLCanvasElement | null = null;
+let classicEstMarkLoading: Promise<HTMLCanvasElement | null> | null = null;
 let classicWordmarkElement: HTMLCanvasElement | null = null;
 let classicWordmarkLoading: Promise<HTMLCanvasElement | null> | null = null;
+
+/** Load the provided Classic back EST. 2026 mark. */
+function loadClassicEstMark(): Promise<HTMLCanvasElement | null> {
+  if (classicEstMarkElement) return Promise.resolve(classicEstMarkElement);
+  if (classicEstMarkLoading) return classicEstMarkLoading;
+  classicEstMarkLoading = new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const scan = document.createElement("canvas");
+      scan.width = image.width;
+      scan.height = image.height;
+      const ctx = scan.getContext("2d")!;
+      ctx.drawImage(image, 0, 0);
+      const { data } = ctx.getImageData(0, 0, scan.width, scan.height);
+      let minX = scan.width;
+      let minY = scan.height;
+      let maxX = 0;
+      let maxY = 0;
+      for (let y = 0; y < scan.height; y += 1) {
+        for (let x = 0; x < scan.width; x += 1) {
+          if (data[(y * scan.width + x) * 4 + 3] < 24) continue;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+      if (maxX <= minX || maxY <= minY) return resolve(null);
+      const cropped = document.createElement("canvas");
+      cropped.width = maxX - minX + 1;
+      cropped.height = maxY - minY + 1;
+      cropped.getContext("2d")!.drawImage(image, -minX, -minY);
+      classicEstMarkElement = cropped;
+      resolve(cropped);
+    };
+    image.onerror = () => resolve(null);
+    image.src = classicEstMarkImage;
+  });
+  return classicEstMarkLoading;
+}
 
 /** Load the provided Classic jacket wordmark as transparent gold line art. */
 function loadClassicWordmark(): Promise<HTMLCanvasElement | null> {
@@ -297,6 +340,15 @@ function drawClassicWordmark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasEl
   ctx.drawImage(wordmark, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
 }
 
+function drawClassicEstMark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, mark: HTMLCanvasElement) {
+  const maxWidth = canvas.width * 0.92;
+  const maxHeight = 96;
+  const scale = Math.min(maxWidth / mark.width, maxHeight / mark.height);
+  const width = mark.width * scale;
+  const height = mark.height * scale;
+  ctx.drawImage(mark, (canvas.width - width) / 2, 650 - height / 2, width, height);
+}
+
 /**
  * Draw outlined glyphs individually with spacing based on their visible ink
  * bounds. Canvas advance widths leave very different side bearings on glyphs
@@ -363,7 +415,12 @@ function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius:
 }
 
 /** Draws the back print onto a 512×720 canvas: stars → city → number → EST. */
-function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, jacketEdition: JacketEdition) {
+function drawBackDesign(
+  canvas: HTMLCanvasElement,
+  design: BackDesign,
+  jacketEdition: JacketEdition,
+  classicEstMark: HTMLCanvasElement | null,
+) {
   const ctx = canvas.getContext("2d")!;
   const w = canvas.width;
   const h = canvas.height;
@@ -408,6 +465,8 @@ function drawBackDesign(canvas: HTMLCanvasElement, design: BackDesign, jacketEdi
 
   if (jacketEdition === "Footballers") {
     cursiveEmbroidery(ctx, "Est. 2026", w / 2, 652, 89.6, w * 0.88);
+  } else if (classicEstMark) {
+    drawClassicEstMark(ctx, canvas, classicEstMark);
   } else {
     ctx.font = "400 66.6px 'League Spartan', sans-serif";
     // This is a fixed brand mark, so match the Classic chest wordmark instead
@@ -550,6 +609,7 @@ type SleeveSet = { canvases: HTMLCanvasElement[]; textures: THREE.CanvasTexture[
 type Loaded = {
   materials: PartMaterials;
   back: Decal;
+  classicEstMark: HTMLCanvasElement | null;
   sleeves: { left: SleeveSet; right: SleeveSet };
 };
 
@@ -848,7 +908,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const loaded = loadedRef.current;
     if (!loaded) return;
     const design = propsRef.current.backDesign;
-    drawBackDesign(loaded.back.canvas, design, propsRef.current.jacketEdition);
+    drawBackDesign(loaded.back.canvas, design, propsRef.current.jacketEdition, loaded.classicEstMark);
     loaded.back.texture.needsUpdate = true;
     drawSleeveNumbers(loaded.sleeves.left.canvases, design.leftSleeveNumbers, design.sleevePrintColor);
     drawSleeveNumbers(loaded.sleeves.right.canvases, design.rightSleeveNumbers, design.sleevePrintColor);
@@ -965,6 +1025,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       // Waiting here prevents a slow font download from changing spacing
       // between visits or leaving fallback-font artwork until the next reload.
       await document.fonts.load("400 390px 'League Spartan'");
+      if (disposed) return;
+      const classicEstMark = await loadClassicEstMark();
       if (disposed) return;
       const root = gltf.scene;
       const byName: Record<string, THREE.Mesh> = {};
@@ -1455,6 +1517,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       loadedRef.current = {
         materials,
         back: { canvas: backCanvas, texture: backTexture },
+        classicEstMark,
         sleeves: sleeveSets,
       };
       // A color can change while the GLB is still loading. Reapply the latest

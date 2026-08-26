@@ -6,6 +6,8 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { DecalGeometry } from "three/examples/jsm/geometries/DecalGeometry.js";
 import classicEstMarkImage from "../../assets/manoir-kits-classic-est-2026.png";
 import classicWordmarkImage from "../../assets/manoir-kits-classic-wordmark.png";
+import footballersEstMarkImage from "../../assets/manoir-kits-footballers-est-2026.png";
+import footballersWordmarkImage from "../../assets/manoir-kits-footballers-wordmark.png";
 import crestImage from "../../assets/manoir-kits-crest.png";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
@@ -37,6 +39,42 @@ let classicEstMarkElement: HTMLCanvasElement | null = null;
 let classicEstMarkLoading: Promise<HTMLCanvasElement | null> | null = null;
 let classicWordmarkElement: HTMLCanvasElement | null = null;
 let classicWordmarkLoading: Promise<HTMLCanvasElement | null> | null = null;
+let footballersEstMarkElement: HTMLCanvasElement | null = null;
+let footballersEstMarkLoading: Promise<HTMLCanvasElement | null> | null = null;
+let footballersWordmarkElement: HTMLCanvasElement | null = null;
+let footballersWordmarkLoading: Promise<HTMLCanvasElement | null> | null = null;
+
+function imageToCanvas(image: HTMLImageElement) {
+  const canvas = document.createElement("canvas");
+  canvas.width = image.width;
+  canvas.height = image.height;
+  canvas.getContext("2d")!.drawImage(image, 0, 0);
+  return canvas;
+}
+
+function cropOpaquePixels(source: HTMLCanvasElement, alphaThreshold = 24) {
+  const ctx = source.getContext("2d")!;
+  const { data } = ctx.getImageData(0, 0, source.width, source.height);
+  let minX = source.width;
+  let minY = source.height;
+  let maxX = 0;
+  let maxY = 0;
+  for (let y = 0; y < source.height; y += 1) {
+    for (let x = 0; x < source.width; x += 1) {
+      if (data[(y * source.width + x) * 4 + 3] < alphaThreshold) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX <= minX || maxY <= minY) return null;
+  const cropped = document.createElement("canvas");
+  cropped.width = maxX - minX + 1;
+  cropped.height = maxY - minY + 1;
+  cropped.getContext("2d")!.drawImage(source, -minX, -minY);
+  return cropped;
+}
 
 /** Load the provided Classic back EST. 2026 mark. */
 function loadClassicEstMark(): Promise<HTMLCanvasElement | null> {
@@ -45,30 +83,8 @@ function loadClassicEstMark(): Promise<HTMLCanvasElement | null> {
   classicEstMarkLoading = new Promise((resolve) => {
     const image = new Image();
     image.onload = () => {
-      const scan = document.createElement("canvas");
-      scan.width = image.width;
-      scan.height = image.height;
-      const ctx = scan.getContext("2d")!;
-      ctx.drawImage(image, 0, 0);
-      const { data } = ctx.getImageData(0, 0, scan.width, scan.height);
-      let minX = scan.width;
-      let minY = scan.height;
-      let maxX = 0;
-      let maxY = 0;
-      for (let y = 0; y < scan.height; y += 1) {
-        for (let x = 0; x < scan.width; x += 1) {
-          if (data[(y * scan.width + x) * 4 + 3] < 24) continue;
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        }
-      }
-      if (maxX <= minX || maxY <= minY) return resolve(null);
-      const cropped = document.createElement("canvas");
-      cropped.width = maxX - minX + 1;
-      cropped.height = maxY - minY + 1;
-      cropped.getContext("2d")!.drawImage(image, -minX, -minY);
+      const cropped = cropOpaquePixels(imageToCanvas(image));
+      if (!cropped) return resolve(null);
       classicEstMarkElement = cropped;
       resolve(cropped);
     };
@@ -85,10 +101,7 @@ function loadClassicWordmark(): Promise<HTMLCanvasElement | null> {
   classicWordmarkLoading = new Promise((resolve) => {
     const image = new Image();
     image.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = image.width;
-      canvas.height = image.height;
-      canvas.getContext("2d")!.drawImage(image, 0, 0);
+      const canvas = imageToCanvas(image);
       classicWordmarkElement = canvas;
       resolve(canvas);
     };
@@ -96,6 +109,42 @@ function loadClassicWordmark(): Promise<HTMLCanvasElement | null> {
     image.src = classicWordmarkImage;
   });
   return classicWordmarkLoading;
+}
+
+/** Load the generated Footballers back EST. 2026 mark. */
+function loadFootballersEstMark(): Promise<HTMLCanvasElement | null> {
+  if (footballersEstMarkElement) return Promise.resolve(footballersEstMarkElement);
+  if (footballersEstMarkLoading) return footballersEstMarkLoading;
+  footballersEstMarkLoading = new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const cropped = cropOpaquePixels(imageToCanvas(image));
+      if (!cropped) return resolve(null);
+      footballersEstMarkElement = cropped;
+      resolve(cropped);
+    };
+    image.onerror = () => resolve(null);
+    image.src = footballersEstMarkImage;
+  });
+  return footballersEstMarkLoading;
+}
+
+/** Load the generated Footballers chest wordmark PNG. */
+function loadFootballersWordmark(): Promise<HTMLCanvasElement | null> {
+  if (footballersWordmarkElement) return Promise.resolve(footballersWordmarkElement);
+  if (footballersWordmarkLoading) return footballersWordmarkLoading;
+  footballersWordmarkLoading = new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const source = imageToCanvas(image);
+      const cropped = cropOpaquePixels(source);
+      footballersWordmarkElement = cropped ?? source;
+      resolve(footballersWordmarkElement);
+    };
+    image.onerror = () => resolve(null);
+    image.src = footballersWordmarkImage;
+  });
+  return footballersWordmarkLoading;
 }
 
 /** Load the embroidered MK crest, trimmed to its own opaque bounds. */
@@ -420,6 +469,7 @@ function drawBackDesign(
   design: BackDesign,
   jacketEdition: JacketEdition,
   classicEstMark: HTMLCanvasElement | null,
+  footballersEstMark: HTMLCanvasElement | null,
 ) {
   const ctx = canvas.getContext("2d")!;
   const w = canvas.width;
@@ -464,7 +514,11 @@ function drawBackDesign(
   }
 
   if (jacketEdition === "Footballers") {
-    cursiveEmbroidery(ctx, "Est. 2026", w / 2, 652, 89.6, w * 0.88);
+    if (footballersEstMark) {
+      drawClassicEstMark(ctx, canvas, footballersEstMark);
+    } else {
+      cursiveEmbroidery(ctx, "Est. 2026", w / 2, 652, 89.6, w * 0.88);
+    }
   } else if (classicEstMark) {
     drawClassicEstMark(ctx, canvas, classicEstMark);
   } else {
@@ -610,6 +664,7 @@ type Loaded = {
   materials: PartMaterials;
   back: Decal;
   classicEstMark: HTMLCanvasElement | null;
+  footballersEstMark: HTMLCanvasElement | null;
   sleeves: { left: SleeveSet; right: SleeveSet };
 };
 
@@ -908,7 +963,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const loaded = loadedRef.current;
     if (!loaded) return;
     const design = propsRef.current.backDesign;
-    drawBackDesign(loaded.back.canvas, design, propsRef.current.jacketEdition, loaded.classicEstMark);
+    drawBackDesign(loaded.back.canvas, design, propsRef.current.jacketEdition, loaded.classicEstMark, loaded.footballersEstMark);
     loaded.back.texture.needsUpdate = true;
     drawSleeveNumbers(loaded.sleeves.left.canvases, design.leftSleeveNumbers, design.sleevePrintColor);
     drawSleeveNumbers(loaded.sleeves.right.canvases, design.rightSleeveNumbers, design.sleevePrintColor);
@@ -1026,7 +1081,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       // between visits or leaving fallback-font artwork until the next reload.
       await document.fonts.load("400 390px 'League Spartan'");
       if (disposed) return;
-      const classicEstMark = await loadClassicEstMark();
+      const initialEdition = propsRef.current.jacketEdition;
+      const classicEstMark = initialEdition === "Classic" ? await loadClassicEstMark() : null;
+      if (disposed) return;
+      const footballersEstMark = initialEdition === "Footballers" ? await loadFootballersEstMark() : null;
       if (disposed) return;
       const root = gltf.scene;
       const byName: Record<string, THREE.Mesh> = {};
@@ -1498,8 +1556,14 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       wctx.textAlign = "center";
       wctx.textBaseline = "middle";
       if (propsRef.current.jacketEdition === "Footballers") {
-        cursiveEmbroidery(wctx, "Manoir", wordCanvas.width / 2, 76, 86, 320);
-        cursiveEmbroidery(wctx, "Kits", wordCanvas.width / 2, 154, 86, 320);
+        const footballersWordmark = await loadFootballersWordmark();
+        if (disposed) return;
+        if (footballersWordmark) {
+          drawClassicWordmark(wctx, wordCanvas, footballersWordmark);
+        } else {
+          cursiveEmbroidery(wctx, "Manoir", wordCanvas.width / 2, 76, 86, 320);
+          cursiveEmbroidery(wctx, "Kits", wordCanvas.width / 2, 154, 86, 320);
+        }
       } else {
         const classicWordmark = await loadClassicWordmark();
         if (disposed) return;
@@ -1518,6 +1582,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         materials,
         back: { canvas: backCanvas, texture: backTexture },
         classicEstMark,
+        footballersEstMark,
         sleeves: sleeveSets,
       };
       // A color can change while the GLB is still loading. Reapply the latest

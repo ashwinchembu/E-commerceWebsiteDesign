@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { DecalGeometry } from "three/examples/jsm/geometries/DecalGeometry.js";
+import classicWordmarkImage from "../../assets/manoir-kits-classic-wordmark.png";
 import crestImage from "../../assets/manoir-kits-crest.png";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
@@ -31,6 +32,28 @@ THREE.Cache.enabled = true;
 
 let crestElement: HTMLCanvasElement | null = null;
 let crestLoading: Promise<HTMLCanvasElement | null> | null = null;
+let classicWordmarkElement: HTMLCanvasElement | null = null;
+let classicWordmarkLoading: Promise<HTMLCanvasElement | null> | null = null;
+
+/** Load the provided Classic jacket wordmark as transparent gold line art. */
+function loadClassicWordmark(): Promise<HTMLCanvasElement | null> {
+  if (classicWordmarkElement) return Promise.resolve(classicWordmarkElement);
+  if (classicWordmarkLoading) return classicWordmarkLoading;
+  classicWordmarkLoading = new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      canvas.getContext("2d")!.drawImage(image, 0, 0);
+      classicWordmarkElement = canvas;
+      resolve(canvas);
+    };
+    image.onerror = () => resolve(null);
+    image.src = classicWordmarkImage;
+  });
+  return classicWordmarkLoading;
+}
 
 /** Load the embroidered MK crest, trimmed to its own opaque bounds. */
 function loadCrest(): Promise<HTMLCanvasElement | null> {
@@ -263,6 +286,15 @@ function cursiveEmbroidery(ctx: CanvasRenderingContext2D, text: string, x: numbe
   ctx.fillStyle = BRAND_GOLD;
   ctx.fillText(text, x, y, maxWidth);
   ctx.restore();
+}
+
+function drawClassicWordmark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, wordmark: HTMLCanvasElement) {
+  const maxWidth = 320;
+  const maxHeight = 168;
+  const scale = Math.min(maxWidth / wordmark.width, maxHeight / wordmark.height);
+  const width = wordmark.width * scale;
+  const height = wordmark.height * scale;
+  ctx.drawImage(wordmark, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
 }
 
 /**
@@ -1407,9 +1439,15 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         cursiveEmbroidery(wctx, "Manoir", wordCanvas.width / 2, 76, 86, 320);
         cursiveEmbroidery(wctx, "Kits", wordCanvas.width / 2, 154, 86, 320);
       } else {
-        wctx.font = "400 68px 'League Spartan', sans-serif";
-        outlinedTrackedText(wctx, "MANOIR", wordCanvas.width / 2, 76, 68, CHEST_FILL, 320, 14, 0.15);
-        outlinedTrackedText(wctx, "KITS", wordCanvas.width / 2, 154, 68, CHEST_FILL, 320, 14, 0.15);
+        const classicWordmark = await loadClassicWordmark();
+        if (disposed) return;
+        if (classicWordmark) {
+          drawClassicWordmark(wctx, wordCanvas, classicWordmark);
+        } else {
+          wctx.font = "400 68px 'League Spartan', sans-serif";
+          outlinedTrackedText(wctx, "MANOIR", wordCanvas.width / 2, 76, 68, CHEST_FILL, 320, 14, 0.15);
+          outlinedTrackedText(wctx, "KITS", wordCanvas.width / 2, 154, 68, CHEST_FILL, 320, 14, 0.15);
+        }
       }
       // Same height as the chest badge on the opposite panel.
       addFrontDecal("front_body_R", wordCanvas, 0.62, -0.05, 0.2);

@@ -345,9 +345,9 @@ export const getSupportTracker = onCall(async (request) => {
   assertAdmin(request);
   const [planSnapshot, entrySnapshot, auditSnapshot, requestSnapshot] = await Promise.all([
     supportPlanReference.get(),
-    supportEntries.orderBy("created_at", "desc").limit(500).get(),
-    supportAuditEvents.orderBy("occurred_at", "desc").limit(100).get(),
-    changeRequests.orderBy("occurred_at", "desc").limit(500).get(),
+    supportEntries.orderBy("created_at", "desc").get(),
+    supportAuditEvents.orderBy("occurred_at", "desc").get(),
+    changeRequests.orderBy("occurred_at", "desc").get(),
   ]);
   const plan = {
     ...SUPPORT_PLAN_DEFAULTS,

@@ -436,6 +436,12 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
   }
 
   async function decideCard(card: UnifiedRequestCard, reviewState: 'approved' | 'rejected') {
+    const decision = reviewState === 'approved' ? 'approve' : 'deny';
+    const confirmed = window.confirm(
+      `${decision === 'approve' ? 'Approve' : 'Deny'} “${card.title}”? `
+      + 'This records the decision only. It does not apply hours or change the balance.',
+    );
+    if (!confirmed) return;
     setWorking(true);
     try {
       await callFirebaseFunction<Record<string, string>, { ok: boolean }>(
@@ -466,6 +472,7 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
 
   if (!tracker) return null;
   const { plan, summary } = tracker;
+  const appliedBankDollars = summary.bank_used_hours * plan.hourly_rate;
   const projectedFutureHours = tracker.cards
     .filter((card) => !card.voided_at && card.allocation === 'unreviewed' && (card.projected_allocation || 'bank') === 'bank')
     .reduce((total, card) => total + Number(card.estimate_hours || 0), 0);
@@ -500,7 +507,18 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
         </button>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-6 border border-sky-400/25 bg-sky-400/[0.06] p-5">
+        <p className="text-[10px] tracking-[0.18em] text-sky-100/60">CURRENT APPLIED TOTAL</p>
+        <p className="mt-3 text-3xl font-light">
+          ${appliedBankDollars.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+        </p>
+        <p className="mt-2 text-xs leading-5 text-white/45">
+          Approved work assigned to the paid future-work bank. Unreviewed, rejected, grace,
+          and non-billable work are excluded.
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="border border-sky-400/25 bg-sky-400/[0.06] p-5">
           <p className="text-[10px] tracking-[0.18em] text-sky-100/60">FUTURE-WORK BANK</p>
           <p className="mt-3 text-3xl font-light">{hours(summary.bank_remaining_hours)}</p>
@@ -814,8 +832,11 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
 
       <details className="mt-6 border border-white/15 p-5">
         <summary className="cursor-pointer text-sm tracking-[0.12em] text-white/75">
-          ACTIVITY HISTORY ({tracker.audit.length})
+          ACTIVITY HISTORY FROM THE BEGINNING ({tracker.audit.length})
         </summary>
+        <p className="mt-3 text-xs leading-5 text-white/45">
+          Every recorded tracker event is shown below with the newest event first.
+        </p>
         <div className="mt-4 grid gap-3">
           {tracker.audit.map((event) => (
             <div className="border-t border-white/10 pt-3 text-xs leading-5 text-white/50" key={event.id}>

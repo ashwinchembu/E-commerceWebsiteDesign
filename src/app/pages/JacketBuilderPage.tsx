@@ -1,8 +1,10 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { ChevronRight, X, Star, SlidersHorizontal } from "lucide-react";
 import type { BackDesign, BodyMaterial } from "../components/VarsityJacketViewer";
 import { useNavigate } from "react-router-dom";
 import { createJacketCheckout, type ShopifyAttribute } from "../lib/shopify";
+import leatherNeckLabelImage from "../../assets/manoir-kits-leather-neck-label.png";
+import oneOfOnePatchImage from "../../assets/manoir-kits-one-of-one-patch.png";
 
 const SIZES = ["S", "M", "L", "XL"];
 
@@ -260,22 +262,6 @@ export function JacketBuilderPage({
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [wishlisted, setWishlisted] = useState(false);
   const [showInterior, setShowInterior] = useState(false);
-  const [interiorImages, setInteriorImages] = useState<{ label: string; patch: string } | null>(null);
-
-  // Render the interior patch artwork (shared with the 3D viewer's canvas
-  // painters) into images the first time the Interior Details card opens.
-  useEffect(() => {
-    if (!showInterior || interiorImages) return;
-    let active = true;
-    void import("../components/VarsityJacketViewer").then(async ({ renderInteriorPatch, renderNeckLabel }) => {
-      const patch = await renderInteriorPatch();
-      if (!active) return;
-      setInteriorImages({ label: renderNeckLabel().toDataURL(), patch: patch.toDataURL() });
-    });
-    return () => {
-      active = false;
-    };
-  }, [showInterior, interiorImages]);
 
   const [backStars, setBackStars] = useState(5);
   const [backNumber, setBackNumber] = useState("7");
@@ -911,21 +897,13 @@ export function JacketBuilderPage({
               <p className="text-[10px] tracking-widest uppercase text-gray-400">Sewn inside every jacket</p>
               <div>
                 <div className="bg-[#1a1a1a] p-3 flex items-center justify-center rounded-sm">
-                  {interiorImages ? (
-                    <img src={interiorImages.label} alt="Neck label" className="w-40" />
-                  ) : (
-                    <div className="w-40 h-20" />
-                  )}
+                  <img src={leatherNeckLabelImage} alt="Neck label" className="w-40" />
                 </div>
                 <p className="mt-1.5 text-[10px] tracking-widest uppercase text-gray-500">Leather neck label</p>
               </div>
               <div>
                 <div className="bg-[#1a1a1a] p-3 flex items-center justify-center rounded-sm">
-                  {interiorImages ? (
-                    <img src={interiorImages.patch} alt="One-of-one interior patch" className="w-32" />
-                  ) : (
-                    <div className="w-32 h-40" />
-                  )}
+                  <img src={oneOfOnePatchImage} alt="One-of-one interior patch" className="w-32" />
                 </div>
                 <p className="mt-1.5 text-[10px] tracking-widest uppercase text-gray-500">One-of-one lining patch</p>
               </div>

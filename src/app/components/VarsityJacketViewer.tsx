@@ -9,10 +9,12 @@ import classicWordmarkImage from "../../assets/manoir-kits-classic-wordmark.png"
 import footballersEstMarkImage from "../../assets/manoir-kits-footballers-est-2026.png";
 import footballersWordmarkImage from "../../assets/manoir-kits-footballers-wordmark.png";
 import crestImage from "../../assets/manoir-kits-crest.png";
+import starMarkImage from "../../assets/manoir-kits-star.png";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#EFBF04";
 const CHEST_FILL = "#FFFFFF";
+const EST_MARK_MAX_HEIGHT = 96 * 0.8;
 const COMPACT_VIEW_MAX_WIDTH = 640;
 const MAX_RENDER_PIXELS = 2_000_000;
 
@@ -43,6 +45,8 @@ let footballersEstMarkElement: HTMLCanvasElement | null = null;
 let footballersEstMarkLoading: Promise<HTMLCanvasElement | null> | null = null;
 let footballersWordmarkElement: HTMLCanvasElement | null = null;
 let footballersWordmarkLoading: Promise<HTMLCanvasElement | null> | null = null;
+let starMarkElement: HTMLCanvasElement | null = null;
+let starMarkLoading: Promise<HTMLCanvasElement | null> | null = null;
 
 function imageToCanvas(image: HTMLImageElement) {
   const canvas = document.createElement("canvas");
@@ -145,6 +149,32 @@ function loadFootballersWordmark(): Promise<HTMLCanvasElement | null> {
     image.src = footballersWordmarkImage;
   });
   return footballersWordmarkLoading;
+}
+
+/** Load the supplied production star and match it to the storefront gold. */
+function loadStarMark(): Promise<HTMLCanvasElement | null> {
+  if (starMarkElement) return Promise.resolve(starMarkElement);
+  if (starMarkLoading) return starMarkLoading;
+  starMarkLoading = new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const cropped = cropOpaquePixels(imageToCanvas(image));
+      if (!cropped) return resolve(null);
+      const tinted = document.createElement("canvas");
+      tinted.width = cropped.width;
+      tinted.height = cropped.height;
+      const ctx = tinted.getContext("2d")!;
+      ctx.drawImage(cropped, 0, 0);
+      ctx.globalCompositeOperation = "source-in";
+      ctx.fillStyle = BRAND_GOLD;
+      ctx.fillRect(0, 0, tinted.width, tinted.height);
+      starMarkElement = tinted;
+      resolve(tinted);
+    };
+    image.onerror = () => resolve(null);
+    image.src = starMarkImage;
+  });
+  return starMarkLoading;
 }
 
 /** Load the embroidered MK crest, trimmed to its own opaque bounds. */
@@ -391,7 +421,9 @@ function drawClassicWordmark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasEl
 
 function drawClassicEstMark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, mark: HTMLCanvasElement) {
   const maxWidth = canvas.width * 0.92;
-  const maxHeight = 96;
+  // Both supplied EST marks rendered too large after the PNG switch. Keep
+  // their common center while applying the requested 20% reduction.
+  const maxHeight = EST_MARK_MAX_HEIGHT;
   const scale = Math.min(maxWidth / mark.width, maxHeight / mark.height);
   const width = mark.width * scale;
   const height = mark.height * scale;
@@ -463,6 +495,29 @@ function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius:
   ctx.restore();
 }
 
+function drawStarMark(
+  ctx: CanvasRenderingContext2D,
+  mark: HTMLCanvasElement | null,
+  cx: number,
+  cy: number,
+  radius: number,
+  rotation = 0,
+) {
+  if (!mark) {
+    drawStar(ctx, cx, cy, radius, BRAND_GOLD, rotation);
+    return;
+  }
+  const diameter = radius * 2;
+  const scale = Math.min(diameter / mark.width, diameter / mark.height);
+  const width = mark.width * scale;
+  const height = mark.height * scale;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotation);
+  ctx.drawImage(mark, -width / 2, -height / 2, width, height);
+  ctx.restore();
+}
+
 /** Draws the back print onto a 512×720 canvas: stars → city → number → EST. */
 function drawBackDesign(
   canvas: HTMLCanvasElement,
@@ -470,6 +525,7 @@ function drawBackDesign(
   jacketEdition: JacketEdition,
   classicEstMark: HTMLCanvasElement | null,
   footballersEstMark: HTMLCanvasElement | null,
+  starMark: HTMLCanvasElement | null,
 ) {
   const ctx = canvas.getContext("2d")!;
   const w = canvas.width;
@@ -488,7 +544,7 @@ function drawBackDesign(
     const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
     const x = w / 2 + starArc * Math.sin(a);
     const y = starCenterY - starArc * Math.cos(a);
-    drawStar(ctx, x, y, 33, BRAND_GOLD, a);
+    drawStarMark(ctx, starMark, x, y, 33, a);
   }
 
   // City rides high, stretched to span the shoulders like the reference.
@@ -665,6 +721,7 @@ type Loaded = {
   back: Decal;
   classicEstMark: HTMLCanvasElement | null;
   footballersEstMark: HTMLCanvasElement | null;
+  starMark: HTMLCanvasElement | null;
   sleeves: { left: SleeveSet; right: SleeveSet };
 };
 
@@ -966,7 +1023,14 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     const loaded = loadedRef.current;
     if (!loaded) return;
     const design = propsRef.current.backDesign;
-    drawBackDesign(loaded.back.canvas, design, propsRef.current.jacketEdition, loaded.classicEstMark, loaded.footballersEstMark);
+    drawBackDesign(
+      loaded.back.canvas,
+      design,
+      propsRef.current.jacketEdition,
+      loaded.classicEstMark,
+      loaded.footballersEstMark,
+      loaded.starMark,
+    );
     loaded.back.texture.needsUpdate = true;
     drawSleeveNumbers(loaded.sleeves.left.canvases, design.leftSleeveNumbers, design.sleevePrintColor);
     drawSleeveNumbers(loaded.sleeves.right.canvases, design.rightSleeveNumbers, design.sleevePrintColor);
@@ -1088,6 +1152,8 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const classicEstMark = initialEdition === "Classic" ? await loadClassicEstMark() : null;
       if (disposed) return;
       const footballersEstMark = initialEdition === "Footballers" ? await loadFootballersEstMark() : null;
+      if (disposed) return;
+      const starMark = await loadStarMark();
       if (disposed) return;
       const root = gltf.scene;
       const byName: Record<string, THREE.Mesh> = {};
@@ -1586,6 +1652,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         back: { canvas: backCanvas, texture: backTexture },
         classicEstMark,
         footballersEstMark,
+        starMark,
         sleeves: sleeveSets,
       };
       // A color can change while the GLB is still loading. Reapply the latest

@@ -473,6 +473,30 @@ test("manufacturer packaging request links to its handoff deployment", () => {
   assert.deepEqual(cards[0].artifacts.map((artifact) => artifact.id), ["packaging-deploy"]);
 });
 
+test("superseded planning requests leave the active tracker without hiding verified deletions", () => {
+  const cards = buildUnifiedRequestCards(
+    [
+      {
+        external_id: "manufacturer-planning",
+        id: "planning",
+        occurred_at: 2,
+        status: "superseded",
+        title: "Plan future manufacturer artwork",
+      },
+      {
+        external_id: "verified-deleted",
+        id: "deleted",
+        occurred_at: 1,
+        status: "superseded",
+        title: "Verified deleted website request",
+        voided_at: 3,
+      },
+    ],
+    [],
+  );
+  assert.deepEqual(cards.map((card) => card.request_id), ["deleted"]);
+});
+
 test("the word estimate does not match an EST 2026 request", () => {
   const cards = buildUnifiedRequestCards(
     [{

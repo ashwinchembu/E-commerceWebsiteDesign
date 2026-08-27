@@ -449,7 +449,9 @@ export function buildUnifiedRequestCards(requests, entries) {
       voided_at: entry.voided_at || null,
     });
   }
-  return cards.sort((left, right) => right.occurred_at - left.occurred_at);
+  return cards
+    .filter((card) => card.status !== "superseded" || card.voided_at)
+    .sort((left, right) => right.occurred_at - left.occurred_at);
 }
 
 export function normalizeRequestCardReview(value) {

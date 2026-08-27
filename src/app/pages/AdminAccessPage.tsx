@@ -636,8 +636,8 @@ function SupportTrackerSection({ adminEmail }: { adminEmail: string }) {
               <p className="border border-white/10 p-3">
                 <span className="block tracking-[0.12em] text-white/75">REVISION ACCOUNTING</span>
                 Repeated attempts to resolve the same defect remain one request card. The owner
-                records one conservative total for that request, not a separate charge for every
-                commit or deployment.
+                records one conservative total for that request. If the same website update was
+                recorded twice, both audit links stay together inside that one card.
               </p>
               <p className="border border-white/10 p-3">
                 <span className="block tracking-[0.12em] text-white/75">WHAT AFFECTS HOURS</span>

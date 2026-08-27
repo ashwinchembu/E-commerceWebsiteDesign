@@ -416,6 +416,38 @@ test("unified request cards merge matching deployments without duplicate cards",
   assert.equal(cards[0].artifacts.length, 1);
 });
 
+test("equivalent deployment records remain one request card with both audit links", () => {
+  const shared = {
+    additions: 167,
+    allocation: "unreviewed",
+    changed_files: [
+      { additions: 40, deletions: 0, path: "functions/core.js" },
+      { additions: 127, deletions: 1, path: "src/app/pages/AdminAccessPage.tsx" },
+    ],
+    deletions: 1,
+    estimate_hours: 1.5,
+    occurred_at: Date.parse("2026-08-20T23:53:06Z"),
+    source: "deployment",
+    title: "Track website requests in owner dashboard",
+  };
+  const cards = buildUnifiedRequestCards([], [
+    { ...shared, id: "deploy_original", sha: "a".repeat(40) },
+    { ...shared, id: "deploy_automation", sha: "b".repeat(40) },
+    {
+      ...shared,
+      changed_files: [{ additions: 167, deletions: 1, path: "functions/index.js" }],
+      id: "deploy_distinct",
+      sha: "c".repeat(40),
+    },
+  ]);
+  assert.equal(cards.length, 2);
+  const duplicateCard = cards.find((card) => card.entry_id === "deploy_original");
+  assert.deepEqual(
+    duplicateCard.artifacts.map((artifact) => artifact.id),
+    ["deploy_original", "deploy_automation"],
+  );
+});
+
 test("one deployment can be related to every request it completed", () => {
   const requests = [
     { external_id: "legacy-cart-buttons", id: "cart", occurred_at: 1, title: "Fix cart buttons" },

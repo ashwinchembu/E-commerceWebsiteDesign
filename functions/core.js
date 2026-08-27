@@ -342,6 +342,32 @@ function workArtifact(entry) {
   };
 }
 
+function equivalentDeploymentKey(entry) {
+  if (entry?.source !== "deployment") return null;
+  const sha = cleanString(entry.sha, 40).toLowerCase();
+  const occurredAt = finiteNumber(entry.occurred_at || entry.created_at, 0);
+  const changedFiles = Array.isArray(entry.changed_files)
+    ? entry.changed_files
+        .map((file) => ({
+          additions: Math.max(0, Math.trunc(finiteNumber(file?.additions))),
+          deletions: Math.max(0, Math.trunc(finiteNumber(file?.deletions))),
+          path: cleanString(file?.path, 400),
+        }))
+        .filter((file) => file.path)
+        .sort((left, right) => left.path.localeCompare(right.path))
+    : [];
+  if (!/^[0-9a-f]{40}$/.test(sha) || !occurredAt || changedFiles.length === 0) {
+    return null;
+  }
+  return JSON.stringify({
+    additions: Math.max(0, Math.trunc(finiteNumber(entry.additions))),
+    changedFiles,
+    deletions: Math.max(0, Math.trunc(finiteNumber(entry.deletions))),
+    occurredAt,
+    title: cleanString(entry.title, 180).toLowerCase(),
+  });
+}
+
 const HISTORICAL_COMMIT_BASE_URL =
   "https://github.com/ashwinchembu/E-commerceWebsiteDesign/commit/";
 
@@ -426,11 +452,31 @@ export function buildUnifiedRequestCards(requests, entries) {
     };
   });
 
+  const unmatchedGroups = [];
+  const equivalentDeployments = new Map();
   for (const entry of unmatchedEntries) {
+    const key = equivalentDeploymentKey(entry);
+    if (!key) {
+      unmatchedGroups.push([entry]);
+      continue;
+    }
+    const group = equivalentDeployments.get(key);
+    if (group) {
+      group.push(entry);
+    } else {
+      const nextGroup = [entry];
+      equivalentDeployments.set(key, nextGroup);
+      unmatchedGroups.push(nextGroup);
+    }
+  }
+
+  for (const related of unmatchedGroups) {
+    const reviewed = related.find((entry) => entry.actual_hours != null && !entry.voided_at);
+    const entry = reviewed || related.find((candidate) => !candidate.voided_at) || related[0];
     cards.push({
       actual_hours: entry.actual_hours ?? null,
       allocation: entry.allocation || "unreviewed",
-      artifacts: [workArtifact(entry)],
+      artifacts: related.map(workArtifact),
       completed_at: null,
       description: entry.source === "manual" ? entry.description || null : null,
       entry_id: entry.id,

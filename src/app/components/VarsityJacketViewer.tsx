@@ -14,7 +14,7 @@ import starMarkImage from "../../assets/manoir-kits-star.png";
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#EFBF04";
 const CHEST_FILL = "#FFFFFF";
-const EST_MARK_MAX_HEIGHT = 96 * 0.8;
+const EST_MARK_MAX_HEIGHT = 96 * 0.8 * 0.8;
 const COMPACT_VIEW_MAX_WIDTH = 640;
 const MAX_RENDER_PIXELS = 2_000_000;
 
@@ -421,8 +421,9 @@ function drawClassicWordmark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasEl
 
 function drawClassicEstMark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, mark: HTMLCanvasElement) {
   const maxWidth = canvas.width * 0.92;
-  // Both supplied EST marks rendered too large after the PNG switch. Keep
-  // their common center while applying the requested 20% reduction.
+  // The first reduction was still too subtle once the back canvas was
+  // projected onto the jacket. Reduce both editions another 20% while
+  // preserving their shared center point.
   const maxHeight = EST_MARK_MAX_HEIGHT;
   const scale = Math.min(maxWidth / mark.width, maxHeight / mark.height);
   const width = mark.width * scale;

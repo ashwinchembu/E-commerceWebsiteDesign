@@ -3,6 +3,7 @@ import { ChevronRight, X, Star, SlidersHorizontal } from "lucide-react";
 import type { BackDesign, BodyMaterial } from "../components/VarsityJacketViewer";
 import { useNavigate } from "react-router-dom";
 import { createJacketCheckout, type ShopifyAttribute } from "../lib/shopify";
+import crestImage from "../../assets/manoir-kits-crest.png";
 import leatherNeckLabelImage from "../../assets/manoir-kits-leather-neck-label.png";
 import oneOfOnePatchImage from "../../assets/manoir-kits-one-of-one-patch.png";
 
@@ -897,13 +898,25 @@ export function JacketBuilderPage({
               <p className="text-[10px] tracking-widest uppercase text-gray-400">Sewn inside every jacket</p>
               <div>
                 <div className="bg-[#1a1a1a] p-3 flex items-center justify-center rounded-sm">
-                  <img src={leatherNeckLabelImage} alt="Neck label" className="w-40" />
+                  <img src={leatherNeckLabelImage} alt="Neck label" className="w-40 -translate-y-2" />
                 </div>
                 <p className="mt-1.5 text-[10px] tracking-widest uppercase text-gray-500">Leather neck label</p>
               </div>
               <div>
                 <div className="bg-[#1a1a1a] p-3 flex items-center justify-center rounded-sm">
-                  <img src={oneOfOnePatchImage} alt="One-of-one interior patch" className="w-32" />
+                  <div className="relative w-32">
+                    <img src={oneOfOnePatchImage} alt="One-of-one interior patch" className="block w-full" />
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-1/2 top-[21%] h-[34%] w-1/2 -translate-x-1/2 bg-[#0f0e09]"
+                    />
+                    <img
+                      src={crestImage}
+                      alt=""
+                      aria-hidden="true"
+                      className="absolute left-1/2 top-[17%] w-[62%] -translate-x-1/2"
+                    />
+                  </div>
                 </div>
                 <p className="mt-1.5 text-[10px] tracking-widest uppercase text-gray-500">One-of-one lining patch</p>
               </div>

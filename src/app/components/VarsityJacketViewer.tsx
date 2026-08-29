@@ -14,6 +14,8 @@ import starMarkImage from "../../assets/manoir-kits-star.png";
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#EFBF04";
 const CHEST_FILL = "#FFFFFF";
+// Keep the requested two 20% reductions explicit so a later artwork swap does
+// not accidentally restore the original back-mark scale.
 const EST_MARK_MAX_HEIGHT = 96 * 0.8 * 0.8;
 const COMPACT_VIEW_MAX_WIDTH = 640;
 const MAX_RENDER_PIXELS = 2_000_000;

@@ -1,0 +1,19 @@
+{
+  "version": "approved-2026-08-29",
+  "frontAndSleeveArtworkScale": 0.8,
+  "backArtworkScale": 0.8,
+  "estMarkBaseHeight": 96,
+  "estMarkReductionSteps": [0.8, 0.8],
+  "backProjectionWidth": 0.64,
+  "backProjectionYOffset": 0.04,
+  "starArc": 560,
+  "starCenterOffset": 52,
+  "starStepDegrees": 11,
+  "starRadius": 33,
+  "cityY": 200,
+  "backNumberY": 452,
+  "estMarkY": 650,
+  "fallbackEstMarkY": 652,
+  "frontCrestWidth": 0.336,
+  "frontWordmarkWidth": 0.62
+}

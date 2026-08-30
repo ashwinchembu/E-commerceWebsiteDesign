@@ -10,15 +10,18 @@ import footballersEstMarkImage from "../../assets/manoir-kits-footballers-est-20
 import footballersWordmarkImage from "../../assets/manoir-kits-footballers-wordmark.png";
 import crestImage from "../../assets/manoir-kits-crest.png";
 import starMarkImage from "../../assets/manoir-kits-star.png";
+import approvedJacketLayout from "../config/approvedJacketLayout.json";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#EFBF04";
 const CHEST_FILL = "#FFFFFF";
-const JACKET_ARTWORK_SCALE = 0.8;
-const BACK_ARTWORK_SCALE = 0.8;
-// Keep the requested two 20% reductions explicit so a later artwork swap does
-// not accidentally restore the original back-mark scale.
-const EST_MARK_MAX_HEIGHT = 96 * 0.8 * 0.8;
+// Front/sleeve sizing and back sizing are deliberately independent. A prior
+// shared scale made a size correction compress the whole back layout.
+const FRONT_AND_SLEEVE_ARTWORK_SCALE = approvedJacketLayout.frontAndSleeveArtworkScale;
+const BACK_ARTWORK_SCALE = approvedJacketLayout.backArtworkScale;
+const EST_MARK_MAX_HEIGHT =
+  approvedJacketLayout.estMarkBaseHeight *
+  approvedJacketLayout.estMarkReductionSteps.reduce((height, reduction) => height * reduction, 1);
 const COMPACT_VIEW_MAX_WIDTH = 640;
 const MAX_RENDER_PIXELS = 2_000_000;
 
@@ -432,7 +435,7 @@ function drawClassicEstMark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasEle
   const scale = Math.min(maxWidth / mark.width, maxHeight / mark.height);
   const width = mark.width * scale;
   const height = mark.height * scale;
-  ctx.drawImage(mark, (canvas.width - width) / 2, 650 - height / 2, width, height);
+  ctx.drawImage(mark, (canvas.width - width) / 2, approvedJacketLayout.estMarkY - height / 2, width, height);
 }
 
 /**
@@ -542,14 +545,14 @@ function drawBackDesign(
   // Stars ride high across the traps in a wide, shallow arc: the center star
   // crowns the collar and the outer ones reach toward the shoulder seams.
   const stars = Math.max(0, Math.min(5, design.stars));
-  const starArc = 560;
-  const starCenterY = 52 + starArc;
-  const stepDeg = 11;
+  const starArc = approvedJacketLayout.starArc;
+  const starCenterY = approvedJacketLayout.starCenterOffset + starArc;
+  const stepDeg = approvedJacketLayout.starStepDegrees;
   for (let i = 0; i < stars; i += 1) {
     const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
     const x = w / 2 + starArc * Math.sin(a);
     const y = starCenterY - starArc * Math.cos(a);
-    drawStarMark(ctx, starMark, x, y, 33 * BACK_ARTWORK_SCALE, a);
+    drawStarMark(ctx, starMark, x, y, approvedJacketLayout.starRadius * BACK_ARTWORK_SCALE, a);
   }
 
   // City rides high, stretched to span the shoulders like the reference.
@@ -563,7 +566,16 @@ function drawBackDesign(
     ctx.save();
     ctx.translate(w / 2, 0);
     ctx.scale(sx, 1);
-    outlinedTrackedText(ctx, city, 0, 200, fontSize, design.backPrintColor, cityMaxWidth / sx, fontSize * 0.035);
+    outlinedTrackedText(
+      ctx,
+      city,
+      0,
+      approvedJacketLayout.cityY,
+      fontSize,
+      design.backPrintColor,
+      cityMaxWidth / sx,
+      fontSize * 0.035,
+    );
     ctx.restore();
   }
 
@@ -573,14 +585,29 @@ function drawBackDesign(
     ctx.font = `400 ${numberFontSize}px 'League Spartan', sans-serif`;
     // Keep both edges on the jacket's flat back panel. Letting double digits
     // reach the curved side seams can stretch a sliver of the decal outward.
-    outlinedTrackedText(ctx, number, w / 2, 452, numberFontSize, design.backPrintColor, w * 0.82 * BACK_ARTWORK_SCALE);
+    outlinedTrackedText(
+      ctx,
+      number,
+      w / 2,
+      approvedJacketLayout.backNumberY,
+      numberFontSize,
+      design.backPrintColor,
+      w * 0.82 * BACK_ARTWORK_SCALE,
+    );
   }
 
   if (jacketEdition === "Footballers") {
     if (footballersEstMark) {
       drawClassicEstMark(ctx, canvas, footballersEstMark);
     } else {
-      cursiveEmbroidery(ctx, "Est. 2026", w / 2, 652, 89.6 * BACK_ARTWORK_SCALE, w * 0.88 * BACK_ARTWORK_SCALE);
+      cursiveEmbroidery(
+        ctx,
+        "Est. 2026",
+        w / 2,
+        approvedJacketLayout.fallbackEstMarkY,
+        89.6 * BACK_ARTWORK_SCALE,
+        w * 0.88 * BACK_ARTWORK_SCALE,
+      );
     }
   } else if (classicEstMark) {
     drawClassicEstMark(ctx, canvas, classicEstMark);
@@ -589,7 +616,16 @@ function drawBackDesign(
     ctx.font = `400 ${estFontSize}px 'League Spartan', sans-serif`;
     // This is a fixed brand mark, so match the Classic chest wordmark instead
     // of recoloring it with the customer's city and number selection.
-    outlinedTrackedText(ctx, "EST. 2026", w / 2, 652, estFontSize, CHEST_FILL, w * 0.92 * BACK_ARTWORK_SCALE, 4 * BACK_ARTWORK_SCALE);
+    outlinedTrackedText(
+      ctx,
+      "EST. 2026",
+      w / 2,
+      approvedJacketLayout.fallbackEstMarkY,
+      estFontSize,
+      CHEST_FILL,
+      w * 0.92 * BACK_ARTWORK_SCALE,
+      4 * BACK_ARTWORK_SCALE,
+    );
   }
 }
 
@@ -1381,12 +1417,16 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         // Preserve the full top-to-bottom spacing of the back layout. Shrink
         // the individual marks on their canvas instead of shrinking this
         // projection, which pulled every element into one crowded block.
-        const bw = ws.x * 0.64;
+        const bw = ws.x * approvedJacketLayout.backProjectionWidth;
         const bh = bw * (backCanvas.height / backCanvas.width);
         addDecal(
           backMesh,
           backTexture,
-          new THREE.Vector3(wcB.x, wcB.y + ws.y * 0.04, wb.min.z),
+          new THREE.Vector3(
+            wcB.x,
+            wcB.y + ws.y * approvedJacketLayout.backProjectionYOffset,
+            wb.min.z,
+          ),
           new THREE.Euler(0, Math.PI, 0),
           // Deep enough to span the whole back shell: the surface curves
           // forward over the traps and at the side seams, and a shallow box
@@ -1429,7 +1469,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const v = new THREE.Vector3();
         // Keep each patch well inside the sleeve's uninterrupted outer face
         // so its edges stay close to the leather at oblique viewing angles.
-        const pw = wsz.x * 0.4 * JACKET_ARTWORK_SCALE;
+        const pw = wsz.x * 0.4 * FRONT_AND_SLEEVE_ARTWORK_SCALE;
         // Scan the arm's outer surface at each slot height first...
         const slotPoints: (THREE.Vector3 | null)[] = [];
         for (let slot = 0; slot < SLEEVE_SLOTS; slot++) {
@@ -1557,7 +1597,13 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const badgeCanvas = document.createElement("canvas");
       badgeCanvas.width = 320;
       badgeCanvas.height = 360;
-      const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.336 * JACKET_ARTWORK_SCALE, -0.02, 0.2);
+      const badgeArt = addFrontDecal(
+        "front_body_L",
+        badgeCanvas,
+        approvedJacketLayout.frontCrestWidth * FRONT_AND_SLEEVE_ARTWORK_SCALE,
+        -0.02,
+        0.2,
+      );
       const crest = await loadCrest();
       if (disposed) return;
       if (crest) {
@@ -1656,7 +1702,13 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         }
       }
       // Same height as the chest badge on the opposite panel.
-      addFrontDecal("front_body_R", wordCanvas, 0.62 * JACKET_ARTWORK_SCALE, -0.05, 0.2);
+      addFrontDecal(
+        "front_body_R",
+        wordCanvas,
+        approvedJacketLayout.frontWordmarkWidth * FRONT_AND_SLEEVE_ARTWORK_SCALE,
+        -0.05,
+        0.2,
+      );
 
       loadedRef.current = {
         materials,

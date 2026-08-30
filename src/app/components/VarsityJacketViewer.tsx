@@ -14,6 +14,7 @@ import starMarkImage from "../../assets/manoir-kits-star.png";
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#EFBF04";
 const CHEST_FILL = "#FFFFFF";
+const JACKET_ARTWORK_SCALE = 0.8;
 // Keep the requested two 20% reductions explicit so a later artwork swap does
 // not accidentally restore the original back-mark scale.
 const EST_MARK_MAX_HEIGHT = 96 * 0.8 * 0.8;
@@ -1373,7 +1374,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const wcB = wb.getCenter(new THREE.Vector3());
         // Keep the full artwork footprint inside the uninterrupted back panel;
         // the outer shell triangles turn sharply into the sleeve seams.
-        const bw = ws.x * 0.64;
+        const bw = ws.x * 0.64 * JACKET_ARTWORK_SCALE;
         const bh = bw * (backCanvas.height / backCanvas.width);
         addDecal(
           backMesh,
@@ -1421,7 +1422,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const v = new THREE.Vector3();
         // Keep each patch well inside the sleeve's uninterrupted outer face
         // so its edges stay close to the leather at oblique viewing angles.
-        const pw = wsz.x * 0.4;
+        const pw = wsz.x * 0.4 * JACKET_ARTWORK_SCALE;
         // Scan the arm's outer surface at each slot height first...
         const slotPoints: (THREE.Vector3 | null)[] = [];
         for (let slot = 0; slot < SLEEVE_SLOTS; slot++) {
@@ -1549,7 +1550,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const badgeCanvas = document.createElement("canvas");
       badgeCanvas.width = 320;
       badgeCanvas.height = 360;
-      const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.336, -0.02, 0.2);
+      const badgeArt = addFrontDecal("front_body_L", badgeCanvas, 0.336 * JACKET_ARTWORK_SCALE, -0.02, 0.2);
       const crest = await loadCrest();
       if (disposed) return;
       if (crest) {
@@ -1648,7 +1649,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         }
       }
       // Same height as the chest badge on the opposite panel.
-      addFrontDecal("front_body_R", wordCanvas, 0.62, -0.05, 0.2);
+      addFrontDecal("front_body_R", wordCanvas, 0.62 * JACKET_ARTWORK_SCALE, -0.05, 0.2);
 
       loadedRef.current = {
         materials,

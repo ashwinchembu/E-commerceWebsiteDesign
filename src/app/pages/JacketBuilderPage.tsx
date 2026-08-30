@@ -898,7 +898,7 @@ export function JacketBuilderPage({
               <p className="text-[10px] tracking-widest uppercase text-gray-400">Sewn inside every jacket</p>
               <div>
                 <div className="bg-[#1a1a1a] p-3 flex items-center justify-center rounded-sm">
-                  <img src={leatherNeckLabelImage} alt="Neck label" className="w-40 -translate-y-2" />
+                  <img src={leatherNeckLabelImage} alt="Neck label" className="block w-40 -translate-y-2" />
                 </div>
                 <p className="mt-1.5 text-[10px] tracking-widest uppercase text-gray-500">Leather neck label</p>
               </div>
@@ -908,13 +908,13 @@ export function JacketBuilderPage({
                     <img src={oneOfOnePatchImage} alt="One-of-one interior patch" className="block w-full" />
                     <span
                       aria-hidden="true"
-                      className="absolute left-1/2 top-[21%] h-[34%] w-1/2 -translate-x-1/2 bg-[#0f0e09]"
+                      className="absolute left-1/2 top-[25%] h-[31%] w-[40%] -translate-x-1/2 bg-[#0f0e09]"
                     />
                     <img
                       src={crestImage}
                       alt=""
                       aria-hidden="true"
-                      className="absolute left-1/2 top-[17%] w-[62%] -translate-x-1/2"
+                      className="absolute left-1/2 top-[26%] w-[35%] -translate-x-1/2"
                     />
                   </div>
                 </div>

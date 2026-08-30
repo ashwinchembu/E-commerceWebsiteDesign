@@ -15,6 +15,7 @@ const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#EFBF04";
 const CHEST_FILL = "#FFFFFF";
 const JACKET_ARTWORK_SCALE = 0.8;
+const BACK_ARTWORK_SCALE = 0.8;
 // Keep the requested two 20% reductions explicit so a later artwork swap does
 // not accidentally restore the original back-mark scale.
 const EST_MARK_MAX_HEIGHT = 96 * 0.8 * 0.8;
@@ -427,7 +428,7 @@ function drawClassicEstMark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasEle
   // The first reduction was still too subtle once the back canvas was
   // projected onto the jacket. Reduce both editions another 20% while
   // preserving their shared center point.
-  const maxHeight = EST_MARK_MAX_HEIGHT;
+  const maxHeight = EST_MARK_MAX_HEIGHT * BACK_ARTWORK_SCALE;
   const scale = Math.min(maxWidth / mark.width, maxHeight / mark.height);
   const width = mark.width * scale;
   const height = mark.height * scale;
@@ -548,44 +549,47 @@ function drawBackDesign(
     const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
     const x = w / 2 + starArc * Math.sin(a);
     const y = starCenterY - starArc * Math.cos(a);
-    drawStarMark(ctx, starMark, x, y, 33, a);
+    drawStarMark(ctx, starMark, x, y, 33 * BACK_ARTWORK_SCALE, a);
   }
 
   // City rides high, stretched to span the shoulders like the reference.
   const city = design.city.trim().toUpperCase();
   if (city) {
-    const fontSize = city.length > 9 ? 82 : 100;
+    const fontSize = (city.length > 9 ? 82 : 100) * BACK_ARTWORK_SCALE;
     ctx.font = `400 ${fontSize}px 'League Spartan', sans-serif`;
     const natural = ctx.measureText(city).width || 1;
-    const sx = Math.min(Math.max((w * 0.86) / natural, 1), 1.35);
+    const cityMaxWidth = w * 0.86 * BACK_ARTWORK_SCALE;
+    const sx = Math.min(Math.max(cityMaxWidth / natural, 1), 1.35);
     ctx.save();
     ctx.translate(w / 2, 0);
     ctx.scale(sx, 1);
-    outlinedTrackedText(ctx, city, 0, 200, fontSize, design.backPrintColor, (w * 0.86) / sx, fontSize * 0.035);
+    outlinedTrackedText(ctx, city, 0, 200, fontSize, design.backPrintColor, cityMaxWidth / sx, fontSize * 0.035);
     ctx.restore();
   }
 
   const number = design.backNumber.trim();
   if (number) {
-    ctx.font = "400 390px 'League Spartan', sans-serif";
+    const numberFontSize = 390 * BACK_ARTWORK_SCALE;
+    ctx.font = `400 ${numberFontSize}px 'League Spartan', sans-serif`;
     // Keep both edges on the jacket's flat back panel. Letting double digits
     // reach the curved side seams can stretch a sliver of the decal outward.
-    outlinedTrackedText(ctx, number, w / 2, 452, 390, design.backPrintColor, w * 0.82);
+    outlinedTrackedText(ctx, number, w / 2, 452, numberFontSize, design.backPrintColor, w * 0.82 * BACK_ARTWORK_SCALE);
   }
 
   if (jacketEdition === "Footballers") {
     if (footballersEstMark) {
       drawClassicEstMark(ctx, canvas, footballersEstMark);
     } else {
-      cursiveEmbroidery(ctx, "Est. 2026", w / 2, 652, 89.6, w * 0.88);
+      cursiveEmbroidery(ctx, "Est. 2026", w / 2, 652, 89.6 * BACK_ARTWORK_SCALE, w * 0.88 * BACK_ARTWORK_SCALE);
     }
   } else if (classicEstMark) {
     drawClassicEstMark(ctx, canvas, classicEstMark);
   } else {
-    ctx.font = "400 66.6px 'League Spartan', sans-serif";
+    const estFontSize = 66.6 * BACK_ARTWORK_SCALE;
+    ctx.font = `400 ${estFontSize}px 'League Spartan', sans-serif`;
     // This is a fixed brand mark, so match the Classic chest wordmark instead
     // of recoloring it with the customer's city and number selection.
-    outlinedTrackedText(ctx, "EST. 2026", w / 2, 652, 66.6, CHEST_FILL, w * 0.92, 4);
+    outlinedTrackedText(ctx, "EST. 2026", w / 2, 652, estFontSize, CHEST_FILL, w * 0.92 * BACK_ARTWORK_SCALE, 4 * BACK_ARTWORK_SCALE);
   }
 }
 
@@ -1374,7 +1378,10 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const wcB = wb.getCenter(new THREE.Vector3());
         // Keep the full artwork footprint inside the uninterrupted back panel;
         // the outer shell triangles turn sharply into the sleeve seams.
-        const bw = ws.x * 0.64 * JACKET_ARTWORK_SCALE;
+        // Preserve the full top-to-bottom spacing of the back layout. Shrink
+        // the individual marks on their canvas instead of shrinking this
+        // projection, which pulled every element into one crowded block.
+        const bw = ws.x * 0.64;
         const bh = bw * (backCanvas.height / backCanvas.width);
         addDecal(
           backMesh,

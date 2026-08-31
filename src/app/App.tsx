@@ -105,23 +105,9 @@ function RouteMetadata() {
 
 function StorefrontRoutes({
   account,
-  accessIdentity,
 }: {
   account: ReturnType<typeof useShopifyCustomerAccount>;
-  accessIdentity: AccessIdentity | null;
 }) {
-  const jacketAccessRole =
-    accessIdentity?.role ??
-    (account.state.status === 'signed-in' && account.state.customer.hasFootballerAccess
-      ? 'footballer'
-      : 'visitor');
-  const shopifyAccessStatus =
-    account.state.status === 'signed-in'
-      ? account.state.customer.hasFootballerAccess
-        ? 'eligible'
-        : 'ineligible'
-      : account.state.status;
-
   return (
     <Routes>
       <Route element={<HomePage />} path="/" />
@@ -144,13 +130,7 @@ function StorefrontRoutes({
       <Route element={<TermsPage />} path="/terms" />
       <Route element={<DoNotSellPage />} path="/do-not-sell" />
       <Route
-        element={
-          <JacketBuilderPage
-            accessRole={jacketAccessRole}
-            onShopifySignIn={() => void account.signIn('/jacket-builder')}
-            shopifyAccessStatus={shopifyAccessStatus}
-          />
-        }
+        element={<JacketBuilderPage />}
         path="/jacket-builder"
       />
 
@@ -310,7 +290,6 @@ export default function App() {
         <main className="flex-1">
           <Suspense fallback={<div className="min-h-[60vh] bg-white" />}>
             <StorefrontRoutes
-              accessIdentity={accessIdentity}
               account={shopifyCustomerAccount}
             />
           </Suspense>

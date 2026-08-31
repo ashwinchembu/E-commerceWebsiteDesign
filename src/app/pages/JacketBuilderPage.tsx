@@ -231,17 +231,7 @@ const PRINT_COLORS = [
   { label: "Black", color: "#000000" },
 ];
 
-interface JacketBuilderPageProps {
-  accessRole?: "visitor" | "footballer" | "admin";
-  onShopifySignIn?: () => void;
-  shopifyAccessStatus?: "checking" | "signed-out" | "eligible" | "ineligible" | "unavailable" | "error";
-}
-
-export function JacketBuilderPage({
-  accessRole = "visitor",
-  onShopifySignIn,
-  shopifyAccessStatus = "signed-out",
-}: JacketBuilderPageProps) {
+export function JacketBuilderPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Jacket");
@@ -249,7 +239,6 @@ export function JacketBuilderPage({
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [jacketEdition, setJacketEdition] = useState<JacketEdition>("Classic");
-  const [showFootballersAccess, setShowFootballersAccess] = useState(false);
   const [bodyColor, setBodyColor] = useState("#181b20");
   const [sleeveColor, setSleeveColor] = useState("#1a1a1a");
   const [leatherType, setLeatherType] = useState<LeatherType>("Nappa");
@@ -284,15 +273,6 @@ export function JacketBuilderPage({
   };
 
   const isFootballersEdition = jacketEdition === "Footballers";
-  const canUseFootballersEdition = accessRole === "footballer" || accessRole === "admin";
-  const footballersAccessLabel =
-    shopifyAccessStatus === "checking"
-      ? "Checking account"
-      : shopifyAccessStatus === "ineligible"
-        ? "Approval required"
-        : shopifyAccessStatus === "error" || shopifyAccessStatus === "unavailable"
-          ? "Account check unavailable"
-          : "Shopify account required";
   const renderedBodyColor = bodyColor;
   const renderedBodyMaterial: BodyMaterial = isFootballersEdition ? "Leather" : "Wool";
 
@@ -303,7 +283,7 @@ export function JacketBuilderPage({
     setter((numbers) => numbers.map((n, i) => (i === index ? digits : n)));
   };
 
-  const price = isFootballersEdition ? 1695 : 1195;
+  const price = isFootballersEdition ? 1995 : 1495;
 
   const checkoutAttributes = (): ShopifyAttribute[] => [
     { key: "Edition", value: jacketEdition },
@@ -515,12 +495,7 @@ export function JacketBuilderPage({
                           <button
                             key={edition}
                             onClick={() => {
-                              if (edition === "Footballers" && !canUseFootballersEdition) {
-                                setShowFootballersAccess(true);
-                                return;
-                              }
                               setJacketEdition(edition);
-                              setShowFootballersAccess(false);
                               if (edition === "Footballers") setExpandedSection("Body");
                             }}
                             className={`min-h-20 border px-3 py-3 text-left transition-colors ${
@@ -531,46 +506,10 @@ export function JacketBuilderPage({
                             <span className="mt-1 block text-xs leading-snug">
                               {edition === "Footballers" ? "Full leather body and sleeves" : "Wool body with leather sleeves"}
                             </span>
-                            {edition === "Footballers" && !canUseFootballersEdition && (
-                              <span className="mt-2 block text-[9px] tracking-widest uppercase text-gray-400">
-                                {footballersAccessLabel}
-                              </span>
-                            )}
                           </button>
                         );
                       })}
                     </div>
-                    {showFootballersAccess && !canUseFootballersEdition && (
-                      <div className="border border-gray-200 bg-white p-3">
-                        <p className="text-xs leading-relaxed text-gray-600">
-                          {shopifyAccessStatus === "ineligible"
-                            ? "This Shopify account is signed in, but Footballers access has not been approved."
-                            : shopifyAccessStatus === "checking"
-                              ? "Checking your Shopify customer account for Footballers access."
-                              : shopifyAccessStatus === "unavailable"
-                                ? "Shopify customer access is temporarily unavailable."
-                                : shopifyAccessStatus === "error"
-                                  ? "Shopify could not verify your customer account. Please sign in again."
-                                : "Sign in with an approved Shopify customer account to unlock Footballers jackets."}
-                        </p>
-                        {(shopifyAccessStatus === "signed-out" || shopifyAccessStatus === "error") &&
-                        onShopifySignIn ? (
-                          <button
-                            onClick={onShopifySignIn}
-                            className="mt-3 w-full bg-black px-3 py-2 text-[10px] tracking-widest uppercase text-white transition-colors hover:bg-gray-800"
-                          >
-                            Sign In With Shopify
-                          </button>
-                        ) : shopifyAccessStatus !== "checking" ? (
-                          <button
-                            onClick={() => navigate("/contact")}
-                            className="mt-3 w-full bg-black px-3 py-2 text-[10px] tracking-widest uppercase text-white transition-colors hover:bg-gray-800"
-                          >
-                            Request Footballers Access
-                          </button>
-                        ) : null}
-                      </div>
-                    )}
                     {isFootballersEdition && (
                       <p className="text-[10px] leading-relaxed text-gray-500">
                         Footballers jackets use one full-leather shell. Pick Nappa for a smoother finish or Cowhide for a tougher grain.

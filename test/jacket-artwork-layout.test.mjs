@@ -4,6 +4,7 @@ import test from "node:test";
 
 const layoutUrl = new URL("../src/app/config/approvedJacketLayout.json", import.meta.url);
 const viewerUrl = new URL("../src/app/components/VarsityJacketViewer.tsx", import.meta.url);
+const builderUrl = new URL("../src/app/pages/JacketBuilderPage.tsx", import.meta.url);
 
 const approvedLayout = {
   version: "approved-2026-08-29",
@@ -35,4 +36,14 @@ test("the viewer reads every locked layout value", async () => {
   for (const key of Object.keys(approvedLayout).filter((key) => key !== "version")) {
     assert.match(viewer, new RegExp(`approvedJacketLayout\\.${key}\\b`), `${key} must remain wired to the viewer`);
   }
+});
+
+test("the jacket builder keeps the approved edition prices", async () => {
+  const builder = await readFile(builderUrl, "utf8");
+  assert.match(builder, /const price = isFootballersEdition \? 1995 : 1495;/);
+});
+
+test("the Footballers edition is available without an account gate", async () => {
+  const builder = await readFile(builderUrl, "utf8");
+  assert.doesNotMatch(builder, /canUseFootballersEdition|Request Footballers Access|Shopify account required/);
 });

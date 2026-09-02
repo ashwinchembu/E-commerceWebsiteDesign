@@ -11,6 +11,7 @@ import footballersWordmarkImage from "../../assets/manoir-kits-footballers-wordm
 import crestImage from "../../assets/manoir-kits-crest.png";
 import starMarkImage from "../../assets/manoir-kits-star.png";
 import approvedJacketLayout from "../config/approvedJacketLayout.json";
+import { balancedTextLines, fitUniformFontSize } from "../lib/jacketArtworkFit";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#EFBF04";
@@ -390,6 +391,14 @@ function extractCrestThreadwork(source: HTMLCanvasElement): HTMLCanvasElement {
 export type LeatherType = "Nappa" | "Cowhide";
 export type BodyMaterial = "Wool" | "Leather";
 export type JacketEdition = "Classic" | "Footballers";
+export type BackCityLayout =
+  | "fill-width"
+  | "proportional-auto-fit"
+  | "fixed-size"
+  | "compact-single-line"
+  | "wrap-two-lines"
+  | "outer-star-span"
+  | "wide-letter-spacing";
 
 /** Varsity chenille lettering: colored fill with a gold outline. */
 function outlinedText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, fontSize: number, fill: string, maxWidth?: number, outlineScale = 0.055) {
@@ -484,6 +493,55 @@ function outlinedTrackedText(
   ctx.restore();
 }
 
+/**
+ * Shrink a label uniformly until its natural tracked width fits the available
+ * back panel. Uniform font sizing preserves every glyph's proportions; unlike
+ * a canvas x-scale, long city names no longer look tall and squeezed.
+ */
+function fittedTrackedFontSize(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  preferredFontSize: number,
+  maxWidth: number,
+  trackingRatio: number,
+  outlineScale = 0.055,
+) {
+  return fitUniformFontSize(preferredFontSize, maxWidth, (fontSize) => {
+    return measuredTrackedTextWidth(ctx, text, fontSize, trackingRatio, outlineScale);
+  });
+}
+
+function measuredTrackedTextWidth(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  fontSize: number,
+  trackingRatio: number,
+  outlineScale = 0.055,
+) {
+  ctx.font = `400 ${fontSize}px 'League Spartan', sans-serif`;
+  const glyphs = [...text].map((glyph) => {
+    const metrics = ctx.measureText(glyph);
+    const isSpace = glyph.trim() === "";
+    const left = isSpace ? 0 : metrics.actualBoundingBoxLeft;
+    const right = isSpace ? metrics.width : metrics.actualBoundingBoxRight;
+    return Math.max(1, left + right);
+  });
+  const tracking = Math.max(fontSize * trackingRatio, fontSize * outlineScale * 2.2);
+  return glyphs.reduce((sum, width) => sum + width, 0) + tracking * Math.max(0, glyphs.length - 1);
+}
+
+function outerStarSpanCityWidth(canvasWidth: number, starCount: number) {
+  const fallbackWidth = canvasWidth * 0.86 * BACK_ARTWORK_SCALE;
+  if (starCount < 2) return fallbackWidth;
+
+  const outerStarAngle = ((starCount - 1) / 2) * approvedJacketLayout.starStepDegrees * Math.PI / 180;
+  const outerStarCenterOffset = approvedJacketLayout.starArc * Math.sin(outerStarAngle);
+  const renderedStarRadius = approvedJacketLayout.starRadius * BACK_ARTWORK_SCALE;
+  const outerEdgeWidth = (outerStarCenterOffset + renderedStarRadius) * 2;
+
+  return Math.min(canvasWidth * 0.94, Math.max(fallbackWidth, outerEdgeWidth));
+}
+
 function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, color: string, rotation = 0) {
   ctx.save();
   ctx.translate(cx, cy);
@@ -531,6 +589,7 @@ function drawBackDesign(
   canvas: HTMLCanvasElement,
   design: BackDesign,
   jacketEdition: JacketEdition,
+  cityLayout: BackCityLayout,
   classicEstMark: HTMLCanvasElement | null,
   footballersEstMark: HTMLCanvasElement | null,
   starMark: HTMLCanvasElement | null,
@@ -555,28 +614,116 @@ function drawBackDesign(
     drawStarMark(ctx, starMark, x, y, approvedJacketLayout.starRadius * BACK_ARTWORK_SCALE, a);
   }
 
-  // City rides high, stretched to span the shoulders like the reference.
+  // The approved live default uses two balanced lines whenever a long name
+  // would exceed the back panel. The other branches remain local review
+  // variants for future layout comparisons.
   const city = design.city.trim().toUpperCase();
   if (city) {
-    const fontSize = (city.length > 9 ? 82 : 100) * BACK_ARTWORK_SCALE;
-    ctx.font = `400 ${fontSize}px 'League Spartan', sans-serif`;
-    const natural = ctx.measureText(city).width || 1;
-    const cityMaxWidth = w * 0.86 * BACK_ARTWORK_SCALE;
-    const sx = Math.min(Math.max(cityMaxWidth / natural, 1), 1.35);
-    ctx.save();
-    ctx.translate(w / 2, 0);
-    ctx.scale(sx, 1);
-    outlinedTrackedText(
-      ctx,
-      city,
-      0,
-      approvedJacketLayout.cityY,
-      fontSize,
-      design.backPrintColor,
-      cityMaxWidth / sx,
-      fontSize * 0.035,
-    );
-    ctx.restore();
+    const cityMaxWidth = cityLayout === "outer-star-span"
+      ? outerStarSpanCityWidth(w, stars)
+      : w * 0.86 * BACK_ARTWORK_SCALE;
+    const trackingRatio = cityLayout === "wide-letter-spacing" ? 0.14 : 0.035;
+    const preferredFontSize = 100 * BACK_ARTWORK_SCALE;
+
+    if (cityLayout === "fill-width") {
+      const fontSize = (city.length > 9 ? 82 : 100) * BACK_ARTWORK_SCALE;
+      ctx.font = `400 ${fontSize}px 'League Spartan', sans-serif`;
+      const naturalWidth = ctx.measureText(city).width || 1;
+      const horizontalScale = Math.min(Math.max(cityMaxWidth / naturalWidth, 1), 1.35);
+      ctx.save();
+      ctx.translate(w / 2, 0);
+      ctx.scale(horizontalScale, 1);
+      outlinedTrackedText(
+        ctx,
+        city,
+        0,
+        approvedJacketLayout.cityY,
+        fontSize,
+        design.backPrintColor,
+        cityMaxWidth / horizontalScale,
+        fontSize * trackingRatio,
+      );
+      ctx.restore();
+    } else if (cityLayout === "fixed-size") {
+      ctx.font = `400 ${preferredFontSize}px 'League Spartan', sans-serif`;
+      outlinedTrackedText(
+        ctx,
+        city,
+        w / 2,
+        approvedJacketLayout.cityY,
+        preferredFontSize,
+        design.backPrintColor,
+        Number.MAX_SAFE_INTEGER,
+        preferredFontSize * trackingRatio,
+      );
+    } else if (cityLayout === "compact-single-line" || cityLayout === "wide-letter-spacing") {
+      const compactMaxWidth = w * (cityLayout === "wide-letter-spacing" ? 0.86 : 0.68) * BACK_ARTWORK_SCALE;
+      const compactPreferredFontSize = (cityLayout === "wide-letter-spacing" ? 78 : 82) * BACK_ARTWORK_SCALE;
+      const fontSize = fittedTrackedFontSize(
+        ctx,
+        city,
+        compactPreferredFontSize,
+        compactMaxWidth,
+        trackingRatio,
+      );
+      ctx.font = `400 ${fontSize}px 'League Spartan', sans-serif`;
+      outlinedTrackedText(
+        ctx,
+        city,
+        w / 2,
+        approvedJacketLayout.cityY,
+        fontSize,
+        design.backPrintColor,
+        compactMaxWidth,
+        fontSize * trackingRatio,
+      );
+    } else if (cityLayout === "wrap-two-lines") {
+      const naturalWidth = measuredTrackedTextWidth(ctx, city, preferredFontSize, trackingRatio);
+      const lines = naturalWidth > cityMaxWidth
+        ? balancedTextLines(
+          city,
+          (line) => measuredTrackedTextWidth(ctx, line, preferredFontSize, trackingRatio),
+        )
+        : [city];
+      const fontSize = lines.reduce(
+        (size, line) => Math.min(size, fittedTrackedFontSize(ctx, line, preferredFontSize, cityMaxWidth, trackingRatio)),
+        preferredFontSize,
+      );
+      const lineGap = fontSize * 0.92;
+      const firstLineY = approvedJacketLayout.cityY - (lineGap * (lines.length - 1)) / 2;
+      ctx.font = `400 ${fontSize}px 'League Spartan', sans-serif`;
+      lines.forEach((line, index) => {
+        outlinedTrackedText(
+          ctx,
+          line,
+          w / 2,
+          firstLineY + lineGap * index,
+          fontSize,
+          design.backPrintColor,
+          cityMaxWidth,
+          fontSize * trackingRatio,
+        );
+      });
+    } else {
+      const fontSize = fittedTrackedFontSize(
+        ctx,
+        city,
+        preferredFontSize,
+        cityMaxWidth,
+        trackingRatio,
+      );
+      ctx.font = `400 ${fontSize}px 'League Spartan', sans-serif`;
+      outlinedTrackedText(
+        ctx,
+        city,
+        w / 2,
+        approvedJacketLayout.cityY,
+        fontSize,
+        design.backPrintColor,
+        cityMaxWidth,
+        fontSize * trackingRatio,
+      );
+    }
   }
 
   const number = design.backNumber.trim();
@@ -745,6 +892,7 @@ interface VarsityJacketViewerProps {
   pocketColor: string;
   liningColor: string;
   backDesign: BackDesign;
+  backCityLayout?: BackCityLayout;
 }
 
 type PartMaterials = {
@@ -1040,12 +1188,20 @@ function makeEmbroideryEdgeMaterial(texture: THREE.CanvasTexture): THREE.MeshSta
 
 export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
   const { bodyColor, bodyMaterial, sleeveColor, leatherType, trimColor, snapColor, pocketColor, liningColor } = props;
+  const previewStaticBack = new URLSearchParams(window.location.search).get("previewBack") === "1";
 
   const mountRef = useRef<HTMLDivElement>(null);
   const [viewerStatus, setViewerStatus] = useState<"loading" | "ready" | "error">("loading");
   const [retryKey, setRetryKey] = useState(0);
   const automaticRetryRef = useRef(0);
-  const dragRef = useRef({ active: false, x: 0, y: 0, rotY: 0.0, rotX: -0.05, lastInteraction: 0 });
+  const dragRef = useRef({
+    active: false,
+    x: 0,
+    y: 0,
+    rotY: previewStaticBack ? Math.PI : 0,
+    rotX: -0.05,
+    lastInteraction: 0,
+  });
   const loadedRef = useRef<Loaded | null>(null);
   const frameRef = useRef(0);
   const propsRef = useRef(props);
@@ -1071,6 +1227,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       loaded.back.canvas,
       design,
       propsRef.current.jacketEdition,
+      propsRef.current.backCityLayout ?? "wrap-two-lines",
       loaded.classicEstMark,
       loaded.footballersEstMark,
       loaded.starMark,
@@ -1085,7 +1242,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
   useEffect(() => {
     redrawDesign();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.backDesign]);
+  }, [props.backDesign, props.backCityLayout]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -1926,7 +2083,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       // poster is visible. Rotating it before the handoff made the two jacket
       // images visibly diverge during the initial reveal. Once ready, keep the
       // full jacket turning slowly whenever the customer is not dragging it.
-      if (readyReported && !reduceMotion && !d.active) {
+      if (readyReported && !reduceMotion && !d.active && !previewStaticBack) {
         d.rotY += clock.getDelta() * 0.105;
       } else {
         clock.getDelta();

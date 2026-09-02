@@ -11,7 +11,7 @@
     "firebase:deploy": "firebase deploy --only functions,firestore:rules,firestore:indexes",
     "firebase:emulators": "firebase emulators:start --project demo-manoir-kits",
     "firebase:test": "npm test --prefix functions",
-    "test:jacket-layout": "node --test test/jacket-artwork-layout.test.mjs",
+    "test:jacket-layout": "node --test test/*.test.mjs",
     "footballer": "node scripts/shopify-footballer.mjs",
     "shopify:feedback:setup": "node scripts/setup-shopify-feedback.mjs",
     "shopify:saved-jackets:setup": "node scripts/setup-shopify-saved-jackets.mjs",

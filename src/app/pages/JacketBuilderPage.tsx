@@ -3,7 +3,7 @@ import { ChevronRight, X, Star, SlidersHorizontal } from "lucide-react";
 import type { BackDesign, BodyMaterial } from "../components/VarsityJacketViewer";
 import { useNavigate } from "react-router-dom";
 import { createJacketCheckout, type ShopifyAttribute } from "../lib/shopify";
-import crestImage from "../../assets/manoir-kits-crest.png";
+import crestImage from "../../assets/manoir-kits-jacket-crest.png";
 import leatherNeckLabelImage from "../../assets/manoir-kits-leather-neck-label.png";
 import oneOfOnePatchImage from "../../assets/manoir-kits-one-of-one-patch.png";
 

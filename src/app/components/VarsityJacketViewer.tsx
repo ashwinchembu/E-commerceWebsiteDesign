@@ -8,7 +8,7 @@ import classicEstMarkImage from "../../assets/manoir-kits-classic-est-2026.png";
 import classicWordmarkImage from "../../assets/manoir-kits-classic-wordmark.png";
 import footballersEstMarkImage from "../../assets/manoir-kits-footballers-est-2026.png";
 import footballersWordmarkImage from "../../assets/manoir-kits-footballers-wordmark.png";
-import crestImage from "../../assets/manoir-kits-crest.png";
+import crestImage from "../../assets/manoir-kits-jacket-crest.png";
 import starMarkImage from "../../assets/manoir-kits-star.png";
 import approvedJacketLayout from "../config/approvedJacketLayout.json";
 import { balancedTextLines, fitUniformFontSize } from "../lib/jacketArtworkFit";

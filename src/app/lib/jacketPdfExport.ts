@@ -1,3 +1,11 @@
+import wordmarkSource from "../../assets/manoir-kits-footballers-wordmark.png";
+import estSource from "../../assets/manoir-kits-footballers-est-2026.png";
+import classicWordmarkSource from "../../assets/manoir-kits-classic-wordmark.png";
+import classicEstSource from "../../assets/manoir-kits-classic-est-2026.png";
+import badgePhotoSource from "../../assets/manufacturer-reference/badge-edge.jpeg";
+import starsPhotoSource from "../../assets/manufacturer-reference/star-group.jpeg";
+import starPhotoSource from "../../assets/manufacturer-reference/star-detail.jpeg";
+
 export type JacketCaptureView = "front" | "back" | "left" | "right";
 
 export interface JacketReferencePdfInput {
@@ -30,13 +38,13 @@ const PAGE_WIDTH = 1754;
 const PAGE_HEIGHT = 1240;
 const PDF_PAGE_WIDTH = 841.89;
 const PDF_PAGE_HEIGHT = 595.28;
-const INK = "#111111";
-const GOLD = "#c9a84c";
-const PAPER = "#f6f4ef";
+const INK = "#202624";
+const GOLD = "#ac8534";
+const PAPER = "#ffffff";
 const WHITE = "#ffffff";
 const MUTED = "#77746f";
-const BORDER = "#d8d3c9";
-const PALE_GOLD = "#eee6d1";
+const BORDER = "#d9ddd7";
+const PALE_GOLD = "#f5f6f3";
 
 function asciiBytes(value: string) {
   return new TextEncoder().encode(value);
@@ -198,8 +206,6 @@ function drawContainedImage(
 
 function drawHeader(context: CanvasRenderingContext2D, section: string, title: string, subtitle: string) {
   context.fillStyle = GOLD;
-  context.fillRect(72, 48, 74, 5);
-  context.fillStyle = GOLD;
   context.font = "600 19px 'League Spartan', Arial, sans-serif";
   context.fillText("MANOIR KITS", 72, 88);
   context.fillStyle = MUTED;
@@ -209,11 +215,11 @@ function drawHeader(context: CanvasRenderingContext2D, section: string, title: s
   context.fillText("PRIVATE STUDIO / MANUFACTURER REFERENCE", PAGE_WIDTH - 72, 88);
   context.textAlign = "left";
   context.fillStyle = INK;
-  context.font = "600 48px 'League Spartan', Arial, sans-serif";
+  context.font = "500 44px 'League Spartan', Arial, sans-serif";
   context.fillText(title, 72, 188);
   context.fillStyle = MUTED;
   context.font = "400 19px 'League Spartan', Arial, sans-serif";
-  context.fillText(subtitle, 72, 224);
+  context.fillText(subtitle, 72, 224, PAGE_WIDTH - 144);
 }
 
 function drawFooter(context: CanvasRenderingContext2D, page: number, total: number, generatedAt: Date) {
@@ -253,7 +259,10 @@ function drawViewCard(
   context.fillStyle = MUTED;
   context.font = "500 15px 'League Spartan', Arial, sans-serif";
   context.fillText(label.toUpperCase(), x + 24, y + 35);
-  drawContainedImage(context, image, image.width, image.height, x + 8, y + 50, width - 16, height - 58, 10);
+  const scale = Math.min((width - 80) / image.width, (height - 100) / image.height);
+  const bounds = { x: x + (width - image.width * scale) / 2, y: y + 50 + (height - 58 - image.height * scale) / 2, width: image.width * scale, height: image.height * scale };
+  context.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height);
+  return bounds;
 }
 
 function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: number) {
@@ -274,7 +283,7 @@ function wrapText(context: CanvasRenderingContext2D, text: string, maxWidth: num
 }
 
 function drawNumberMarker(context: CanvasRenderingContext2D, number: number, x: number, y: number) {
-  context.fillStyle = GOLD;
+  context.fillStyle = INK;
   context.beginPath();
   context.arc(x, y, 18, 0, Math.PI * 2);
   context.fill();
@@ -296,10 +305,16 @@ function drawCallout(
   toY: number,
 ) {
   context.strokeStyle = GOLD;
-  context.lineWidth = 2;
+  context.lineWidth = 1.5;
   context.beginPath();
   context.moveTo(fromX, fromY);
-  context.lineTo(toX - 24, toY);
+  const distance = Math.hypot(toX - fromX, toY - fromY);
+  context.lineTo(toX - (toX - fromX) * 23 / distance, toY - (toY - fromY) * 23 / distance);
+  context.stroke();
+  context.fillStyle = WHITE;
+  context.beginPath();
+  context.arc(fromX, fromY, 4, 0, Math.PI * 2);
+  context.fill();
   context.stroke();
   drawNumberMarker(context, number, toX, toY);
 }
@@ -317,7 +332,10 @@ function drawDetailCard(
   context.fillStyle = WHITE;
   context.fillRect(x, y, width, height);
   context.strokeStyle = BORDER;
-  context.strokeRect(x, y, width, height);
+  context.beginPath();
+  context.moveTo(x + 70, y + height);
+  context.lineTo(x + width, y + height);
+  context.stroke();
   drawNumberMarker(context, number, x + 34, y + 34);
   context.fillStyle = MUTED;
   context.font = "500 14px 'League Spartan', Arial, sans-serif";
@@ -368,44 +386,48 @@ function drawNoteBox(
   lines.slice(0, 5).forEach((line, index) => context.fillText(line, x + 24, y + 66 + index * 22));
 }
 
-function drawSequence(
-  context: CanvasRenderingContext2D,
-  label: string,
-  values: string[],
-  x: number,
-  y: number,
-  width: number,
-) {
-  context.fillStyle = WHITE;
-  context.fillRect(x, y, width, 154);
-  context.strokeStyle = BORDER;
-  context.strokeRect(x, y, width, 154);
+function drawSleeveDetails(context: CanvasRenderingContext2D, values: string[], color: string, x: number, y: number, width: number, height: number) {
   context.fillStyle = MUTED;
-  context.font = "500 14px 'League Spartan', Arial, sans-serif";
-  context.fillText(label.toUpperCase(), x + 24, y + 31);
+  context.font = "500 15px Arial, sans-serif";
+  context.fillText("DETAIL", x, y - 20);
   const selected = values.filter(Boolean);
   if (!selected.length) {
-    context.fillStyle = INK;
-    context.font = "600 20px 'League Spartan', Arial, sans-serif";
-    context.fillText("No numbers selected", x + 24, y + 89);
+    context.font = "400 17px Arial, sans-serif";
+    context.fillText("No numbers", x, y + 30);
     return;
   }
-  let chipX = x + 24;
+  const gap = 14;
+  const h = Math.min(120, (height - (selected.length - 1) * gap) / selected.length);
   selected.forEach((value, index) => {
-    context.fillStyle = INK;
-    context.fillRect(chipX, y + 56, 82, 64);
-    context.fillStyle = GOLD;
-    context.font = "600 29px 'League Spartan', Arial, sans-serif";
+    const top = y + index * (h + gap);
+    context.fillStyle = PALE_GOLD;
+    context.fillRect(x, top, width, h);
+    context.strokeStyle = BORDER;
+    context.lineWidth = 1;
+    context.strokeRect(x, top, width, h);
+    context.font = `600 ${Math.min(52, h * .6)}px Arial, sans-serif`;
     context.textAlign = "center";
-    context.fillText(value, chipX + 41, y + 98);
+    context.textBaseline = "middle";
+    context.strokeStyle = "#b7ae94";
+    context.lineWidth = 1;
+    context.strokeText(value, x + width / 2, top + h / 2);
+    context.fillStyle = color;
+    context.fillText(value, x + width / 2, top + h / 2);
     context.textAlign = "left";
-    chipX += 104;
-    if (index < selected.length - 1) {
-      context.fillStyle = MUTED;
-      context.font = "500 18px Arial, sans-serif";
-      context.fillText("/", chipX - 15, y + 94);
-    }
+    context.textBaseline = "alphabetic";
   });
+}
+
+function drawArtwork(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {
+  const cropped = cropTransparentImage(image);
+  context.fillStyle = PALE_GOLD;
+  context.fillRect(x, y, width, height);
+  drawContainedImage(context, cropped, cropped.width, cropped.height, x, y, width, height, 12);
+}
+
+function markView(context: CanvasRenderingContext2D, number: number, bounds: {x: number; y: number; width: number; height: number}, anchor: number[], marker: number[]) {
+  drawCallout(context, number, bounds.x + anchor[0] * bounds.width, bounds.y + anchor[1] * bounds.height,
+    bounds.x + marker[0] * bounds.width, bounds.y + marker[1] * bounds.height);
 }
 
 function drawSpecificationRow(
@@ -467,7 +489,10 @@ function materialFor(input: JacketReferencePdfInput, label: string) {
 }
 
 export async function downloadJacketReferencePdf(input: JacketReferencePdfInput) {
-  const [front, back, left, right, neckLabel, oneOfOnePatch, crest] = await Promise.all([
+  const isFootballers = input.edition.toLowerCase() === "footballers";
+  const wordmarkDescription = isFootballers ? "Cursive chest wordmark" : "Classic chest wordmark";
+  const estDescription = isFootballers ? "Cursive direct embroidery at the lower back." : "Classic EST. 2026 artwork at the lower back.";
+  const [front, back, left, right, neckLabel, oneOfOnePatch, crest, wordmark, est, badgePhoto, starsPhoto, starPhoto] = await Promise.all([
     loadImage(input.captures.front),
     loadImage(input.captures.back),
     loadImage(input.captures.left),
@@ -475,6 +500,11 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
     loadImage(input.interiorImages.neckLabel),
     loadImage(input.interiorImages.oneOfOnePatch),
     loadImage(input.interiorImages.crest),
+    loadImage(isFootballers ? wordmarkSource : classicWordmarkSource),
+    loadImage(isFootballers ? estSource : classicEstSource),
+    loadImage(badgePhotoSource),
+    loadImage(starsPhotoSource),
+    loadImage(starPhotoSource),
   ]);
   const jacketViews = {
     front: cropTransparentImage(front),
@@ -501,30 +531,21 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
       "Front / materials and chest details",
       `${input.designName} - ${input.edition} edition`,
     );
-    drawViewCard(context, jacketViews.front, "Front view / placement reference", 72, 276, 800, 836);
-    const detailX = 970;
-    const detailWidth = 712;
-    const cardHeight = 116;
+    const bounds = drawViewCard(context, jacketViews.front, "Front view / wearer-facing reference", 72, 276, 860, 836);
+    const detailX = 980;
+    const detailWidth = 702;
     const details = [
-      { label: "Chest wordmark", value: "Manoir Kits script - direct embroidery", y: 286, fromX: 390, fromY: 505 },
-      { label: "MK crest", value: "Crest patch - placement follows front rendering", y: 430, fromX: 552, fromY: 518 },
-      { label: "Body", value: `${input.bodyMaterial} - ${body.value}`, y: 574, fromX: 470, fromY: 710 },
-      { label: "Sleeves and pockets", value: `${input.leatherType} leather - ${sleeves.value} / ${pockets.value}`, y: 718, fromX: 272, fromY: 748 },
-      { label: "Snaps and knit trim", value: `${snaps.value} snaps - ${trim.value} trim`, y: 862, fromX: 475, fromY: 936 },
+      { label: wordmarkDescription, value: "Wearer right / viewer left. Direct embroidery.", y: 276, h: 206, anchor: [.26,.31], marker: [0,.31], art: wordmark },
+      { label: "MK badge", value: "Wearer left / viewer right. See badge edge on page 5.", y: 502, h: 206, anchor: [.67,.31], marker: [1,.31], art: crest },
+      { label: "Body", value: `${body.value} / ${input.bodyMaterial}`, y: 730, h: 108, anchor: [.49,.23], marker: [.49,.07] },
+      { label: "Sleeves + pockets", value: `${input.leatherType} leather. Sleeves: ${sleeves.value}. Pockets: ${pockets.value}.`, y: 860, h: 108, anchor: [.86,.61], marker: [1,.61] },
+      { label: "Snaps + knit trim", value: `${snaps.value} snaps. ${trim.value} collar, cuffs and waistband.`, y: 990, h: 108, anchor: [.54,.87], marker: [.54,.99] },
     ];
     details.forEach((detail, index) => {
-      drawCallout(context, index + 1, detail.fromX, detail.fromY, detailX + 34, detail.y + 34);
-      drawDetailCard(context, index + 1, detail.label, detail.value, detailX, detail.y, detailWidth, cardHeight);
+      markView(context, index + 1, bounds, detail.anchor, detail.marker);
+      drawDetailCard(context, index + 1, detail.label, detail.value, detailX, detail.y, detailWidth, detail.h);
+      if (detail.art) drawArtwork(context, detail.art, detailX + 70, detail.y + 100, detailWidth - 90, 88);
     });
-    drawNoteBox(
-      context,
-      "Front approval note",
-      "Use this page for placement and proportion. Confirm physical color swatches, artwork dimensions and stitch proofs before production.",
-      detailX,
-      1010,
-      detailWidth,
-      102,
-    );
     drawFooter(context, 1, pageCount, input.generatedAt);
     pages.push(canvas);
   }
@@ -537,28 +558,25 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
       "Back / artwork and placement",
       `${input.stars} golden ${input.stars === 1 ? "star" : "stars"} - ${(input.backName || "name").toUpperCase()} - ${input.backNumber || "number"}`,
     );
-    drawViewCard(context, jacketViews.back, "Back view / placement reference", 72, 276, 800, 836);
-    const detailX = 970;
-    const detailWidth = 712;
+    const bounds = drawViewCard(context, jacketViews.back, "Back view / placement reference", 72, 276, 860, 836);
+    const detailX = 980;
+    const detailWidth = 702;
     const details = [
-      { label: "Gold star arc", value: `${input.stars} star${input.stars === 1 ? "" : "s"} centered above the name`, y: 310, fromX: 470, fromY: 430 },
-      { label: "Back name", value: (input.backName || "None").toUpperCase(), y: 470, fromX: 470, fromY: 600 },
-      { label: "Back number", value: input.backNumber || "None", y: 630, fromX: 470, fromY: 760 },
-      { label: "Lower-back mark", value: "EST. 2026 - centered below the number", y: 790, fromX: 470, fromY: 935 },
+      { label: "Golden stars", value: `${input.stars} star${input.stars === 1 ? "" : "s"} at the top center. Layered applique construction; see page 5.`, y: 286, anchor: [.68,.23] },
+      { label: "Back name", value: `${(input.backName || "None").toUpperCase()} / ${backArtwork.value} artwork`, y: 465, anchor: [.65,.30] },
+      { label: "Back number", value: `${input.backNumber || "None"} / ${backArtwork.value} artwork`, y: 644, anchor: [.69,.52] },
+      { label: "Est. 2026", value: estDescription, y: 823, anchor: [.64,.67] },
     ];
     details.forEach((detail, index) => {
-      drawCallout(context, index + 1, detail.fromX, detail.fromY, detailX + 34, detail.y + 34);
-      drawDetailCard(context, index + 1, detail.label, detail.value, detailX, detail.y, detailWidth, 128);
+      if ((index !== 0 || input.stars > 0) && (index !== 1 || input.backName) && (index !== 2 || input.backNumber)) {
+        markView(context, index + 1, bounds, detail.anchor, [1, detail.anchor[1] + .04]);
+      }
+      drawDetailCard(context, index + 1, detail.label, detail.value, detailX, detail.y, detailWidth, index === 3 ? 220 : 142);
     });
-    drawNoteBox(
-      context,
-      "Placement order",
-      "Keep the star arc, name, number and EST. 2026 mark in this fixed top-to-bottom order. Match the rendered spacing and proportions.",
-      detailX,
-      968,
-      detailWidth,
-      144,
-    );
+    drawArtwork(context, est, detailX + 70, 923, detailWidth - 90, 100);
+    context.fillStyle = MUTED;
+    context.font = "400 17px Arial, sans-serif";
+    context.fillText("Top to bottom: stars, name, number, establishment mark.", detailX + 20, 1092);
     drawFooter(context, 2, pageCount, input.generatedAt);
     pages.push(canvas);
   }
@@ -571,19 +589,19 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
       "Sleeves / placement and number details",
       "Wearer-side convention - every number sits on the outside face of the sleeve",
     );
-    drawViewCard(context, jacketViews.left, "Wearer-left sleeve / outside face", 72, 276, 770, 548);
-    drawViewCard(context, jacketViews.right, "Wearer-right sleeve / outside face", 912, 276, 770, 548);
-    drawSequence(context, "Wearer-left - top to bottom", input.leftSleeveNumbers, 72, 854, 770);
-    drawSequence(context, "Wearer-right - top to bottom", input.rightSleeveNumbers, 912, 854, 770);
-    drawNoteBox(
-      context,
-      "Sleeve production rule",
-      "Place the sequences on the exterior of both sleeves in the order shown. Preserve leading zeros and confirm reading direction on the sewn sample.",
-      72,
-      1036,
-      1610,
-      82,
-    );
+    drawViewCard(context, jacketViews.left, "Wearer-left sleeve / outside", 290, 276, 552, 704);
+    drawViewCard(context, jacketViews.right, "Wearer-right sleeve / outside", 912, 276, 552, 704);
+    drawSleeveDetails(context, input.leftSleeveNumbers, sleeveArtwork.color, 72, 360, 180, 570);
+    drawSleeveDetails(context, input.rightSleeveNumbers, sleeveArtwork.color, 1502, 360, 180, 570);
+    context.fillStyle = INK;
+    context.font = "400 22px Arial, sans-serif";
+    context.textAlign = "center";
+    context.fillText(input.leftSleeveNumbers.filter(Boolean).join(" / ") || "No numbers", 566, 1020, 552);
+    context.fillText(input.rightSleeveNumbers.filter(Boolean).join(" / ") || "No numbers", 1188, 1020, 552);
+    context.textAlign = "left";
+    context.fillStyle = MUTED;
+    context.font = "400 18px Arial, sans-serif";
+    context.fillText("Read from shoulder toward cuff. Preserve leading zeros. Numbers appear on the outside of both sleeves and enlarged beside each view.", 72, 1100, 1610);
     drawFooter(context, 3, pageCount, input.generatedAt);
     pages.push(canvas);
   }
@@ -596,21 +614,21 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
       "Interior / black leather labels",
       "Label artwork, lining reference and required sewn-in proof",
     );
-    context.fillStyle = "#171717";
+    context.fillStyle = PALE_GOLD;
     context.fillRect(72, 286, 800, 362);
     drawContainedImage(context, neckLabel, neckLabel.naturalWidth, neckLabel.naturalHeight, 112, 326, 720, 245, 16);
-    context.fillStyle = WHITE;
+    context.fillStyle = INK;
     context.font = "500 14px 'League Spartan', Arial, sans-serif";
     context.fillText("LEATHER NECK LABEL / ARTWORK REFERENCE", 104, 620);
     const patch = compositeInteriorPatch(oneOfOnePatch, crest);
-    context.fillStyle = "#171717";
+    context.fillStyle = PALE_GOLD;
     context.fillRect(72, 678, 800, 362);
     drawContainedImage(context, patch, patch.width, patch.height, 155, 710, 634, 250, 8);
-    context.fillStyle = WHITE;
+    context.fillStyle = INK;
     context.fillText("ONE OF ONE / LEGEND'S EDITION LINING PATCH", 104, 1012);
 
     const detailX = 930;
-    drawDetailCard(context, 1, "Neck label", "Black leather label with supplied gold Manoir Kits artwork", detailX, 286, 752, 130);
+    drawDetailCard(context, 1, "Neck label", "Black leather with white debossed Manoir Kits text", detailX, 286, 752, 130);
     drawDetailCard(context, 2, "One of one patch", "Black leather patch with crest and edition wording", detailX, 444, 752, 130);
     drawDetailCard(context, 3, "Placement", "Neck label at inside neck; edition patch on interior lining", detailX, 602, 752, 130);
     context.fillStyle = WHITE;
@@ -637,77 +655,22 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
       context,
       "05 / Construction",
       "Applique / construction references",
-      "Artwork intent and build method for manufacturer confirmation",
+      "Original supplier-reference photos / embroidered edges and layered applique",
     );
-    const cardY = 286;
-    const cardWidth = 500;
-    const artHeight = 500;
-    const artCards = [72, 627, 1182];
-    artCards.forEach((x) => {
-      context.fillStyle = WHITE;
-      context.fillRect(x, cardY, cardWidth, artHeight);
-      context.strokeStyle = BORDER;
-      context.strokeRect(x, cardY, cardWidth, artHeight);
+    const photos = [badgePhoto, starsPhoto, starPhoto];
+    const labels = ["BADGE / EMBROIDERED EDGE", "STARS / LAYERED CONSTRUCTION", "STAR / CLOSE DETAIL"];
+    photos.forEach((photo, index) => {
+      const x = 72 + index * 552;
+      context.fillStyle = PALE_GOLD;
+      context.fillRect(x, 286, 506, 584);
+      drawContainedImage(context, photo, photo.naturalWidth, photo.naturalHeight, x + 12, 298, 482, 560);
+      context.fillStyle = INK;
+      context.font = "500 18px Arial, sans-serif";
+      context.fillText(labels[index], x, 908);
     });
-
-    context.fillStyle = "#171717";
-    context.fillRect(94, cardY + 56, 456, 350);
-    drawContainedImage(context, crest, crest.naturalWidth, crest.naturalHeight, 128, cardY + 90, 388, 282, 12);
-    context.fillStyle = MUTED;
-    context.font = "500 14px 'League Spartan', Arial, sans-serif";
-    context.fillText("CREST / STAR / PATCH DETAILS", 96, cardY + 452);
-
-    context.fillStyle = "#171717";
-    context.fillRect(649, cardY + 56, 456, 350);
-    drawContainedImage(context, oneOfOnePatch, oneOfOnePatch.naturalWidth, oneOfOnePatch.naturalHeight, 675, cardY + 96, 404, 270, 10);
-    context.fillStyle = MUTED;
-    context.fillText("INTERIOR PATCH CONSTRUCTION", 651, cardY + 452);
-
-    context.fillStyle = "#171717";
-    context.fillRect(1204, cardY + 56, 456, 350);
-    context.fillStyle = GOLD;
-    context.textAlign = "center";
-    context.font = "600 34px 'League Spartan', Arial, sans-serif";
-    context.fillText((input.backName || "NAME").toUpperCase(), 1432, cardY + 155);
-    context.font = "600 128px 'League Spartan', Arial, sans-serif";
-    context.fillText(input.backNumber || "00", 1432, cardY + 300);
-    context.font = "500 24px 'League Spartan', Arial, sans-serif";
-    context.fillText("EST. 2026", 1432, cardY + 354);
-    context.textAlign = "left";
-    context.fillStyle = MUTED;
-    context.font = "500 14px 'League Spartan', Arial, sans-serif";
-    context.fillText("BACK AND SLEEVE APPLIQUE", 1206, cardY + 452);
-
-    drawNoteBox(
-      context,
-      "Chest artwork",
-      "Use direct embroidery for the cursive Manoir Kits wordmark. Confirm thread color, stitch density, backing and exact size from the artwork file.",
-      72,
-      818,
-      cardWidth,
-      226,
-    );
-    drawNoteBox(
-      context,
-      "Patches and stars",
-      "Use embroidered or applique construction for the crest, stars and interior patch. Manufacturer must confirm edge finish, layers and attachment method.",
-      627,
-      818,
-      cardWidth,
-      226,
-    );
-    drawNoteBox(
-      context,
-      "Names and numbers",
-      "Use applique or embroidery for the back name, back number and outside sleeve numbers. Preserve the selected color and all leading zeros.",
-      1182,
-      818,
-      cardWidth,
-      226,
-    );
-    context.fillStyle = MUTED;
-    context.font = "400 15px 'League Spartan', Arial, sans-serif";
-    context.fillText("Final dimensions, stitch files, materials and physical construction samples require manufacturer approval.", 72, 1096);
+    drawNoteBox(context, "Apply the supplied construction references",
+      `Original OVO jacket photos supplied by Harnoor. Match the embroidery and layered edge treatment for the badge, stars, names and numbers. This design uses ${input.stars} stars; the red color and five-star arrangement in the photos are examples only. Confirm applique leather, thread and dimensions before production.`,
+      72, 950, 1610, 172);
     drawFooter(context, 5, pageCount, input.generatedAt);
     pages.push(canvas);
   }
@@ -731,7 +694,7 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
       ["Knit trim", trim.value],
       ["Inside lining", lining.value],
       ["Artwork color", backArtwork.value],
-      ["Chest wordmark", "Manoir Kits script - direct embroidery"],
+      ["Chest wordmark", `${isFootballers ? "Cursive" : "Classic"} Manoir Kits - direct embroidery`],
       ["Crest", "MK crest patch - front chest"],
       ["Back stars", `${input.stars} gold star${input.stars === 1 ? "" : "s"}`],
       ["Back name", (input.backName || "None").toUpperCase()],
@@ -740,7 +703,7 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
       ["Right sleeve outside", input.rightSleeveNumbers.filter(Boolean).join(" / ") || "None"],
       ["Sleeve artwork color", sleeveArtwork.value],
       ["One of one patch", "Black leather / gold artwork / interior lining"],
-      ["Neck label", "Black leather / gold Manoir Kits artwork"],
+      ["Neck label", "Black leather / white debossed text"],
     ];
     const half = Math.ceil(specs.length / 2);
     const columns = [specs.slice(0, half), specs.slice(half)];

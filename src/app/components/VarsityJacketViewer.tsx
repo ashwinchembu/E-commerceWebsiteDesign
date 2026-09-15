@@ -1903,8 +1903,9 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       const captureAngles: Record<JacketCaptureView, number> = {
         front: 0,
         back: Math.PI,
-        left: Math.PI / 2,
-        right: -Math.PI / 2,
+        // Name captures by the wearer's sleeve, not the camera's side.
+        left: -Math.PI / 2,
+        right: Math.PI / 2,
       };
       const captureJacketView: JacketCaptureFunction = (view) => {
         if (disposed || !modelPrepared) throw new Error("Jacket preview is not ready.");

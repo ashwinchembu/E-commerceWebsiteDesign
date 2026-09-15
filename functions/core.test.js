@@ -40,16 +40,20 @@ test("admin bootstrap requires an exact verified allowlisted email", () => {
     false,
   );
   assert.equal(
+    isAuthorizedAdminEmail("skpbains@gmail.com", true, allowlist),
+    false,
+  );
+  assert.equal(
     isAuthorizedAdminEmail("ashchembu@gmail.com.evil.test", true, allowlist),
     false,
   );
 });
 
 test("Studio sign-in requires Google and an exact verified allowlisted email", () => {
-  const allowlist = ["ashchembu@gmail.com", "skpbains@gmail.com"];
+  const allowlist = ["manoirkits@gmail.com", "harnoor.bains@gmail.com"];
   assert.equal(
     isAuthorizedGoogleEmail(
-      " SKPBAINS@GMAIL.COM ",
+      " HARNOOR.BAINS@GMAIL.COM ",
       true,
       "google.com",
       allowlist,
@@ -58,7 +62,7 @@ test("Studio sign-in requires Google and an exact verified allowlisted email", (
   );
   assert.equal(
     isAuthorizedGoogleEmail(
-      "skpbains@gmail.com",
+      "harnoor.bains@gmail.com",
       true,
       "password",
       allowlist,
@@ -72,11 +76,29 @@ test("Studio sign-in requires Google and an exact verified allowlisted email", (
       "google.com",
       allowlist,
     ),
+    true,
+  );
+  assert.equal(
+    isAuthorizedGoogleEmail(
+      "harnoor.bains@gmail.com.evil.test",
+      true,
+      "google.com",
+      allowlist,
+    ),
     false,
   );
   assert.equal(
     isAuthorizedGoogleEmail(
-      "skpbains@gmail.com.evil.test",
+      "ashchembu@gmail.com",
+      true,
+      "google.com",
+      allowlist,
+    ),
+    false,
+  );
+  assert.equal(
+    isAuthorizedGoogleEmail(
+      "skpbains@gmail.com",
       true,
       "google.com",
       allowlist,
@@ -91,7 +113,7 @@ test("request-card ownership is exact and case insensitive", () => {
     true,
   );
   assert.equal(
-    isRequestCardOwnerEmail("skpbains@gmail.com", "ashchembu@gmail.com"),
+    isRequestCardOwnerEmail("harnoor.bains@gmail.com", "ashchembu@gmail.com"),
     false,
   );
   assert.equal(

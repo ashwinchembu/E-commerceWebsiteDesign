@@ -103,11 +103,10 @@ const FEEDBACK_ALLOWED_ORIGINS = [
 const ADMIN_EMAIL_ALLOWLIST = [
   "ashchembu@gmail.com",
   "manoirkits@gmail.com",
-  "skpbains@gmail.com",
 ];
 const STUDIO_GOOGLE_EMAIL_ALLOWLIST = [
-  "ashchembu@gmail.com",
-  "skpbains@gmail.com",
+  "manoirkits@gmail.com",
+  "harnoor.bains@gmail.com",
 ];
 const REQUEST_CARD_OWNER_EMAIL = "ashchembu@gmail.com";
 

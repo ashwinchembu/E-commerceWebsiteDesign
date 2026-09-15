@@ -83,13 +83,13 @@ test("the private studio exposes custom names, sleeve numbers, and one to ten st
 test("the studio PDF assembler writes one valid page object for every jacket view page", () => {
   const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
   const pdf = assemblePdfFromJpegs(
-    Array.from({ length: 5 }, () => ({ bytes: jpeg, width: 1, height: 1 })),
+    Array.from({ length: 6 }, () => ({ bytes: jpeg, width: 1, height: 1 })),
   );
   const source = new TextDecoder("latin1").decode(pdf);
   assert.ok(source.startsWith("%PDF-1.4"));
-  assert.equal(source.match(/\/Type \/Page\b/g)?.length, 5);
-  assert.match(source, /\/Count 5/);
-  assert.match(source, /xref\n0 18/);
+  assert.equal(source.match(/\/Type \/Page\b/g)?.length, 6);
+  assert.match(source, /\/Count 6/);
+  assert.match(source, /xref\n0 21/);
   assert.match(source, /startxref\n\d+\n%%EOF/);
 });
 

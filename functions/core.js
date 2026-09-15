@@ -617,6 +617,18 @@ export function isAuthorizedAdminEmail(value, emailVerified, allowlist) {
   );
 }
 
+export function isAuthorizedGoogleEmail(
+  value,
+  emailVerified,
+  signInProvider,
+  allowlist,
+) {
+  return (
+    signInProvider === "google.com" &&
+    isAuthorizedAdminEmail(value, emailVerified, allowlist)
+  );
+}
+
 function validEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }

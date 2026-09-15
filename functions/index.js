@@ -21,6 +21,7 @@ import {
   grantState,
   historicalRequestWorkEntries,
   isAuthorizedAdminEmail,
+  isAuthorizedGoogleEmail,
   isRequestCardOwnerEmail,
   normalizeClientMeta,
   normalizeChangeRequestLog,
@@ -104,6 +105,10 @@ const ADMIN_EMAIL_ALLOWLIST = [
   "manoirkits@gmail.com",
   "skpbains@gmail.com",
 ];
+const STUDIO_GOOGLE_EMAIL_ALLOWLIST = [
+  "ashchembu@gmail.com",
+  "skpbains@gmail.com",
+];
 const REQUEST_CARD_OWNER_EMAIL = "ashchembu@gmail.com";
 
 function assertAdmin(request) {
@@ -155,6 +160,38 @@ export const claimAdminAccess = onCall(async (request) => {
   }
 
   return { authorized: true };
+});
+
+export const getStudioSession = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Google sign-in is required.");
+  }
+
+  const user = await auth.getUser(request.auth.uid);
+  const email = request.auth.token.email || user.email;
+  const emailVerified =
+    request.auth.token.email_verified === true && user.emailVerified === true;
+  const signInProvider = request.auth.token.firebase?.sign_in_provider;
+  if (
+    !isAuthorizedGoogleEmail(
+      email,
+      emailVerified,
+      signInProvider,
+      STUDIO_GOOGLE_EMAIL_ALLOWLIST,
+    )
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "This Google account does not have Private Studio access.",
+    );
+  }
+
+  return {
+    studio: {
+      email: cleanString(email, 320).toLowerCase(),
+      name: cleanString(user.displayName, 120) || "Studio user",
+    },
+  };
 });
 
 function invalidArgument(error) {

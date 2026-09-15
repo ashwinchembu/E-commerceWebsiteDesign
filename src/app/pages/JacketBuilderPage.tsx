@@ -1,8 +1,34 @@
-import { lazy, Suspense, useState } from "react";
-import { ChevronRight, X, Star, SlidersHorizontal } from "lucide-react";
-import type { BackDesign, BodyMaterial } from "../components/VarsityJacketViewer";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { ChevronRight, FileDown, FolderOpen, Plus, Save, SlidersHorizontal, Star, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
+import type {
+  BackCityLayout,
+  BackDesign,
+  BodyMaterial,
+  JacketCaptureFunction,
+} from "../components/VarsityJacketViewer";
 import { useNavigate } from "react-router-dom";
 import { createJacketCheckout, type ShopifyAttribute } from "../lib/shopify";
+import {
+  createEditionMaterialStore,
+  DEFAULT_EDITION_MATERIALS,
+  sanitizeJacketNumber,
+  transitionEditionMaterials,
+  type EditionMaterials,
+  type JacketEdition,
+  type LeatherType,
+} from "../lib/jacketBuilderState";
+import {
+  createDefaultStudioValues,
+  MAX_STUDIO_DRAFTS,
+  parseStudioDrafts,
+  sanitizeStudioBackName,
+  sanitizeStudioDesignName,
+  STUDIO_STORAGE_KEY,
+  upsertStudioDraft,
+  type StudioDesignDraft,
+  type StudioDesignValues,
+} from "../lib/jacketStudioState";
 import crestImage from "../../assets/manoir-kits-jacket-crest.png";
 import leatherNeckLabelImage from "../../assets/manoir-kits-leather-neck-label.png";
 import oneOfOnePatchImage from "../../assets/manoir-kits-one-of-one-patch.png";
@@ -112,8 +138,15 @@ const LEATHER_BW = [
 ];
 
 const LEATHER_TYPES = ["Nappa", "Cowhide"] as const;
-type LeatherType = (typeof LEATHER_TYPES)[number];
-type JacketEdition = "Classic" | "Footballers";
+const BACK_CITY_LAYOUT_PREVIEWS = new Set<BackCityLayout>([
+  "fill-width",
+  "proportional-auto-fit",
+  "fixed-size",
+  "compact-single-line",
+  "wrap-two-lines",
+  "outer-star-span",
+  "wide-letter-spacing",
+]);
 
 function labelForColor(color: string) {
   for (const group of COLOR_GROUPS) {
@@ -231,20 +264,28 @@ const PRINT_COLORS = [
   { label: "Black", color: "#000000" },
 ];
 
-export function JacketBuilderPage() {
+interface JacketBuilderPageProps {
+  studioMode?: boolean;
+  operatorName?: string;
+}
+
+export function JacketBuilderPage({ studioMode = false, operatorName }: JacketBuilderPageProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"materials" | "patches">("materials");
   const [expandedSection, setExpandedSection] = useState<string | null>("Jacket");
   const [openBodyGroup, setOpenBodyGroup] = useState<string | null>("Neutrals");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const [jacketEdition, setJacketEdition] = useState<JacketEdition>("Classic");
-  const [bodyColor, setBodyColor] = useState("#181b20");
-  const [sleeveColor, setSleeveColor] = useState("#1a1a1a");
-  const [leatherType, setLeatherType] = useState<LeatherType>("Nappa");
-  const [pocketColor, setPocketColor] = useState("#1a1a1a");
-  const [snapColor, setSnapColor] = useState("#1a1a1a");
-  const [trimColor, setTrimColor] = useState("#1a1a1a");
+  const initialEdition: JacketEdition = studioMode ? "Footballers" : "Classic";
+  const initialMaterials = DEFAULT_EDITION_MATERIALS[initialEdition];
+  const [jacketEdition, setJacketEdition] = useState<JacketEdition>(initialEdition);
+  const [bodyColor, setBodyColor] = useState(initialMaterials.bodyColor);
+  const [sleeveColor, setSleeveColor] = useState(initialMaterials.sleeveColor);
+  const [leatherType, setLeatherType] = useState<LeatherType>(initialMaterials.leatherType);
+  const [pocketColor, setPocketColor] = useState(initialMaterials.pocketColor);
+  const [snapColor, setSnapColor] = useState(initialMaterials.snapColor);
+  const [trimColor, setTrimColor] = useState(initialMaterials.trimColor);
+  const editionMaterials = useRef(createEditionMaterialStore());
 
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
@@ -260,7 +301,17 @@ export function JacketBuilderPage() {
   const [backCity, setBackCity] = useState("Madrid");
   const [backPrintColor, setBackPrintColor] = useState(PRINT_COLORS[0].color);
   const [sleevePrintColor, setSleevePrintColor] = useState(PRINT_COLORS[0].color);
-  const [liningColor, setLiningColor] = useState(LEATHER_BW[0].color);
+  const [liningColor, setLiningColor] = useState(initialMaterials.liningColor);
+  const [studioDraftName, setStudioDraftName] = useState("Untitled design");
+  const [activeStudioDraftId, setActiveStudioDraftId] = useState<string | null>(null);
+  const [savedStudioDrafts, setSavedStudioDrafts] = useState<StudioDesignDraft[]>([]);
+  const [pdfReady, setPdfReady] = useState(false);
+  const [pdfPending, setPdfPending] = useState(false);
+  const captureJacketRef = useRef<JacketCaptureFunction | null>(null);
+  const requestedCityLayout = new URLSearchParams(window.location.search).get("cityLayout") as BackCityLayout | null;
+  const backCityLayout = requestedCityLayout && BACK_CITY_LAYOUT_PREVIEWS.has(requestedCityLayout)
+    ? requestedCityLayout
+    : undefined;
 
   const backDesign: BackDesign = {
     stars: backStars,
@@ -276,14 +327,211 @@ export function JacketBuilderPage() {
   const renderedBodyColor = bodyColor;
   const renderedBodyMaterial: BodyMaterial = isFootballersEdition ? "Leather" : "Wool";
 
-  const onBackNumberChange = (value: string) => setBackNumber(value.replace(/\D/g, "").slice(0, 2));
+  const onBackNumberChange = (value: string) => setBackNumber(sanitizeJacketNumber(value));
   const onSleeveNumberChange = (side: "left" | "right", index: number, value: string) => {
     const digits = value.replace(/\D/g, "").slice(0, 2);
     const setter = side === "left" ? setLeftSleeveNumbers : setRightSleeveNumbers;
     setter((numbers) => numbers.map((n, i) => (i === index ? digits : n)));
   };
 
+  const starLimit = studioMode ? 10 : 5;
+  const starOptions = Array.from({ length: starLimit }, (_, index) => index + 1);
+
   const price = isFootballersEdition ? 1995 : 1495;
+
+  const switchJacketEdition = (nextEdition: JacketEdition) => {
+    if (nextEdition === jacketEdition) return;
+
+    // Each edition keeps its own materials. This prevents a customized wool
+    // Classic palette from leaking into the black-and-white Footballers shell,
+    // while still restoring the customer's Classic work when they switch back.
+    const currentMaterials: EditionMaterials = {
+      bodyColor,
+      sleeveColor,
+      leatherType,
+      pocketColor,
+      snapColor,
+      trimColor,
+      liningColor,
+    };
+    const transition = transitionEditionMaterials(
+      editionMaterials.current,
+      jacketEdition,
+      currentMaterials,
+      nextEdition,
+    );
+    editionMaterials.current = transition.store;
+    const nextMaterials = transition.materials;
+    setBodyColor(nextMaterials.bodyColor);
+    setSleeveColor(nextMaterials.sleeveColor);
+    setLeatherType(nextMaterials.leatherType);
+    setPocketColor(nextMaterials.pocketColor);
+    setSnapColor(nextMaterials.snapColor);
+    setTrimColor(nextMaterials.trimColor);
+    setLiningColor(nextMaterials.liningColor);
+    setJacketEdition(nextEdition);
+    if (nextEdition === "Footballers") setExpandedSection("Body");
+  };
+
+  const applyStudioValues = (values: StudioDesignValues) => {
+    const materials: EditionMaterials = {
+      bodyColor: values.bodyColor,
+      sleeveColor: values.sleeveColor,
+      leatherType: values.leatherType,
+      pocketColor: values.pocketColor,
+      snapColor: values.snapColor,
+      trimColor: values.trimColor,
+      liningColor: values.liningColor,
+    };
+    editionMaterials.current = {
+      ...createEditionMaterialStore(),
+      [values.jacketEdition]: materials,
+    };
+    setJacketEdition(values.jacketEdition);
+    setBodyColor(values.bodyColor);
+    setSleeveColor(values.sleeveColor);
+    setLeatherType(values.leatherType);
+    setPocketColor(values.pocketColor);
+    setSnapColor(values.snapColor);
+    setTrimColor(values.trimColor);
+    setLiningColor(values.liningColor);
+    setBackCity(values.backName);
+    setBackStars(values.backStars);
+    setBackNumber(values.backNumber);
+    setLeftSleeveNumbers([...values.leftSleeveNumbers]);
+    setRightSleeveNumbers([...values.rightSleeveNumbers]);
+    setBackPrintColor(values.backPrintColor);
+    setSleevePrintColor(values.sleevePrintColor);
+  };
+
+  const currentStudioValues = (): StudioDesignValues => ({
+    jacketEdition,
+    bodyColor,
+    sleeveColor,
+    leatherType,
+    pocketColor,
+    snapColor,
+    trimColor,
+    liningColor,
+    backName: backCity,
+    backStars,
+    backNumber,
+    leftSleeveNumbers,
+    rightSleeveNumbers,
+    backPrintColor,
+    sleevePrintColor,
+  });
+
+  useEffect(() => {
+    if (!studioMode) return;
+    setSavedStudioDrafts(parseStudioDrafts(window.localStorage.getItem(STUDIO_STORAGE_KEY)));
+  }, [studioMode]);
+
+  const persistStudioDrafts = (drafts: StudioDesignDraft[]) => {
+    window.localStorage.setItem(STUDIO_STORAGE_KEY, JSON.stringify(drafts));
+    setSavedStudioDrafts(drafts);
+  };
+
+  const saveStudioDesign = () => {
+    const name = sanitizeStudioDesignName(studioDraftName).trim()
+      || `Jacket ${savedStudioDrafts.length + 1}`;
+    const id = activeStudioDraftId
+      || window.crypto?.randomUUID?.()
+      || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const draft: StudioDesignDraft = {
+      id,
+      name,
+      updatedAt: new Date().toISOString(),
+      values: currentStudioValues(),
+    };
+    try {
+      persistStudioDrafts(upsertStudioDraft(savedStudioDrafts, draft));
+      setStudioDraftName(name);
+      setActiveStudioDraftId(id);
+      toast.success("Design saved in this browser");
+    } catch {
+      toast.error("This browser could not save the design");
+    }
+  };
+
+  const loadStudioDesign = (draft: StudioDesignDraft) => {
+    applyStudioValues(draft.values);
+    setStudioDraftName(draft.name);
+    setActiveStudioDraftId(draft.id);
+    setActiveTab("patches");
+  };
+
+  const startNewStudioDesign = () => {
+    applyStudioValues(createDefaultStudioValues());
+    setStudioDraftName("Untitled design");
+    setActiveStudioDraftId(null);
+    setActiveTab("patches");
+  };
+
+  const deleteStudioDesign = (id: string) => {
+    try {
+      persistStudioDrafts(savedStudioDrafts.filter((draft) => draft.id !== id));
+      if (activeStudioDraftId === id) {
+        setActiveStudioDraftId(null);
+        setStudioDraftName("Untitled design");
+      }
+      toast.success("Saved design removed");
+    } catch {
+      toast.error("This browser could not remove the design");
+    }
+  };
+
+  const exportStudioPdf = async () => {
+    const captureJacket = captureJacketRef.current;
+    if (!captureJacket || pdfPending) {
+      toast.error("Wait for the jacket preview to finish loading");
+      return;
+    }
+    setPdfPending(true);
+    try {
+      await document.fonts.ready;
+      const captures = {
+        front: captureJacket("front"),
+        back: captureJacket("back"),
+        left: captureJacket("left"),
+        right: captureJacket("right"),
+      };
+      const { downloadJacketReferencePdf } = await import("../lib/jacketPdfExport");
+      const result = await downloadJacketReferencePdf({
+        designName: sanitizeStudioDesignName(studioDraftName).trim() || backCity || "Custom jacket",
+        generatedAt: new Date(),
+        edition: jacketEdition,
+        bodyMaterial: renderedBodyMaterial,
+        leatherType,
+        backName: backCity,
+        backNumber,
+        stars: backStars,
+        leftSleeveNumbers,
+        rightSleeveNumbers,
+        materials: [
+          { label: "Body", value: labelForColor(bodyColor), color: bodyColor },
+          { label: "Sleeves", value: labelForColor(sleeveColor), color: sleeveColor },
+          { label: "Pockets", value: labelForColor(pocketColor), color: pocketColor },
+          { label: "Snaps", value: labelForColor(snapColor), color: snapColor },
+          { label: "Knit trim", value: labelForColor(trimColor), color: trimColor },
+          { label: "Inside lining", value: labelForColor(liningColor), color: liningColor },
+          { label: "Back artwork", value: labelForColor(backPrintColor), color: backPrintColor },
+          { label: "Sleeve numbers", value: labelForColor(sleevePrintColor), color: sleevePrintColor },
+        ],
+        captures,
+        interiorImages: {
+          neckLabel: leatherNeckLabelImage,
+          oneOfOnePatch: oneOfOnePatchImage,
+          crest: crestImage,
+        },
+      });
+      toast.success(`${result.fileName} downloaded`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The PDF could not be exported");
+    } finally {
+      setPdfPending(false);
+    }
+  };
 
   const checkoutAttributes = (): ShopifyAttribute[] => [
     { key: "Edition", value: jacketEdition },
@@ -415,17 +663,49 @@ export function JacketBuilderPage() {
           </div>
 
           <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
-            <button onClick={() => setWishlisted((w) => !w)} className="text-gray-400 hover:text-black transition-colors">
-              <Star className={`w-4 h-4 ${wishlisted ? "fill-black text-black" : ""}`} />
-            </button>
-            <div className="h-5 w-px bg-gray-200" />
-            <div className="text-sm font-semibold tracking-wide">${price.toLocaleString()}</div>
-            <button
-              onClick={() => setShowSizeModal(true)}
-              className="bg-black text-white px-3 py-2 text-[10px] tracking-widest uppercase hover:bg-gray-800 transition-colors sm:px-5"
-            >
-              Add to Cart
-            </button>
+            {studioMode ? (
+              <>
+                <span className="hidden text-[9px] tracking-[0.18em] text-gray-400 uppercase lg:inline">
+                  {operatorName ? `${operatorName}'s studio` : "Private studio"}
+                </span>
+                <button
+                  onClick={exportStudioPdf}
+                  disabled={!pdfReady || pdfPending}
+                  className="flex items-center gap-1 border border-gray-200 px-2 py-2 text-[9px] tracking-widest uppercase text-gray-600 transition-colors hover:border-black hover:text-black disabled:cursor-wait disabled:opacity-40 sm:px-3 sm:text-[10px]"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  {pdfPending ? "Building" : "PDF"}
+                </button>
+                <button
+                  onClick={startNewStudioDesign}
+                  className="flex items-center gap-1 border border-gray-200 px-2 py-2 text-[9px] tracking-widest uppercase text-gray-600 transition-colors hover:border-black hover:text-black sm:px-3 sm:text-[10px]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">New</span>
+                </button>
+                <button
+                  onClick={saveStudioDesign}
+                  className="flex items-center gap-1 bg-black px-2 py-2 text-[9px] tracking-widest text-white uppercase transition-colors hover:bg-gray-800 sm:px-4 sm:text-[10px]"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Save
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setWishlisted((w) => !w)} className="text-gray-400 hover:text-black transition-colors">
+                  <Star className={`w-4 h-4 ${wishlisted ? "fill-black text-black" : ""}`} />
+                </button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div className="text-sm font-semibold tracking-wide">${price.toLocaleString()}</div>
+                <button
+                  onClick={() => setShowSizeModal(true)}
+                  className="bg-black text-white px-3 py-2 text-[10px] tracking-widest uppercase hover:bg-gray-800 transition-colors sm:px-5"
+                >
+                  Add to Cart
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -494,10 +774,7 @@ export function JacketBuilderPage() {
                         return (
                           <button
                             key={edition}
-                            onClick={() => {
-                              setJacketEdition(edition);
-                              if (edition === "Footballers") setExpandedSection("Body");
-                            }}
+                            onClick={() => switchJacketEdition(edition)}
                             className={`min-h-20 border px-3 py-3 text-left transition-colors ${
                               active ? "border-black bg-white" : "border-gray-200 bg-white text-gray-500 hover:border-black"
                             }`}
@@ -689,16 +966,75 @@ export function JacketBuilderPage() {
                 Back &amp; sleeve design · Drag the jacket to see the back
               </p>
 
+              {studioMode ? (
+                <div className="space-y-3 border-b border-gray-200 pb-5">
+                  <div>
+                    <label className="mb-1.5 block text-[10px] tracking-widest text-gray-400 uppercase">
+                      Design name
+                    </label>
+                    <input
+                      aria-label="Design name"
+                      type="text"
+                      maxLength={40}
+                      value={studioDraftName}
+                      onChange={(event) => setStudioDraftName(sanitizeStudioDesignName(event.target.value))}
+                      className="w-full border border-gray-300 px-3 py-2 text-xs tracking-wide focus:border-black focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-[10px] tracking-widest text-gray-400 uppercase">Saved designs</span>
+                      <span className="text-[9px] tracking-wider text-gray-400 uppercase">
+                        {savedStudioDrafts.length}/{MAX_STUDIO_DRAFTS}
+                      </span>
+                    </div>
+                    {savedStudioDrafts.length ? (
+                      <div className="space-y-1.5">
+                        {savedStudioDrafts.map((draft) => (
+                          <div
+                            key={draft.id}
+                            className={`flex items-center gap-1 border px-2 py-1.5 ${
+                              activeStudioDraftId === draft.id ? "border-black bg-gray-50" : "border-gray-200"
+                            }`}
+                          >
+                            <button
+                              onClick={() => loadStudioDesign(draft)}
+                              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                              title={`Open ${draft.name}`}
+                            >
+                              <FolderOpen className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                              <span className="truncate text-[11px] tracking-wide">{draft.name}</span>
+                            </button>
+                            <button
+                              aria-label={`Delete ${draft.name}`}
+                              onClick={() => deleteStudioDesign(draft.id)}
+                              className="p-1 text-gray-400 transition-colors hover:text-black"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="border border-dashed border-gray-300 px-3 py-2 text-[10px] leading-relaxed text-gray-400">
+                        Save up to ten concepts in this browser.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
               {/* Stars */}
               <div>
                 <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">
-                  Gold Stars ({backStars} of 5)
+                  Gold Stars ({backStars} of {starLimit})
                 </label>
                 <div className="flex flex-wrap items-center gap-1">
-                  {[1, 2, 3, 4, 5].map((n) => (
+                  {starOptions.map((n) => (
                     <button
                       key={n}
-                      onClick={() => setBackStars(backStars === n ? n - 1 : n)}
+                      onClick={() => setBackStars(studioMode ? n : backStars === n ? n - 1 : n)}
                       className="flex h-8 w-8 items-center justify-center"
                       title={`${n} star${n === 1 ? "" : "s"}`}
                     >
@@ -786,8 +1122,9 @@ export function JacketBuilderPage() {
               </div>
 
               <p className="text-[10px] text-gray-400 leading-relaxed">
-                Gold stars, the chest badge and “EST. 2026” are fixed brand details. Pick your country or city from the dropdown
-                below the jacket.
+                {studioMode
+                  ? "The jacket layout, chest badge and “EST. 2026” stay fixed. Change the name, stars and numbers to build each concept."
+                  : "Gold stars, the chest badge and “EST. 2026” are fixed brand details. Pick your country or city from the dropdown below the jacket."}
               </p>
             </div>
           )}
@@ -818,6 +1155,11 @@ export function JacketBuilderPage() {
               pocketColor={pocketColor}
               liningColor={liningColor}
               backDesign={backDesign}
+              backCityLayout={backCityLayout}
+              onCaptureReady={(capture) => {
+                captureJacketRef.current = capture;
+                setPdfReady(Boolean(capture));
+              }}
             />
           </Suspense>
 
@@ -864,28 +1206,43 @@ export function JacketBuilderPage() {
 
           {/* City picker + drag hint */}
           <div className="absolute bottom-3 left-1/2 flex w-[calc(100%-1.5rem)] -translate-x-1/2 flex-col items-center gap-2 sm:bottom-4 sm:w-auto">
-            <select
-              value={backCity}
-              onChange={(e) => setBackCity(e.target.value)}
-              className="w-full max-w-xs cursor-pointer bg-white border border-gray-300 px-3 py-2 text-[11px] tracking-widest uppercase focus:outline-none focus:border-black sm:w-auto sm:px-4 sm:text-xs"
-            >
-              <optgroup label="Countries">
-                {WORLD_CUP_COUNTRIES.map((country) => (
-                  <option key={`country-${country}`} value={country}>
-                    {country}
-                  </option>
-                ))}
-              </optgroup>
-              {COUNTRY_CITIES.map(({ country, cities }) => (
-                <optgroup key={country} label={country}>
-                  {[...cities].sort((a, b) => a.localeCompare(b)).map((city) => (
-                    <option key={city} value={city}>
-                      {city}
+            {studioMode ? (
+              <label className="flex w-full max-w-xs items-center gap-2 border border-gray-300 bg-white px-3 py-2 focus-within:border-black sm:w-72">
+                <span className="shrink-0 text-[9px] tracking-widest text-gray-400 uppercase">Back name</span>
+                <input
+                  aria-label="Back name"
+                  type="text"
+                  maxLength={24}
+                  value={backCity}
+                  onChange={(event) => setBackCity(sanitizeStudioBackName(event.target.value))}
+                  placeholder="PLAYER OR CLUB"
+                  className="min-w-0 flex-1 bg-transparent text-right text-[11px] tracking-widest uppercase focus:outline-none sm:text-xs"
+                />
+              </label>
+            ) : (
+              <select
+                value={backCity}
+                onChange={(e) => setBackCity(e.target.value)}
+                className="w-full max-w-xs cursor-pointer bg-white border border-gray-300 px-3 py-2 text-[11px] tracking-widest uppercase focus:outline-none focus:border-black sm:w-auto sm:px-4 sm:text-xs"
+              >
+                <optgroup label="Countries">
+                  {WORLD_CUP_COUNTRIES.map((country) => (
+                    <option key={`country-${country}`} value={country}>
+                      {country}
                     </option>
                   ))}
                 </optgroup>
-              ))}
-            </select>
+                {COUNTRY_CITIES.map(({ country, cities }) => (
+                  <optgroup key={country} label={country}>
+                    {[...cities].sort((a, b) => a.localeCompare(b)).map((city) => (
+                      <option key={city} value={city}>
+                        {city}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            )}
             <span className="text-center text-[9px] tracking-widest uppercase text-gray-400 pointer-events-none select-none sm:text-[10px]">
               <span className="sm:hidden">One finger to rotate · Pinch to zoom</span>
               <span className="hidden sm:inline">Drag to rotate · Scroll to zoom</span>
@@ -895,7 +1252,7 @@ export function JacketBuilderPage() {
       </div>
 
       {/* Size picker modal */}
-      {showSizeModal && (
+      {!studioMode && showSizeModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center p-3 sm:items-center sm:p-4" onClick={() => setShowSizeModal(false)}>
           <div className="bg-white w-full max-w-sm rounded shadow-xl p-5 sm:p-6" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-1">

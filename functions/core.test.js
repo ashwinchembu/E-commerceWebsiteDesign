@@ -9,6 +9,7 @@ import {
   grantState,
   historicalRequestWorkEntries,
   isAuthorizedAdminEmail,
+  isAuthorizedGoogleEmail,
   isRequestCardOwnerEmail,
   normalizeContactInput,
   normalizeChangeRequestLog,
@@ -40,6 +41,46 @@ test("admin bootstrap requires an exact verified allowlisted email", () => {
   );
   assert.equal(
     isAuthorizedAdminEmail("ashchembu@gmail.com.evil.test", true, allowlist),
+    false,
+  );
+});
+
+test("Studio sign-in requires Google and an exact verified allowlisted email", () => {
+  const allowlist = ["ashchembu@gmail.com", "skpbains@gmail.com"];
+  assert.equal(
+    isAuthorizedGoogleEmail(
+      " SKPBAINS@GMAIL.COM ",
+      true,
+      "google.com",
+      allowlist,
+    ),
+    true,
+  );
+  assert.equal(
+    isAuthorizedGoogleEmail(
+      "skpbains@gmail.com",
+      true,
+      "password",
+      allowlist,
+    ),
+    false,
+  );
+  assert.equal(
+    isAuthorizedGoogleEmail(
+      "manoirkits@gmail.com",
+      true,
+      "google.com",
+      allowlist,
+    ),
+    false,
+  );
+  assert.equal(
+    isAuthorizedGoogleEmail(
+      "skpbains@gmail.com.evil.test",
+      true,
+      "google.com",
+      allowlist,
+    ),
     false,
   );
 });

@@ -530,11 +530,25 @@ function measuredTrackedTextWidth(
   return glyphs.reduce((sum, width) => sum + width, 0) + tracking * Math.max(0, glyphs.length - 1);
 }
 
+function fittedStarStepDegrees(canvasWidth: number, starCount: number) {
+  if (starCount < 2) return approvedJacketLayout.starStepDegrees;
+  const renderedStarRadius = approvedJacketLayout.starRadius * BACK_ARTWORK_SCALE;
+  const availableHalfWidth = Math.max(0, canvasWidth / 2 - renderedStarRadius - 10);
+  const maxHalfAngle = Math.asin(
+    Math.min(1, availableHalfWidth / approvedJacketLayout.starArc),
+  );
+  const halfStepCount = (starCount - 1) / 2;
+  return Math.min(
+    approvedJacketLayout.starStepDegrees,
+    (maxHalfAngle * 180) / Math.PI / halfStepCount,
+  );
+}
+
 function outerStarSpanCityWidth(canvasWidth: number, starCount: number) {
   const fallbackWidth = canvasWidth * 0.86 * BACK_ARTWORK_SCALE;
   if (starCount < 2) return fallbackWidth;
 
-  const outerStarAngle = ((starCount - 1) / 2) * approvedJacketLayout.starStepDegrees * Math.PI / 180;
+  const outerStarAngle = ((starCount - 1) / 2) * fittedStarStepDegrees(canvasWidth, starCount) * Math.PI / 180;
   const outerStarCenterOffset = approvedJacketLayout.starArc * Math.sin(outerStarAngle);
   const renderedStarRadius = approvedJacketLayout.starRadius * BACK_ARTWORK_SCALE;
   const outerEdgeWidth = (outerStarCenterOffset + renderedStarRadius) * 2;
@@ -603,10 +617,10 @@ function drawBackDesign(
 
   // Stars ride high across the traps in a wide, shallow arc: the center star
   // crowns the collar and the outer ones reach toward the shoulder seams.
-  const stars = Math.max(0, Math.min(5, design.stars));
+  const stars = Math.max(0, Math.min(10, Math.round(design.stars)));
   const starArc = approvedJacketLayout.starArc;
   const starCenterY = approvedJacketLayout.starCenterOffset + starArc;
-  const stepDeg = approvedJacketLayout.starStepDegrees;
+  const stepDeg = fittedStarStepDegrees(w, stars);
   for (let i = 0; i < stars; i += 1) {
     const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
     const x = w / 2 + starArc * Math.sin(a);
@@ -881,6 +895,9 @@ export interface BackDesign {
   sleevePrintColor: string;
 }
 
+export type JacketCaptureView = "front" | "back" | "left" | "right";
+export type JacketCaptureFunction = (view: JacketCaptureView) => string;
+
 interface VarsityJacketViewerProps {
   jacketEdition: JacketEdition;
   bodyColor: string;
@@ -893,6 +910,7 @@ interface VarsityJacketViewerProps {
   liningColor: string;
   backDesign: BackDesign;
   backCityLayout?: BackCityLayout;
+  onCaptureReady?: (capture: JacketCaptureFunction | null) => void;
 }
 
 type PartMaterials = {
@@ -1277,6 +1295,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         antialias: true,
         alpha: true,
         powerPreference: "high-performance",
+        preserveDrawingBuffer: true,
       });
     } catch (error) {
       retrySilently("Failed to create jacket renderer", error);
@@ -1287,6 +1306,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     }
     renderer.setPixelRatio(renderPixelRatio(mount.clientWidth, mount.clientHeight));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
+    renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
@@ -1880,6 +1900,26 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       applyViewerAppearance(materials, propsRef.current);
       redrawDesign();
       modelPrepared = true;
+      const captureAngles: Record<JacketCaptureView, number> = {
+        front: 0,
+        back: Math.PI,
+        left: Math.PI / 2,
+        right: -Math.PI / 2,
+      };
+      const captureJacketView: JacketCaptureFunction = (view) => {
+        if (disposed || !modelPrepared) throw new Error("Jacket preview is not ready.");
+        const savedRotation = modelRoot.rotation.clone();
+        const savedCameraZ = camera.position.z;
+        camera.position.z = initialAspect < 0.85 ? 6.35 : 5.6;
+        modelRoot.rotation.set(-0.05, captureAngles[view], 0);
+        renderer.render(scene, camera);
+        const image = renderer.domElement.toDataURL("image/png");
+        modelRoot.rotation.copy(savedRotation);
+        camera.position.z = savedCameraZ;
+        renderer.render(scene, camera);
+        return image;
+      };
+      propsRef.current.onCaptureReady?.(captureJacketView);
     }, undefined, (error) => {
       retrySilently("Failed to load jacket model", error);
     });
@@ -2134,6 +2174,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
       dracoLoader.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
+      propsRef.current.onCaptureReady?.(null);
       loadedRef.current = null;
     };
   }, [retryKey]);

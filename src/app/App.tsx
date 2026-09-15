@@ -63,6 +63,11 @@ const PrivateAccessPage = lazy(() =>
     default: module.PrivateAccessPage,
   })),
 );
+const StudioAccessPage = lazy(() =>
+  import('./pages/StudioAccessPage').then((module) => ({
+    default: module.StudioAccessPage,
+  })),
+);
 const TermsPage = lazy(() =>
   import('./pages/TermsPage').then((module) => ({ default: module.TermsPage })),
 );
@@ -74,6 +79,11 @@ interface AccessIdentity {
   role: 'visitor' | 'footballer' | 'admin';
 }
 
+interface StudioIdentity {
+  name: string;
+  email: string;
+}
+
 const pageTitles: Record<string, string> = {
   '/': 'Manoir Kits | Custom Football Heritage Jackets',
   '/about': 'About | Manoir Kits',
@@ -82,6 +92,7 @@ const pageTitles: Record<string, string> = {
   '/do-not-sell': 'Privacy Choices | Manoir Kits',
   '/feedback': 'Feedback | Manoir Kits',
   '/jacket-builder': 'Design Your Custom Jacket | Manoir Kits',
+  '/studio': 'Private Jacket Studio | Manoir Kits',
   '/privacy-policy': 'Privacy Policy | Manoir Kits',
   '/terms': 'Terms and Conditions | Manoir Kits',
 };
@@ -105,8 +116,10 @@ function RouteMetadata() {
 
 function StorefrontRoutes({
   account,
+  studioIdentity,
 }: {
   account: ReturnType<typeof useShopifyCustomerAccount>;
+  studioIdentity: StudioIdentity | null;
 }) {
   return (
     <Routes>
@@ -133,6 +146,16 @@ function StorefrontRoutes({
         element={<JacketBuilderPage />}
         path="/jacket-builder"
       />
+      <Route
+        element={
+          studioIdentity ? (
+            <JacketBuilderPage operatorName={studioIdentity.name} studioMode />
+          ) : (
+            <Navigate replace to="/jacket-builder" />
+          )
+        }
+        path="/studio"
+      />
 
       {/* The old catalog was prototype data. All real purchasing now starts in
           the Shopify-backed jacket builder. */}
@@ -151,15 +174,25 @@ export default function App() {
   const privateAccessEnabled = import.meta.env.VITE_PRIVATE_ACCESS_ENABLED === 'true';
   const isAdminAccessRoute = window.location.pathname.startsWith('/admin/access');
   const isPrivateAccessRoute = window.location.pathname === '/access';
+  const isStudioAccessRoute = window.location.pathname === '/studio-access';
+  const isStudioRoute = window.location.pathname === '/studio';
+  const requiresAccessSession =
+    privateAccessEnabled && !isStudioRoute && !isStudioAccessRoute;
   const shopifyCustomerAccount = useShopifyCustomerAccount(
-    !privateAccessEnabled && !isAdminAccessRoute && !isPrivateAccessRoute,
+    !privateAccessEnabled &&
+      !isAdminAccessRoute &&
+      !isPrivateAccessRoute &&
+      !isStudioAccessRoute &&
+      !isStudioRoute,
   );
   const [showNewsletterModal, setShowNewsletterModal] = useState(false);
   const [accessIdentity, setAccessIdentity] = useState<AccessIdentity | null>(null);
-  const [accessChecked, setAccessChecked] = useState(!privateAccessEnabled);
+  const [accessChecked, setAccessChecked] = useState(!requiresAccessSession);
+  const [studioIdentity, setStudioIdentity] = useState<StudioIdentity | null>(null);
+  const [studioChecked, setStudioChecked] = useState(!isStudioRoute);
 
   useEffect(() => {
-    if (!privateAccessEnabled || isAdminAccessRoute || isPrivateAccessRoute) return;
+    if (!requiresAccessSession || isAdminAccessRoute || isPrivateAccessRoute) return;
     let active = true;
     let unsubscribe = () => {};
     void Promise.all([import('firebase/auth'), import('./lib/firebase')])
@@ -208,13 +241,56 @@ export default function App() {
       active = false;
       unsubscribe();
     };
-  }, [isAdminAccessRoute, isPrivateAccessRoute, privateAccessEnabled]);
+  }, [isAdminAccessRoute, isPrivateAccessRoute, requiresAccessSession]);
+
+  useEffect(() => {
+    if (!isStudioRoute) return;
+    let active = true;
+    let unsubscribe = () => {};
+    void Promise.all([import('firebase/auth'), import('./lib/firebase')])
+      .then(async ([firebaseAuth, firebaseClient]) => {
+        const { auth, persistenceReady } = firebaseClient.getFirebaseServices();
+        await persistenceReady;
+        if (!active) return;
+        unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (user) => {
+          if (!active) return;
+          if (!user) {
+            window.location.assign('/studio-access');
+            return;
+          }
+          try {
+            const { studio } = await firebaseClient.callFirebaseFunction<
+              Record<string, never>,
+              { studio: StudioIdentity }
+            >('getStudioSession', {});
+            if (!active) return;
+            setStudioIdentity({
+              email: studio.email,
+              name: studio.name,
+            });
+            setStudioChecked(true);
+          } catch {
+            await firebaseAuth.signOut(auth);
+            window.location.assign('/studio-access');
+          }
+        });
+      })
+      .catch(() => {
+        window.location.assign('/studio-access');
+      });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [isStudioRoute]);
 
   useEffect(() => {
     if (
       window.location.pathname === '/jacket-builder' ||
+      window.location.pathname === '/studio' ||
       isAdminAccessRoute ||
       isPrivateAccessRoute ||
+      isStudioAccessRoute ||
       !shouldShowNewsletterOffer()
     ) {
       return;
@@ -245,7 +321,7 @@ export default function App() {
       window.removeEventListener('manoir:cookie-consent', scheduleNewsletter);
       window.removeEventListener(NEWSLETTER_SUBSCRIBED_EVENT, closeNewsletter);
     };
-  }, [isAdminAccessRoute, isPrivateAccessRoute]);
+  }, [isAdminAccessRoute, isPrivateAccessRoute, isStudioAccessRoute]);
 
   const handleNewsletterClose = () => {
     setShowNewsletterModal(false);
@@ -259,6 +335,15 @@ export default function App() {
     ]);
     await firebaseAuth.signOut(firebaseClient.getFirebaseServices().auth);
     window.location.assign('/access');
+  };
+
+  const handleStudioLogout = async () => {
+    const [firebaseAuth, firebaseClient] = await Promise.all([
+      import('firebase/auth'),
+      import('./lib/firebase'),
+    ]);
+    await firebaseAuth.signOut(firebaseClient.getFirebaseServices().auth);
+    window.location.assign('/studio-access');
   };
 
   if (isAdminAccessRoute) {
@@ -277,20 +362,35 @@ export default function App() {
     );
   }
 
-  if (privateAccessEnabled && (!accessChecked || !accessIdentity)) {
+
+  if (isStudioAccessRoute) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-black" />}>
+        <StudioAccessPage />
+      </Suspense>
+    );
+  }
+
+  if (requiresAccessSession && (!accessChecked || !accessIdentity)) {
     return <div aria-label="Verifying private access" className="min-h-screen bg-black" />;
+  }
+
+
+  if (isStudioRoute && (!studioChecked || !studioIdentity)) {
+    return <div aria-label="Verifying Studio access" className="min-h-screen bg-black" />;
   }
 
   return (
     <Router>
       <RouteMetadata />
       <div className="flex min-h-screen flex-col">
-        <Header />
+        <Header showStudio={Boolean(studioIdentity)} />
 
         <main className="flex-1">
           <Suspense fallback={<div className="min-h-[60vh] bg-white" />}>
             <StorefrontRoutes
               account={shopifyCustomerAccount}
+              studioIdentity={studioIdentity}
             />
           </Suspense>
         </main>
@@ -306,6 +406,15 @@ export default function App() {
             email={accessIdentity.email}
             name={accessIdentity.name}
             onLogout={handlePrivateAccessLogout}
+          />
+        ) : null}
+
+        {studioIdentity ? (
+          <SecurityWatermark
+            accessId="GOOGLE"
+            email={studioIdentity.email}
+            name={studioIdentity.name}
+            onLogout={handleStudioLogout}
           />
         ) : null}
 

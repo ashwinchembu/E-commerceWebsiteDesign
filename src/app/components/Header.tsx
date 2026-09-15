@@ -2,7 +2,7 @@ import { Menu, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
-export function Header() {
+export function Header({ showStudio = false }: { showStudio?: boolean }) {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const location = useLocation();
   const isHomePage = location.pathname === '/';
@@ -39,6 +39,14 @@ export function Header() {
             >
               CUSTOM JACKET
             </Link>
+            {showStudio ? (
+              <Link
+                className="text-sm tracking-wide transition-opacity hover:opacity-70"
+                to="/studio"
+              >
+                PRIVATE STUDIO
+              </Link>
+            ) : null}
           </nav>
 
           <Link
@@ -70,6 +78,14 @@ export function Header() {
               >
                 CUSTOM JACKET
               </Link>
+              {showStudio ? (
+                <Link
+                  className="text-sm tracking-wide transition-opacity hover:opacity-70"
+                  to="/studio"
+                >
+                  PRIVATE STUDIO
+                </Link>
+              ) : null}
               <Link
                 className="text-sm tracking-wide transition-opacity hover:opacity-70"
                 to="/account"

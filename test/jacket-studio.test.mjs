@@ -74,8 +74,9 @@ test("the private studio exposes custom names, sleeve numbers, and zero to ten s
     readFile(studioAccessUrl, "utf8"),
   ]);
   assert.match(builder, /studioMode \? 10 : 5/);
-  assert.match(builder, /index \+ \(studioMode \? 0 : 1\)/);
-  assert.match(builder, /n === 0/);
+  assert.match(builder, /Array\.from\(\{ length: starLimit \}, \(_, index\) => index \+ 1\)/);
+  assert.match(builder, /backStars === n \? n - 1 : n/);
+  assert.doesNotMatch(builder, />0<\/span>/);
   assert.match(builder, /aria-label="Back name"/);
   assert.match(builder, /Left Sleeve Numbers \(up to 5\)/);
   assert.match(builder, /Right Sleeve Numbers \(up to 5\)/);

@@ -81,6 +81,16 @@ function normalizedSleeveNumbers(value: unknown) {
   );
 }
 
+function normalizedStudioStars(value: unknown, fallback: number) {
+  const requested =
+    typeof value === "number" || (typeof value === "string" && value.trim())
+      ? Number(value)
+      : Number.NaN;
+  return Number.isFinite(requested)
+    ? Math.max(0, Math.min(10, Math.round(requested)))
+    : fallback;
+}
+
 function normalizedValues(value: unknown): StudioDesignValues | null {
   if (!isRecord(value)) return null;
   const defaults = createDefaultStudioValues();
@@ -96,7 +106,7 @@ function normalizedValues(value: unknown): StudioDesignValues | null {
     trimColor: normalizedColor(value.trimColor, defaults.trimColor),
     liningColor: normalizedColor(value.liningColor, defaults.liningColor),
     backName: sanitizeStudioBackName(typeof value.backName === "string" ? value.backName : defaults.backName),
-    backStars: Math.max(1, Math.min(10, Math.round(Number(value.backStars) || defaults.backStars))),
+    backStars: normalizedStudioStars(value.backStars, defaults.backStars),
     backNumber: sanitizeStudioNumber(typeof value.backNumber === "string" ? value.backNumber : defaults.backNumber),
     leftSleeveNumbers: normalizedSleeveNumbers(value.leftSleeveNumbers),
     rightSleeveNumbers: normalizedSleeveNumbers(value.rightSleeveNumbers),

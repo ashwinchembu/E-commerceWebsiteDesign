@@ -335,7 +335,10 @@ export function JacketBuilderPage({ studioMode = false, operatorName }: JacketBu
   };
 
   const starLimit = studioMode ? 10 : 5;
-  const starOptions = Array.from({ length: starLimit }, (_, index) => index + 1);
+  const starOptions = Array.from(
+    { length: starLimit + (studioMode ? 1 : 0) },
+    (_, index) => index + (studioMode ? 0 : 1),
+  );
 
   const price = isFootballersEdition ? 1995 : 1495;
 
@@ -1038,7 +1041,11 @@ export function JacketBuilderPage({ studioMode = false, operatorName }: JacketBu
                       className="flex h-8 w-8 items-center justify-center"
                       title={`${n} star${n === 1 ? "" : "s"}`}
                     >
-                      <Star className={`w-5 h-5 ${n <= backStars ? "fill-[#c9a84c] text-[#c9a84c]" : "text-gray-300"}`} />
+                      {n === 0 ? (
+                        <span className="text-xs text-gray-500">0</span>
+                      ) : (
+                        <Star className={`w-5 h-5 ${n <= backStars ? "fill-[#c9a84c] text-[#c9a84c]" : "text-gray-300"}`} />
+                      )}
                     </button>
                   ))}
                 </div>

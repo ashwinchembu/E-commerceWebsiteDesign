@@ -58,7 +58,15 @@ test("saving an existing design updates it without creating a duplicate", () => 
   assert.equal(drafts[0].values.backStars, 8);
 });
 
-test("the private studio exposes custom names, sleeve numbers, and one to ten stars", async () => {
+test("saved studio designs preserve a zero-star selection", () => {
+  const values = { ...createDefaultStudioValues(), backStars: 0 };
+  const parsed = parseStudioDrafts(
+    JSON.stringify([draft("no-stars", "2026-09-15T12:00:00.000Z", values)]),
+  );
+  assert.equal(parsed[0].values.backStars, 0);
+});
+
+test("the private studio exposes custom names, sleeve numbers, and zero to ten stars", async () => {
   const [builder, viewer, app, studioAccess] = await Promise.all([
     readFile(builderUrl, "utf8"),
     readFile(viewerUrl, "utf8"),
@@ -66,6 +74,8 @@ test("the private studio exposes custom names, sleeve numbers, and one to ten st
     readFile(studioAccessUrl, "utf8"),
   ]);
   assert.match(builder, /studioMode \? 10 : 5/);
+  assert.match(builder, /index \+ \(studioMode \? 0 : 1\)/);
+  assert.match(builder, /n === 0/);
   assert.match(builder, /aria-label="Back name"/);
   assert.match(builder, /Left Sleeve Numbers \(up to 5\)/);
   assert.match(builder, /Right Sleeve Numbers \(up to 5\)/);

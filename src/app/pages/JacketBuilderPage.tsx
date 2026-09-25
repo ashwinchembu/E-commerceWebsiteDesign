@@ -24,6 +24,7 @@ import {
   parseStudioDrafts,
   sanitizeStudioBackName,
   sanitizeStudioDesignName,
+  STUDIO_SLEEVE_NUMBER_LIMIT,
   STUDIO_STORAGE_KEY,
   upsertStudioDraft,
   type StudioDesignDraft,
@@ -296,7 +297,7 @@ export function JacketBuilderPage({ studioMode = false, operatorName }: JacketBu
 
   const [backStars, setBackStars] = useState(5);
   const [backNumber, setBackNumber] = useState("7");
-  const sleeveNumberLimit = studioMode ? 10 : 5;
+  const sleeveNumberLimit = STUDIO_SLEEVE_NUMBER_LIMIT;
   const [leftSleeveNumbers, setLeftSleeveNumbers] = useState(() =>
     Array.from({ length: sleeveNumberLimit }, () => ""),
   );

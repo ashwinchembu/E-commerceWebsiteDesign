@@ -38,14 +38,6 @@ const PAGE_WIDTH = 1754;
 const PAGE_HEIGHT = 1240;
 const PDF_PAGE_WIDTH = 841.89;
 const PDF_PAGE_HEIGHT = 595.28;
-export const REFERENCE_SLEEVE_NUMBER_LIMIT = 5;
-
-export function sleeveNumbersForReference(values: string[]) {
-  return values
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .slice(0, REFERENCE_SLEEVE_NUMBER_LIMIT);
-}
 const INK = "#202624";
 const GOLD = "#ac8534";
 const PAPER = "#ffffff";
@@ -398,7 +390,7 @@ function drawSleeveDetails(context: CanvasRenderingContext2D, values: string[], 
   context.fillStyle = MUTED;
   context.font = "500 15px Arial, sans-serif";
   context.fillText("DETAIL", x, y - 20);
-  const selected = sleeveNumbersForReference(values);
+  const selected = values.filter(Boolean);
   if (!selected.length) {
     context.font = "400 17px Arial, sans-serif";
     context.fillText("No numbers", x, y + 30);
@@ -604,8 +596,8 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
     context.fillStyle = INK;
     context.font = "400 22px Arial, sans-serif";
     context.textAlign = "center";
-    context.fillText(sleeveNumbersForReference(input.leftSleeveNumbers).join(" / ") || "No numbers", 566, 1020, 552);
-    context.fillText(sleeveNumbersForReference(input.rightSleeveNumbers).join(" / ") || "No numbers", 1188, 1020, 552);
+    context.fillText(input.leftSleeveNumbers.filter(Boolean).join(" / ") || "No numbers", 566, 1020, 552);
+    context.fillText(input.rightSleeveNumbers.filter(Boolean).join(" / ") || "No numbers", 1188, 1020, 552);
     context.textAlign = "left";
     context.fillStyle = MUTED;
     context.font = "400 18px Arial, sans-serif";
@@ -707,8 +699,8 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
       ["Back stars", `${input.stars} gold star${input.stars === 1 ? "" : "s"}`],
       ["Back name", (input.backName || "None").toUpperCase()],
       ["Back number", input.backNumber || "None"],
-      ["Left sleeve outside", sleeveNumbersForReference(input.leftSleeveNumbers).join(" / ") || "None"],
-      ["Right sleeve outside", sleeveNumbersForReference(input.rightSleeveNumbers).join(" / ") || "None"],
+      ["Left sleeve outside", input.leftSleeveNumbers.filter(Boolean).join(" / ") || "None"],
+      ["Right sleeve outside", input.rightSleeveNumbers.filter(Boolean).join(" / ") || "None"],
       ["Sleeve artwork color", sleeveArtwork.value],
       ["One of one patch", "Black leather / gold artwork / interior lining"],
       ["Neck label", "Black leather / white debossed text"],

@@ -6,9 +6,14 @@ import {
   MAX_STUDIO_DRAFTS,
   parseStudioDrafts,
   sanitizeStudioBackName,
+  STUDIO_SLEEVE_NUMBER_LIMIT,
   upsertStudioDraft,
 } from "../src/app/lib/jacketStudioState.ts";
-import { assemblePdfFromJpegs } from "../src/app/lib/jacketPdfExport.ts";
+import {
+  assemblePdfFromJpegs,
+  REFERENCE_SLEEVE_NUMBER_LIMIT,
+  sleeveNumbersForReference,
+} from "../src/app/lib/jacketPdfExport.ts";
 import { evenlySpacedSleeveSlots } from "../src/app/lib/sleeveLayout.ts";
 
 const viewerUrl = new URL("../src/app/components/VarsityJacketViewer.tsx", import.meta.url);
@@ -30,8 +35,9 @@ test("private studio names remain printable and fit the back label limit", () =>
 });
 
 test("saved studio designs are validated and constrained to the ten-design workspace", () => {
-  assert.equal(createDefaultStudioValues().leftSleeveNumbers.length, 10);
-  assert.equal(createDefaultStudioValues().rightSleeveNumbers.length, 10);
+  assert.equal(STUDIO_SLEEVE_NUMBER_LIMIT, 5);
+  assert.equal(createDefaultStudioValues().leftSleeveNumbers.length, 5);
+  assert.equal(createDefaultStudioValues().rightSleeveNumbers.length, 5);
   const raw = JSON.stringify(
     Array.from({ length: 12 }, (_, index) => ({
       ...draft(String(index), new Date(2026, 0, index + 1).toISOString()),
@@ -47,7 +53,7 @@ test("saved studio designs are validated and constrained to the ten-design works
   assert.equal(parsed.length, MAX_STUDIO_DRAFTS);
   assert.equal(parsed[0].values.backStars, 10);
   assert.equal(parsed[0].values.backNumber, "10");
-  assert.deepEqual(parsed[0].values.leftSleeveNumbers, ["7", "12", "", "", "", "55", "6", "7", "8", "9"]);
+  assert.deepEqual(parsed[0].values.leftSleeveNumbers, ["7", "12", "", "", ""]);
 });
 
 test("the owner dashboard keeps the signed-in identity on one line", async () => {
@@ -114,6 +120,19 @@ test("partial sleeve number sets spread across the complete sleeve", () => {
   assert.deepEqual(evenlySpacedSleeveSlots(10, 2), [0, 9]);
   assert.deepEqual(evenlySpacedSleeveSlots(10, 5), [0, 2, 5, 7, 9]);
   assert.deepEqual(evenlySpacedSleeveSlots(10, 10), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(evenlySpacedSleeveSlots(5, 1), [2]);
+  assert.deepEqual(evenlySpacedSleeveSlots(5, 2), [0, 4]);
+  assert.deepEqual(evenlySpacedSleeveSlots(5, 3), [0, 2, 4]);
+  assert.deepEqual(evenlySpacedSleeveSlots(5, 5), [0, 1, 2, 3, 4]);
+});
+
+test("manufacturer references keep five number entries per sleeve", () => {
+  assert.equal(REFERENCE_SLEEVE_NUMBER_LIMIT, STUDIO_SLEEVE_NUMBER_LIMIT);
+  assert.deepEqual(
+    sleeveNumbersForReference(["01", "02", "03", "04", "05", "06", "07"]),
+    ["01", "02", "03", "04", "05"],
+  );
+  assert.deepEqual(sleeveNumbersForReference(["01", "", " 02 ", "", "03"]), ["01", "02", "03"]);
 });
 
 test("saving an existing design updates it without creating a duplicate", () => {
@@ -143,7 +162,8 @@ test("the private studio exposes custom names, sleeve numbers, and zero to ten s
     readFile(appUrl, "utf8"),
     readFile(studioAccessUrl, "utf8"),
   ]);
-  assert.match(builder, /studioMode \? 10 : 5/);
+  assert.match(builder, /sleeveNumberLimit = STUDIO_SLEEVE_NUMBER_LIMIT/);
+  assert.match(builder, /starLimit = studioMode \? 10 : 5/);
   assert.match(builder, /Array\.from\(\{ length: starLimit \}, \(_, index\) => index \+ 1\)/);
   assert.match(builder, /backStars === n \? n - 1 : n/);
   assert.doesNotMatch(builder, />0<\/span>/);

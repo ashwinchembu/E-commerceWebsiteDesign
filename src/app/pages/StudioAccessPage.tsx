@@ -26,44 +26,63 @@ async function verifyStudioAccount() {
 }
 
 export function StudioAccessPage() {
+  const [authReady, setAuthReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
 
   useEffect(() => {
     document.title = 'Private Studio Sign In | Manoir Kits';
+    let active = true;
+    let unsubscribe = () => {};
     try {
-      const { auth } = getFirebaseServices();
-      return onAuthStateChanged(auth, async (user) => {
-        if (!user) return;
-        try {
-          await verifyStudioAccount();
-          window.location.assign('/studio');
-        } catch (error) {
-          await signOut(auth).catch(() => undefined);
-          setStatus(
-            firebaseErrorMessage(
-              error,
-              'This Google account does not have Private Studio access.',
-            ),
-          );
-          setBusy(false);
-        }
+      const { auth, persistenceReady } = getFirebaseServices();
+      void persistenceReady.then(() => {
+        if (!active) return;
+        unsubscribe = onAuthStateChanged(auth, async (user) => {
+          if (!active) return;
+          if (!user) {
+            setAuthReady(true);
+            return;
+          }
+          try {
+            await verifyStudioAccount();
+            window.location.assign('/studio');
+          } catch (error) {
+            await signOut(auth).catch(() => undefined);
+            setStatus(
+              firebaseErrorMessage(
+                error,
+                'This Google account does not have Private Studio access.',
+              ),
+            );
+            setBusy(false);
+            setAuthReady(true);
+          }
+        });
+      }).catch((error) => {
+        if (!active) return;
+        setStatus(firebaseErrorMessage(error, 'Google sign in could not be prepared.'));
       });
     } catch (error) {
       setStatus(firebaseErrorMessage(error, 'Firebase is not configured.'));
-      return undefined;
     }
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
-  async function googleSignIn() {
+  function googleSignIn() {
     setBusy(true);
     setStatus('Opening Google sign in…');
     try {
-      const { auth, persistenceReady } = getFirebaseServices();
-      await persistenceReady;
+      const { auth } = getFirebaseServices();
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
+      void signInWithPopup(auth, provider).catch((error) => {
+        setStatus(firebaseErrorMessage(error, 'Google sign in failed.'));
+        setBusy(false);
+      });
     } catch (error) {
       setStatus(firebaseErrorMessage(error, 'Google sign in failed.'));
       setBusy(false);
@@ -82,8 +101,8 @@ export function StudioAccessPage() {
         </p>
         <button
           className="mt-8 w-full border border-white bg-white px-4 py-4 text-xs tracking-[0.2em] text-black transition hover:bg-transparent hover:text-white disabled:opacity-40"
-          disabled={busy}
-          onClick={() => void googleSignIn()}
+          disabled={busy || !authReady}
+          onClick={googleSignIn}
           type="button"
         >
           CONTINUE WITH GOOGLE

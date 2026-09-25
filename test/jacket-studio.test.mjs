@@ -54,6 +54,27 @@ test("the owner dashboard keeps the signed-in identity on one line", async () =>
   assert.match(adminAccess, /whitespace-nowrap[\s\S]{0,200}Signed in as/);
 });
 
+test("Google popup sign-in starts directly from the mobile tap", async () => {
+  const [adminAccess, studioAccess] = await Promise.all([
+    readFile(adminAccessUrl, "utf8"),
+    readFile(studioAccessUrl, "utf8"),
+  ]);
+  const adminGoogleSignIn = adminAccess.match(
+    /function googleSignIn\(\) \{([\s\S]*?)\n  \}\n\n  async function createGrant/,
+  )?.[1];
+  const studioGoogleSignIn = studioAccess.match(
+    /function googleSignIn\(\) \{([\s\S]*?)\n  \}\n\n  return/,
+  )?.[1];
+
+  assert.ok(adminGoogleSignIn);
+  assert.ok(studioGoogleSignIn);
+  assert.match(adminGoogleSignIn, /void signInWithPopup\(auth, provider\)/);
+  assert.match(studioGoogleSignIn, /void signInWithPopup\(auth, provider\)/);
+  assert.doesNotMatch(adminGoogleSignIn, /await\s+persistenceReady/);
+  assert.doesNotMatch(studioGoogleSignIn, /await\s+persistenceReady/);
+  assert.match(studioAccess, /disabled=\{busy \|\| !authReady\}/);
+});
+
 test("saving an existing design updates it without creating a duplicate", () => {
   const original = draft("messi", "2026-09-15T10:00:00.000Z");
   const updated = {

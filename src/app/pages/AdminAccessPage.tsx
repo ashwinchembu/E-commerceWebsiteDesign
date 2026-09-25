@@ -994,18 +994,22 @@ export function AdminAccessPage() {
     }
   }
 
-  async function googleSignIn() {
+  function googleSignIn() {
     setBusy(true);
     setAuthError('');
     try {
-      const { auth, persistenceReady } = getFirebaseServices();
-      await persistenceReady;
+      const { auth } = getFirebaseServices();
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      await signInWithPopup(auth, provider);
+      void signInWithPopup(auth, provider)
+        .catch((error) => {
+          setAuthError(firebaseErrorMessage(error, 'Google sign-in failed.'));
+        })
+        .finally(() => {
+          setBusy(false);
+        });
     } catch (error) {
       setAuthError(firebaseErrorMessage(error, 'Google sign-in failed.'));
-    } finally {
       setBusy(false);
     }
   }
@@ -1117,7 +1121,7 @@ export function AdminAccessPage() {
             <button
               className={`${secondaryButton} mt-7 w-full`}
               disabled={busy}
-              onClick={() => void googleSignIn()}
+              onClick={googleSignIn}
               type="button"
             >
               CONTINUE WITH GOOGLE

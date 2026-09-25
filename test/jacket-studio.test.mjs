@@ -9,6 +9,7 @@ import {
   upsertStudioDraft,
 } from "../src/app/lib/jacketStudioState.ts";
 import { assemblePdfFromJpegs } from "../src/app/lib/jacketPdfExport.ts";
+import { evenlySpacedSleeveSlots } from "../src/app/lib/sleeveLayout.ts";
 
 const viewerUrl = new URL("../src/app/components/VarsityJacketViewer.tsx", import.meta.url);
 const builderUrl = new URL("../src/app/pages/JacketBuilderPage.tsx", import.meta.url);
@@ -105,6 +106,14 @@ test("Studio Google sign-in defers browser storage until the popup returns", asy
     studioAccess,
     /setPersistence\(auth, browserSessionPersistence\)[\s\S]*setPersistence\(auth, browserLocalPersistence\)/,
   );
+});
+
+test("partial sleeve number sets spread across the complete sleeve", () => {
+  assert.deepEqual(evenlySpacedSleeveSlots(10, 0), []);
+  assert.deepEqual(evenlySpacedSleeveSlots(10, 1), [5]);
+  assert.deepEqual(evenlySpacedSleeveSlots(10, 2), [0, 9]);
+  assert.deepEqual(evenlySpacedSleeveSlots(10, 5), [0, 2, 5, 7, 9]);
+  assert.deepEqual(evenlySpacedSleeveSlots(10, 10), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 });
 
 test("saving an existing design updates it without creating a duplicate", () => {

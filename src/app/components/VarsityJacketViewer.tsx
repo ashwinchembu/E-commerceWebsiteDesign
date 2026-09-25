@@ -12,6 +12,7 @@ import crestImage from "../../assets/manoir-kits-jacket-crest.png";
 import starMarkImage from "../../assets/manoir-kits-star.png";
 import approvedJacketLayout from "../config/approvedJacketLayout.json";
 import { balancedTextLines, fitUniformFontSize } from "../lib/jacketArtworkFit";
+import { evenlySpacedSleeveSlots } from "../lib/sleeveLayout";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#EFBF04";
@@ -791,17 +792,20 @@ function drawBackDesign(
 }
 
 /**
- * Draws the sleeve numbers, one canvas per slot. Each slot becomes its own
- * small decal sewn at a fixed spot down the arm, so filled values compact
- * top-down like patches applied from the shoulder.
+ * Draws the sleeve numbers, one canvas per slot. The filled values are spread
+ * over the complete slot range so a partial set still fills the sleeve from
+ * shoulder to cuff instead of occupying only the upper part of the arm.
  */
 function drawSleeveNumbers(canvases: HTMLCanvasElement[], numbers: string[], color: string) {
   const values = numbers.map((n) => n.trim()).filter(Boolean).slice(0, canvases.length);
-  canvases.forEach((canvas, i) => {
+  canvases.forEach((canvas) => {
     const ctx = canvas.getContext("2d")!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const value = values[i];
-    if (!value) return;
+  });
+  const slots = evenlySpacedSleeveSlots(canvases.length, values.length);
+  values.forEach((value, index) => {
+    const canvas = canvases[slots[index]];
+    const ctx = canvas.getContext("2d")!;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "400 120px 'League Spartan', sans-serif";

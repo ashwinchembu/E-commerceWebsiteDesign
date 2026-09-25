@@ -13,6 +13,7 @@ import { assemblePdfFromJpegs } from "../src/app/lib/jacketPdfExport.ts";
 const viewerUrl = new URL("../src/app/components/VarsityJacketViewer.tsx", import.meta.url);
 const builderUrl = new URL("../src/app/pages/JacketBuilderPage.tsx", import.meta.url);
 const appUrl = new URL("../src/app/App.tsx", import.meta.url);
+const adminAccessUrl = new URL("../src/app/pages/AdminAccessPage.tsx", import.meta.url);
 const studioAccessUrl = new URL(
   "../src/app/pages/StudioAccessPage.tsx",
   import.meta.url,
@@ -28,6 +29,8 @@ test("private studio names remain printable and fit the back label limit", () =>
 });
 
 test("saved studio designs are validated and constrained to the ten-design workspace", () => {
+  assert.equal(createDefaultStudioValues().leftSleeveNumbers.length, 10);
+  assert.equal(createDefaultStudioValues().rightSleeveNumbers.length, 10);
   const raw = JSON.stringify(
     Array.from({ length: 12 }, (_, index) => ({
       ...draft(String(index), new Date(2026, 0, index + 1).toISOString()),
@@ -35,7 +38,7 @@ test("saved studio designs are validated and constrained to the ten-design works
         ...createDefaultStudioValues(),
         backStars: index === 11 ? 99 : 5,
         backNumber: "1x0",
-        leftSleeveNumbers: ["7x", "123", "", "", "", "55"],
+        leftSleeveNumbers: ["7x", "123", "", "", "", "55", "6", "7", "8", "9", "10"],
       },
     })),
   );
@@ -43,7 +46,12 @@ test("saved studio designs are validated and constrained to the ten-design works
   assert.equal(parsed.length, MAX_STUDIO_DRAFTS);
   assert.equal(parsed[0].values.backStars, 10);
   assert.equal(parsed[0].values.backNumber, "10");
-  assert.deepEqual(parsed[0].values.leftSleeveNumbers, ["7", "12", "", "", ""]);
+  assert.deepEqual(parsed[0].values.leftSleeveNumbers, ["7", "12", "", "", "", "55", "6", "7", "8", "9"]);
+});
+
+test("the owner dashboard keeps the signed-in identity on one line", async () => {
+  const adminAccess = await readFile(adminAccessUrl, "utf8");
+  assert.match(adminAccess, /whitespace-nowrap[\s\S]{0,200}Signed in as/);
 });
 
 test("saving an existing design updates it without creating a duplicate", () => {
@@ -78,8 +86,11 @@ test("the private studio exposes custom names, sleeve numbers, and zero to ten s
   assert.match(builder, /backStars === n \? n - 1 : n/);
   assert.doesNotMatch(builder, />0<\/span>/);
   assert.match(builder, /aria-label="Back name"/);
-  assert.match(builder, /Left Sleeve Numbers \(up to 5\)/);
-  assert.match(builder, /Right Sleeve Numbers \(up to 5\)/);
+  assert.match(builder, /studioMode \? 10 : 5/);
+  assert.match(builder, /sleeveSlotLimit=\{sleeveNumberLimit\}/);
+  assert.match(builder, /Left Sleeve Numbers \(up to \$\{sleeveNumberLimit\}\)/);
+  assert.match(builder, /Right Sleeve Numbers \(up to \$\{sleeveNumberLimit\}\)/);
+  assert.match(viewer, /Math\.min\(10, propsRef\.current\.sleeveSlotLimit \?\? 5\)/);
   assert.match(viewer, /Math\.min\(10, Math\.round\(design\.stars\)\)/);
   assert.match(viewer, /fittedStarStepDegrees\(w, stars\)/);
   assert.match(app, /path="\/studio"/);

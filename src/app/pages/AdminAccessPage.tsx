@@ -1172,7 +1172,7 @@ export function AdminAccessPage() {
         <div>
           <p className="text-xs tracking-[0.25em] text-white/50">MANOIR KITS</p>
           <h1 className="mt-2 text-3xl font-light sm:text-4xl">Owner dashboard</h1>
-          <p className="mt-2 text-sm text-white/50">
+          <p className="mt-2 whitespace-nowrap text-[11px] text-white/50 sm:text-sm">
             Signed in as {admin.email || admin.displayName}
           </p>
         </div>

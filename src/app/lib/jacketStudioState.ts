@@ -59,8 +59,8 @@ export function createDefaultStudioValues(): StudioDesignValues {
     backName: "Madrid",
     backStars: 5,
     backNumber: "7",
-    leftSleeveNumbers: ["", "", "", "", ""],
-    rightSleeveNumbers: ["", "", "", "", ""],
+    leftSleeveNumbers: Array.from({ length: 10 }, () => ""),
+    rightSleeveNumbers: Array.from({ length: 10 }, () => ""),
     backPrintColor: "#FFFFFF",
     sleevePrintColor: "#FFFFFF",
   };
@@ -76,7 +76,7 @@ function normalizedColor(value: unknown, fallback: string) {
 
 function normalizedSleeveNumbers(value: unknown) {
   const source = Array.isArray(value) ? value : [];
-  return Array.from({ length: 5 }, (_, index) =>
+  return Array.from({ length: 10 }, (_, index) =>
     sanitizeStudioNumber(typeof source[index] === "string" ? source[index] : ""),
   );
 }

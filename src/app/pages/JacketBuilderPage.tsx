@@ -296,8 +296,13 @@ export function JacketBuilderPage({ studioMode = false, operatorName }: JacketBu
 
   const [backStars, setBackStars] = useState(5);
   const [backNumber, setBackNumber] = useState("7");
-  const [leftSleeveNumbers, setLeftSleeveNumbers] = useState(["", "", "", "", ""]);
-  const [rightSleeveNumbers, setRightSleeveNumbers] = useState(["", "", "", "", ""]);
+  const sleeveNumberLimit = studioMode ? 10 : 5;
+  const [leftSleeveNumbers, setLeftSleeveNumbers] = useState(() =>
+    Array.from({ length: sleeveNumberLimit }, () => ""),
+  );
+  const [rightSleeveNumbers, setRightSleeveNumbers] = useState(() =>
+    Array.from({ length: sleeveNumberLimit }, () => ""),
+  );
   const [backCity, setBackCity] = useState("Madrid");
   const [backPrintColor, setBackPrintColor] = useState(PRINT_COLORS[0].color);
   const [sleevePrintColor, setSleevePrintColor] = useState(PRINT_COLORS[0].color);
@@ -1060,12 +1065,12 @@ export function JacketBuilderPage({ studioMode = false, operatorName }: JacketBu
               {/* Sleeve numbers — each arm has its own set */}
               <div className="space-y-3">
                 {([
-                  { side: "left" as const, label: "Left Sleeve Numbers (up to 5)", values: leftSleeveNumbers },
-                  { side: "right" as const, label: "Right Sleeve Numbers (up to 5)", values: rightSleeveNumbers },
+                  { side: "left" as const, label: `Left Sleeve Numbers (up to ${sleeveNumberLimit})`, values: leftSleeveNumbers },
+                  { side: "right" as const, label: `Right Sleeve Numbers (up to ${sleeveNumberLimit})`, values: rightSleeveNumbers },
                 ]).map(({ side, label, values }) => (
                   <div key={side}>
                     <label className="text-[10px] tracking-widest uppercase text-gray-400 block mb-1.5">{label}</label>
-                    <div className="flex gap-1.5">
+                    <div className="flex flex-wrap gap-1.5">
                       {values.map((value, i) => (
                         <input
                           key={i}
@@ -1144,7 +1149,7 @@ export function JacketBuilderPage({ studioMode = false, operatorName }: JacketBu
             }
           >
             <VarsityJacketViewer
-              key={jacketEdition}
+              key={`${jacketEdition}-${sleeveNumberLimit}`}
               jacketEdition={jacketEdition}
               bodyColor={renderedBodyColor}
               bodyMaterial={renderedBodyMaterial}
@@ -1156,6 +1161,7 @@ export function JacketBuilderPage({ studioMode = false, operatorName }: JacketBu
               liningColor={liningColor}
               backDesign={backDesign}
               backCityLayout={backCityLayout}
+              sleeveSlotLimit={sleeveNumberLimit}
               onCaptureReady={(capture) => {
                 captureJacketRef.current = capture;
                 setPdfReady(Boolean(capture));

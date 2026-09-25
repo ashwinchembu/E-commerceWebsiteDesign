@@ -910,6 +910,7 @@ interface VarsityJacketViewerProps {
   liningColor: string;
   backDesign: BackDesign;
   backCityLayout?: BackCityLayout;
+  sleeveSlotLimit?: number;
   onCaptureReady?: (capture: JacketCaptureFunction | null) => void;
 }
 
@@ -1614,11 +1615,11 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         );
       }
 
-      // Sleeve numbers: five small patches down the OUTER face of each arm,
+      // Sleeve numbers: compact patches down the OUTER face of each arm,
       // like the physical jacket. Each number is its own tangent patch at its
       // own height instead of one tall strip smearing around the arm's curve.
       // Each arm has its own canvases so the sleeves can differ.
-      const SLEEVE_SLOTS = 5;
+      const SLEEVE_SLOTS = Math.max(1, Math.min(10, propsRef.current.sleeveSlotLimit ?? 5));
       const makeSleeveSet = (): SleeveSet => {
         const canvases: HTMLCanvasElement[] = [];
         const textures: THREE.CanvasTexture[] = [];
@@ -1646,13 +1647,16 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const v = new THREE.Vector3();
         // Keep each patch well inside the sleeve's uninterrupted outer face
         // so its edges stay close to the leather at oblique viewing angles.
-        const pw = wsz.x * 0.4 * FRONT_AND_SLEEVE_ARTWORK_SCALE;
+        const pw = wsz.x * (SLEEVE_SLOTS > 5 ? 0.28 : 0.4) * FRONT_AND_SLEEVE_ARTWORK_SCALE;
         // Scan the arm's outer surface at each slot height first...
         const slotPoints: (THREE.Vector3 | null)[] = [];
         for (let slot = 0; slot < SLEEVE_SLOTS; slot++) {
-          // Keep the fifth patch comfortably above the cuff, where the sleeve
-          // narrows and near-tangent triangles can stretch its bottom edge.
-          const yi = wc.y + wsz.y * (0.27 - 0.105 * slot);
+          // Keep the last patch comfortably above the cuff. Ten-number Studio
+          // exports use a smaller, evenly spaced column while the public
+          // five-number layout retains its established positions.
+          const studioStep = SLEEVE_SLOTS > 5 ? 0.67 / (SLEEVE_SLOTS - 1) : 0.105;
+          const studioTop = SLEEVE_SLOTS > 5 ? 0.31 : 0.27;
+          const yi = wc.y + wsz.y * (studioTop - studioStep * slot);
           const yTol = wsz.y * 0.06;
           // The arm leans, so find its depth range at this height first...
           let zMin = Infinity;
@@ -1716,7 +1720,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
             point,
             orientation,
             pw,
-            pw * 0.8,
+            pw * (SLEEVE_SLOTS > 5 ? 0.72 : 0.8),
             facing,
           );
         }

@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  browserLocalPersistence,
+  browserSessionPersistence,
   GoogleAuthProvider,
+  inMemoryPersistence,
   onAuthStateChanged,
+  setPersistence,
   signInWithPopup,
   signOut,
 } from 'firebase/auth';
@@ -25,7 +29,16 @@ async function verifyStudioAccount() {
   );
 }
 
+async function persistStudioSession(auth: ReturnType<typeof getFirebaseServices>['auth']) {
+  try {
+    await setPersistence(auth, browserSessionPersistence);
+  } catch {
+    await setPersistence(auth, browserLocalPersistence);
+  }
+}
+
 export function StudioAccessPage() {
+  const signingIn = useRef(false);
   const [authReady, setAuthReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -36,16 +49,20 @@ export function StudioAccessPage() {
     let unsubscribe = () => {};
     try {
       const { auth, persistenceReady } = getFirebaseServices();
-      void persistenceReady.then(() => {
+      void persistenceReady.then(async () => {
+        if (!active) return;
+        await setPersistence(auth, inMemoryPersistence);
         if (!active) return;
         unsubscribe = onAuthStateChanged(auth, async (user) => {
           if (!active) return;
+          if (signingIn.current) return;
           if (!user) {
             setAuthReady(true);
             return;
           }
           try {
             await verifyStudioAccount();
+            await persistStudioSession(auth);
             window.location.assign('/studio');
           } catch (error) {
             await signOut(auth).catch(() => undefined);
@@ -73,17 +90,27 @@ export function StudioAccessPage() {
   }, []);
 
   function googleSignIn() {
+    signingIn.current = true;
     setBusy(true);
     setStatus('Opening Google sign in…');
     try {
       const { auth } = getFirebaseServices();
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      void signInWithPopup(auth, provider).catch((error) => {
-        setStatus(firebaseErrorMessage(error, 'Google sign in failed.'));
-        setBusy(false);
-      });
+      void signInWithPopup(auth, provider)
+        .then(async () => {
+          await verifyStudioAccount();
+          await persistStudioSession(auth);
+          window.location.assign('/studio');
+        })
+        .catch(async (error) => {
+          await signOut(auth).catch(() => undefined);
+          signingIn.current = false;
+          setStatus(firebaseErrorMessage(error, 'Google sign in failed.'));
+          setBusy(false);
+        });
     } catch (error) {
+      signingIn.current = false;
       setStatus(firebaseErrorMessage(error, 'Google sign in failed.'));
       setBusy(false);
     }

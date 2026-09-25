@@ -84,6 +84,29 @@ test("Google popup sign-in starts directly from the mobile tap", async () => {
   assert.match(studioAccess, /disabled=\{busy \|\| !authReady\}/);
 });
 
+test("Studio Google sign-in defers browser storage until the popup returns", async () => {
+  const studioAccess = await readFile(studioAccessUrl, "utf8");
+  const setup = studioAccess.match(
+    /void persistenceReady\.then\(async \(\) => \{([\s\S]*?)\n      \}\)\.catch/,
+  )?.[1];
+  const googleSignIn = studioAccess.match(
+    /function googleSignIn\(\) \{([\s\S]*?)\n  \}\n\n  return/,
+  )?.[1];
+
+  assert.ok(setup);
+  assert.ok(googleSignIn);
+  assert.match(setup, /setPersistence\(auth, inMemoryPersistence\)/);
+  assert.match(googleSignIn, /signInWithPopup\(auth, provider\)/);
+  assert.match(
+    googleSignIn,
+    /signInWithPopup\(auth, provider\)[\s\S]*verifyStudioAccount\(\)[\s\S]*persistStudioSession\(auth\)/,
+  );
+  assert.match(
+    studioAccess,
+    /setPersistence\(auth, browserSessionPersistence\)[\s\S]*setPersistence\(auth, browserLocalPersistence\)/,
+  );
+});
+
 test("saving an existing design updates it without creating a duplicate", () => {
   const original = draft("messi", "2026-09-15T10:00:00.000Z");
   const updated = {

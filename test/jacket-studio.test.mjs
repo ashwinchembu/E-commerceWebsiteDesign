@@ -54,6 +54,15 @@ test("the owner dashboard keeps the signed-in identity on one line", async () =>
   assert.match(adminAccess, /whitespace-nowrap[\s\S]{0,200}Signed in as/);
 });
 
+test("the private studio watermark omits the Google ID label", async () => {
+  const app = await readFile(appUrl, "utf8");
+  assert.match(
+    app,
+    /studioIdentity \? \(\s*<SecurityWatermark\s+accessId=""/,
+  );
+  assert.doesNotMatch(app, /accessId="GOOGLE"/);
+});
+
 test("Google popup sign-in starts directly from the mobile tap", async () => {
   const [adminAccess, studioAccess] = await Promise.all([
     readFile(adminAccessUrl, "utf8"),

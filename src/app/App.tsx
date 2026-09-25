@@ -411,7 +411,7 @@ export default function App() {
 
         {studioIdentity ? (
           <SecurityWatermark
-            accessId="GOOGLE"
+            accessId=""
             email={studioIdentity.email}
             name={studioIdentity.name}
             onLogout={handleStudioLogout}

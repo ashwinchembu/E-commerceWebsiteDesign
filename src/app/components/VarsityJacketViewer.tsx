@@ -12,7 +12,7 @@ import crestImage from "../../assets/manoir-kits-jacket-crest.png";
 import starMarkImage from "../../assets/manoir-kits-star.png";
 import approvedJacketLayout from "../config/approvedJacketLayout.json";
 import { balancedTextLines, fitUniformFontSize } from "../lib/jacketArtworkFit";
-import { evenlySpacedSleeveSlots } from "../lib/sleeveLayout";
+import { sleeveNumberSlots } from "../lib/sleeveLayout";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#EFBF04";
@@ -802,7 +802,7 @@ function drawSleeveNumbers(canvases: HTMLCanvasElement[], numbers: string[], col
     const ctx = canvas.getContext("2d")!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   });
-  const slots = evenlySpacedSleeveSlots(canvases.length, values.length);
+  const slots = sleeveNumberSlots(canvases.length, values.length);
   values.forEach((value, index) => {
     const canvas = canvases[slots[index]];
     const ctx = canvas.getContext("2d")!;
@@ -1655,11 +1655,11 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         // Scan the arm's outer surface at each slot height first...
         const slotPoints: (THREE.Vector3 | null)[] = [];
         for (let slot = 0; slot < SLEEVE_SLOTS; slot++) {
-          // Keep the last patch comfortably above the cuff. Ten-number Studio
-          // exports use a smaller, evenly spaced column while the public
-          // five-number layout retains its established positions.
-          const studioStep = SLEEVE_SLOTS > 5 ? 0.67 / (SLEEVE_SLOTS - 1) : 0.105;
-          const studioTop = SLEEVE_SLOTS > 5 ? 0.31 : 0.27;
+          // Five-number Studio exports share the public builder's exact
+          // shoulder-to-cuff anchors (the even Studio slots). The odd slots
+          // fill the gaps only when a design genuinely uses more than five.
+          const studioStep = SLEEVE_SLOTS > 5 ? 0.105 / 2 : 0.105;
+          const studioTop = 0.27;
           const yi = wc.y + wsz.y * (studioTop - studioStep * slot);
           const yTol = wsz.y * 0.06;
           // The arm leans, so find its depth range at this height first...

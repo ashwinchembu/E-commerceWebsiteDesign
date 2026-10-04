@@ -9,7 +9,7 @@ import {
   upsertStudioDraft,
 } from "../src/app/lib/jacketStudioState.ts";
 import { assemblePdfFromJpegs } from "../src/app/lib/jacketPdfExport.ts";
-import { evenlySpacedSleeveSlots } from "../src/app/lib/sleeveLayout.ts";
+import { evenlySpacedSleeveSlots, sleeveNumberSlots } from "../src/app/lib/sleeveLayout.ts";
 
 const viewerUrl = new URL("../src/app/components/VarsityJacketViewer.tsx", import.meta.url);
 const builderUrl = new URL("../src/app/pages/JacketBuilderPage.tsx", import.meta.url);
@@ -114,6 +114,15 @@ test("partial sleeve number sets spread across the complete sleeve", () => {
   assert.deepEqual(evenlySpacedSleeveSlots(10, 2), [0, 9]);
   assert.deepEqual(evenlySpacedSleeveSlots(10, 5), [0, 2, 5, 7, 9]);
   assert.deepEqual(evenlySpacedSleeveSlots(10, 10), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+});
+
+test("five-number Studio designs use the public sleeve anchors", () => {
+  assert.deepEqual(sleeveNumberSlots(10, 0), []);
+  assert.deepEqual(sleeveNumberSlots(10, 1), [4]);
+  assert.deepEqual(sleeveNumberSlots(10, 2), [0, 8]);
+  assert.deepEqual(sleeveNumberSlots(10, 5), [0, 2, 4, 6, 8]);
+  assert.deepEqual(sleeveNumberSlots(10, 6), [0, 2, 4, 5, 7, 9]);
+  assert.deepEqual(sleeveNumberSlots(5, 5), [0, 1, 2, 3, 4]);
 });
 
 test("saving an existing design updates it without creating a duplicate", () => {

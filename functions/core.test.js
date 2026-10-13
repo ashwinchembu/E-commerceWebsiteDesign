@@ -23,6 +23,7 @@ import {
   normalizeSupportEntryInput,
   parseAccessCode,
   supportPlanSummary,
+  supportPreBuildAllocationCheck,
 } from "./core.js";
 
 test("admin bootstrap requires an exact verified allowlisted email", () => {
@@ -684,4 +685,85 @@ test("support entries require reviewed hours and summarize both separate banks",
     summary.grace_ends_at,
     Date.parse("2026-08-31T00:00:00Z"),
   );
+});
+
+test("pre-build allocation checks reserve other pending work in the same hours bucket", () => {
+  const check = supportPreBuildAllocationCheck(
+    [
+      {
+        actual_hours: 3,
+        allocation: "bank",
+        estimate_hours: 3,
+        projected_allocation: "bank",
+        request_id: "completed",
+      },
+      {
+        actual_hours: null,
+        allocation: "unreviewed",
+        estimate_hours: 2,
+        projected_allocation: "bank",
+        request_id: "other-pending",
+      },
+      {
+        actual_hours: null,
+        allocation: "unreviewed",
+        estimate_hours: 6,
+        projected_allocation: "bank",
+        request_id: "current-request",
+      },
+      {
+        actual_hours: null,
+        allocation: "unreviewed",
+        estimate_hours: 20,
+        projected_allocation: "grace",
+        request_id: "other-bucket",
+      },
+    ],
+    { bank_total_hours: 10, grace_total_hours: 20 },
+    "current-request",
+  );
+
+  assert.deepEqual(check, {
+    available_before_request_hours: 5,
+    estimate_hours: 6,
+    exceeds_allocation: true,
+    portal_remaining_hours: 7,
+    projected_allocation: "bank",
+    reserved_other_unreviewed_hours: 2,
+  });
+});
+
+test("pre-build allocation checks use the selected projected bucket", () => {
+  const check = supportPreBuildAllocationCheck(
+    [
+      {
+        actual_hours: 1,
+        allocation: "grace",
+        estimate_hours: 1,
+        projected_allocation: "grace",
+        request_id: "completed",
+      },
+      {
+        actual_hours: null,
+        allocation: "unreviewed",
+        estimate_hours: 1,
+        projected_allocation: "grace",
+        request_id: "other-pending",
+      },
+      {
+        actual_hours: null,
+        allocation: "unreviewed",
+        estimate_hours: 2,
+        projected_allocation: "grace",
+        request_id: "current-request",
+      },
+    ],
+    { bank_total_hours: 24, grace_total_hours: 5 },
+    "current-request",
+  );
+
+  assert.equal(check.projected_allocation, "grace");
+  assert.equal(check.available_before_request_hours, 3);
+  assert.equal(check.exceeds_allocation, false);
+  assert.equal(supportPreBuildAllocationCheck([], {}, "missing"), null);
 });

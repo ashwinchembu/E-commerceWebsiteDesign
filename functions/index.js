@@ -37,6 +37,7 @@ import {
   parseAccessCode,
   publicGrant,
   secureEqual,
+  supportPreBuildAllocationCheck,
   supportPlanSummary,
 } from "./core.js";
 
@@ -475,8 +476,29 @@ export const logChangeRequest = onRequest(
       );
       return { created: !existing };
     });
+    const [planSnapshot, entrySnapshot, requestSnapshot] = await Promise.all([
+      supportPlanReference.get(),
+      supportEntries.orderBy("created_at", "desc").get(),
+      changeRequests.orderBy("occurred_at", "desc").get(),
+    ]);
+    const plan = {
+      ...SUPPORT_PLAN_DEFAULTS,
+      ...(planSnapshot.exists ? planSnapshot.data() : {}),
+    };
+    const entries = entrySnapshot.docs.map(supportEntryForAdmin);
+    const requests = requestSnapshot.docs.map((document) => ({
+      id: document.id,
+      ...document.data(),
+    }));
+    const loggedShas = new Set(entries.map((entry) => entry.sha).filter(Boolean));
+    const historicalEntries = historicalRequestWorkEntries().filter(
+      (entry) => !loggedShas.has(entry.sha),
+    );
+    const cards = buildUnifiedRequestCards(requests, [...entries, ...historicalEntries]);
+    const allocationCheck = supportPreBuildAllocationCheck(cards, plan, reference.id);
     response.status(result.created ? 201 : 200).json({
       ...result,
+      allocationCheck,
       id: reference.id,
       logged: true,
     });

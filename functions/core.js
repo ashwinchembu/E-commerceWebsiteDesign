@@ -606,6 +606,50 @@ export function supportPlanSummary(entries, plan = {}) {
   };
 }
 
+export function supportPreBuildAllocationCheck(cards, plan = {}, requestId) {
+  const activeCards = (Array.isArray(cards) ? cards : []).filter(
+    (card) => card?.voided_at == null,
+  );
+  const requestCard = activeCards.find((card) => card.request_id === requestId);
+  if (!requestCard) return null;
+
+  const projectedAllocation = requestCard.projected_allocation === "grace" ? "grace" : "bank";
+  const summary = supportPlanSummary(
+    activeCards.map((card) => ({
+      actual_hours: card.actual_hours,
+      allocation: card.allocation,
+      estimate_hours: card.estimate_hours,
+      voided_at: card.voided_at,
+    })),
+    plan,
+  );
+  const portalRemainingHours = projectedAllocation === "grace"
+    ? summary.grace_remaining_hours
+    : summary.bank_remaining_hours;
+  const reservedOtherUnreviewedHours = quarterHour(
+    activeCards
+      .filter((card) => (
+        card.request_id !== requestId
+        && card.allocation === "unreviewed"
+        && (card.projected_allocation === "grace" ? "grace" : "bank") === projectedAllocation
+      ))
+      .reduce((total, card) => total + finiteNumber(card.estimate_hours), 0),
+  );
+  const availableBeforeRequestHours = quarterHour(
+    Math.max(0, portalRemainingHours - reservedOtherUnreviewedHours),
+  );
+  const estimateHours = quarterHour(requestCard.estimate_hours);
+
+  return {
+    available_before_request_hours: availableBeforeRequestHours,
+    estimate_hours: estimateHours,
+    exceeds_allocation: estimateHours > availableBeforeRequestHours,
+    portal_remaining_hours: portalRemainingHours,
+    projected_allocation: projectedAllocation,
+    reserved_other_unreviewed_hours: reservedOtherUnreviewedHours,
+  };
+}
+
 export function isAuthorizedAdminEmail(value, emailVerified, allowlist) {
   if (emailVerified !== true) return false;
   const email = cleanString(value, 320).toLowerCase();

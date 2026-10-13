@@ -120,6 +120,7 @@ test("five-number Studio designs use the public sleeve anchors", () => {
   assert.deepEqual(sleeveNumberSlots(10, 0), []);
   assert.deepEqual(sleeveNumberSlots(10, 1), [4]);
   assert.deepEqual(sleeveNumberSlots(10, 2), [0, 8]);
+  assert.deepEqual(sleeveNumberSlots(10, 4), [0, 3, 5, 8]);
   assert.deepEqual(sleeveNumberSlots(10, 5), [0, 2, 4, 6, 8]);
   assert.deepEqual(sleeveNumberSlots(10, 6), [0, 2, 4, 5, 7, 9]);
   assert.deepEqual(sleeveNumberSlots(5, 5), [0, 1, 2, 3, 4]);
@@ -199,4 +200,13 @@ test("the private studio wires the export button to all four 3D jacket views", a
   assert.match(builder, /downloadJacketReferencePdf/);
   assert.match(viewer, /onCaptureReady/);
   assert.match(viewer, /renderer\.domElement\.toDataURL\("image\/png"\)/);
+});
+
+test("the studio PDF keeps numbered references without connector lines", async () => {
+  const exporter = await readFile(
+    new URL("../src/app/lib/jacketPdfExport.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(exporter, /function drawCallout/);
+  assert.match(exporter, /function markView[\s\S]*drawNumberMarker/);
 });

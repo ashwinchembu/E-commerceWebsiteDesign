@@ -296,29 +296,6 @@ function drawNumberMarker(context: CanvasRenderingContext2D, number: number, x: 
   context.textBaseline = "alphabetic";
 }
 
-function drawCallout(
-  context: CanvasRenderingContext2D,
-  number: number,
-  fromX: number,
-  fromY: number,
-  toX: number,
-  toY: number,
-) {
-  context.strokeStyle = GOLD;
-  context.lineWidth = 1.5;
-  context.beginPath();
-  context.moveTo(fromX, fromY);
-  const distance = Math.hypot(toX - fromX, toY - fromY);
-  context.lineTo(toX - (toX - fromX) * 23 / distance, toY - (toY - fromY) * 23 / distance);
-  context.stroke();
-  context.fillStyle = WHITE;
-  context.beginPath();
-  context.arc(fromX, fromY, 4, 0, Math.PI * 2);
-  context.fill();
-  context.stroke();
-  drawNumberMarker(context, number, toX, toY);
-}
-
 function drawDetailCard(
   context: CanvasRenderingContext2D,
   number: number,
@@ -425,9 +402,15 @@ function drawArtwork(context: CanvasRenderingContext2D, image: HTMLImageElement,
   drawContainedImage(context, cropped, cropped.width, cropped.height, x, y, width, height, 12);
 }
 
-function markView(context: CanvasRenderingContext2D, number: number, bounds: {x: number; y: number; width: number; height: number}, anchor: number[], marker: number[]) {
-  drawCallout(context, number, bounds.x + anchor[0] * bounds.width, bounds.y + anchor[1] * bounds.height,
-    bounds.x + marker[0] * bounds.width, bounds.y + marker[1] * bounds.height);
+function markView(context: CanvasRenderingContext2D, number: number, bounds: {x: number; y: number; width: number; height: number}, anchor: number[]) {
+  // Keep the numbered reference on the exact garment detail without drawing
+  // connector lines across the otherwise clean page background.
+  drawNumberMarker(
+    context,
+    number,
+    bounds.x + anchor[0] * bounds.width,
+    bounds.y + anchor[1] * bounds.height,
+  );
 }
 
 function drawSpecificationRow(
@@ -542,7 +525,7 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
       { label: "Snaps + knit trim", value: `${snaps.value} snaps. ${trim.value} collar, cuffs and waistband.`, y: 990, h: 108, anchor: [.54,.87], marker: [.54,.99] },
     ];
     details.forEach((detail, index) => {
-      markView(context, index + 1, bounds, detail.anchor, detail.marker);
+      markView(context, index + 1, bounds, detail.anchor);
       drawDetailCard(context, index + 1, detail.label, detail.value, detailX, detail.y, detailWidth, detail.h);
       if (detail.art) drawArtwork(context, detail.art, detailX + 70, detail.y + 100, detailWidth - 90, 88);
     });
@@ -569,7 +552,7 @@ export async function downloadJacketReferencePdf(input: JacketReferencePdfInput)
     ];
     details.forEach((detail, index) => {
       if ((index !== 0 || input.stars > 0) && (index !== 1 || input.backName) && (index !== 2 || input.backNumber)) {
-        markView(context, index + 1, bounds, detail.anchor, [1, detail.anchor[1] + .04]);
+        markView(context, index + 1, bounds, detail.anchor);
       }
       drawDetailCard(context, index + 1, detail.label, detail.value, detailX, detail.y, detailWidth, index === 3 ? 220 : 142);
     });

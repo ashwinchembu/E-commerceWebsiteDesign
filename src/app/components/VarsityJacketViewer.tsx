@@ -929,7 +929,16 @@ type PartMaterials = {
 
 type Decal = { canvas: HTMLCanvasElement; texture: THREE.CanvasTexture };
 
-type SleeveSet = { canvases: HTMLCanvasElement[]; textures: THREE.CanvasTexture[] };
+type SleevePatchPair = {
+  regular: THREE.Mesh | null;
+  compact: THREE.Mesh | null;
+};
+
+type SleeveSet = {
+  canvases: HTMLCanvasElement[];
+  textures: THREE.CanvasTexture[];
+  patches: SleevePatchPair[];
+};
 
 type Loaded = {
   materials: PartMaterials;
@@ -1258,6 +1267,15 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
     loaded.back.texture.needsUpdate = true;
     drawSleeveNumbers(loaded.sleeves.left.canvases, design.leftSleeveNumbers, design.sleevePrintColor);
     drawSleeveNumbers(loaded.sleeves.right.canvases, design.rightSleeveNumbers, design.sleevePrintColor);
+    const setSleevePatchSize = (set: SleeveSet, values: string[]) => {
+      const useCompactPatches = values.filter((value) => value.trim()).length > 5;
+      set.patches.forEach(({ regular, compact }) => {
+        if (regular) regular.visible = !useCompactPatches;
+        if (compact) compact.visible = useCompactPatches;
+      });
+    };
+    setSleevePatchSize(loaded.sleeves.left, design.leftSleeveNumbers);
+    setSleevePatchSize(loaded.sleeves.right, design.rightSleeveNumbers);
     for (const t of loaded.sleeves.left.textures) t.needsUpdate = true;
     for (const t of loaded.sleeves.right.textures) t.needsUpdate = true;
   };
@@ -1637,7 +1655,7 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
           canvases.push(c);
           textures.push(t);
         }
-        return { canvases, textures };
+        return { canvases, textures, patches: [] };
       };
       // sleeves_L sits on +x, which is the WEARER's left arm.
       const sleeveSets = { left: makeSleeveSet(), right: makeSleeveSet() };
@@ -1649,9 +1667,6 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const wsz = wb.getSize(new THREE.Vector3());
         const pos = s.geometry.attributes.position;
         const v = new THREE.Vector3();
-        // Keep each patch well inside the sleeve's uninterrupted outer face
-        // so its edges stay close to the leather at oblique viewing angles.
-        const pw = wsz.x * (SLEEVE_SLOTS > 5 ? 0.28 : 0.4) * FRONT_AND_SLEEVE_ARTWORK_SCALE;
         // Scan the arm's outer surface at each slot height first...
         const slotPoints: (THREE.Vector3 | null)[] = [];
         for (let slot = 0; slot < SLEEVE_SLOTS; slot++) {
@@ -1718,15 +1733,35 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         for (const { i } of anchors) {
           const t = first.i === last.i ? 0 : (i - first.i) / (last.i - first.i);
           const point = first.p.clone().lerp(last.p, t);
-          addSleevePatch(
+          // A Studio sleeve can hold ten numbers, but designs with five or
+          // fewer should retain the larger public-builder patch size. Build
+          // both footprints once and toggle them when the design changes so a
+          // four-number design does not inherit the tiny ten-number artwork.
+          const regularWidth = wsz.x * 0.4 * FRONT_AND_SLEEVE_ARTWORK_SCALE;
+          const compactWidth = wsz.x * 0.28 * FRONT_AND_SLEEVE_ARTWORK_SCALE;
+          const regular = addSleevePatch(
             s,
             set.textures[i],
             point,
             orientation,
-            pw,
-            pw * (SLEEVE_SLOTS > 5 ? 0.72 : 0.8),
+            regularWidth,
+            regularWidth * 0.8,
             facing,
           );
+          const compact = SLEEVE_SLOTS > 5
+            ? addSleevePatch(
+              s,
+              set.textures[i],
+              point,
+              orientation,
+              compactWidth,
+              compactWidth * 0.72,
+              facing,
+            )
+            : null;
+          if (regular) regular.visible = false;
+          if (compact) compact.visible = false;
+          set.patches[i] = { regular, compact };
         }
       }
 

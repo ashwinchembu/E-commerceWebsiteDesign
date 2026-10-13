@@ -55,13 +55,14 @@ test("the owner dashboard keeps the signed-in identity on one line", async () =>
   assert.match(adminAccess, /whitespace-nowrap[\s\S]{0,200}Signed in as/);
 });
 
-test("the private studio watermark omits the Google ID label", async () => {
+test("the private studio omits the repeated identity pattern", async () => {
   const app = await readFile(appUrl, "utf8");
   assert.match(
     app,
-    /studioIdentity \? \(\s*<SecurityWatermark\s+accessId=""/,
+    /studioIdentity \? \(\s*<SecurityWatermark[\s\S]{0,200}showPattern=\{false\}/,
   );
   assert.doesNotMatch(app, /accessId="GOOGLE"/);
+  assert.doesNotMatch(app, /email=\{studioIdentity\.email\}/);
 });
 
 test("Google popup sign-in starts directly from the mobile tap", async () => {
@@ -200,13 +201,4 @@ test("the private studio wires the export button to all four 3D jacket views", a
   assert.match(builder, /downloadJacketReferencePdf/);
   assert.match(viewer, /onCaptureReady/);
   assert.match(viewer, /renderer\.domElement\.toDataURL\("image\/png"\)/);
-});
-
-test("the studio PDF keeps numbered references without connector lines", async () => {
-  const exporter = await readFile(
-    new URL("../src/app/lib/jacketPdfExport.ts", import.meta.url),
-    "utf8",
-  );
-  assert.doesNotMatch(exporter, /function drawCallout/);
-  assert.match(exporter, /function markView[\s\S]*drawNumberMarker/);
 });

@@ -412,9 +412,10 @@ export default function App() {
         {studioIdentity ? (
           <SecurityWatermark
             accessId=""
-            email={studioIdentity.email}
+            email=""
             name={studioIdentity.name}
             onLogout={handleStudioLogout}
+            showPattern={false}
           />
         ) : null}
 

@@ -121,7 +121,7 @@ test("five-number Studio designs use the public sleeve anchors", () => {
   assert.deepEqual(sleeveNumberSlots(10, 0), []);
   assert.deepEqual(sleeveNumberSlots(10, 1), [4]);
   assert.deepEqual(sleeveNumberSlots(10, 2), [0, 8]);
-  assert.deepEqual(sleeveNumberSlots(10, 4), [0, 3, 5, 8]);
+  assert.deepEqual(sleeveNumberSlots(10, 4), [0, 3, 6, 9]);
   assert.deepEqual(sleeveNumberSlots(10, 5), [0, 2, 4, 6, 8]);
   assert.deepEqual(sleeveNumberSlots(10, 6), [0, 2, 4, 5, 7, 9]);
   assert.deepEqual(sleeveNumberSlots(5, 5), [0, 1, 2, 3, 4]);
@@ -167,6 +167,8 @@ test("the private studio exposes custom names, sleeve numbers, and zero to ten s
   assert.match(viewer, /Math\.min\(10, Math\.round\(design\.stars\)\)/);
   assert.match(viewer, /fittedStarLayout\(w, stars\)/);
   assert.match(viewer, /drawStarMark\(ctx, starMark, x, y, starLayout\.radius, a\)/);
+  assert.match(viewer, /trackedCursiveEmbroidery\([\s\S]*"Est\. 2026"/);
+  assert.match(viewer, /linePoint\.lerp\(slotPoints\[i\]!, 0\.65\)/);
   assert.match(app, /path="\/studio"/);
   assert.match(app, /studioIdentity \? \(/);
   assert.match(app, /getStudioSession/);

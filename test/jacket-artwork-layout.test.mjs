@@ -129,7 +129,7 @@ test("the selected top-ten layouts include compact and wide-spaced jacket previe
   for (const layout of ["compact-single-line", "wide-letter-spacing"]) {
     assert.match(viewer + builder, new RegExp(layout));
   }
-  assert.match(viewer, /cityLayout === "wide-letter-spacing" \? 0\.14 : 0\.035/);
+  assert.match(viewer, /cityLayout === "wide-letter-spacing" \? 0\.22 : 0\.16/);
 });
 
 test("worst-case city names fit the star span by reducing font size uniformly", () => {

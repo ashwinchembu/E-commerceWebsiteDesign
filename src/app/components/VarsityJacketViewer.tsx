@@ -428,6 +428,47 @@ function cursiveEmbroidery(ctx: CanvasRenderingContext2D, text: string, x: numbe
   ctx.restore();
 }
 
+/** Cursive embroidery with a deliberate fabric gap between every character. */
+function trackedCursiveEmbroidery(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fontSize: number,
+  maxWidth: number,
+  tracking = fontSize * 0.1,
+) {
+  ctx.save();
+  ctx.font = `700 ${fontSize}px 'Snell Roundhand', 'Brush Script MT', cursive`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = BRAND_GOLD;
+  ctx.lineWidth = Math.max(1.5, fontSize * 0.025);
+  ctx.fillStyle = BRAND_GOLD;
+
+  const glyphs = [...text].map((glyph) => {
+    const metrics = ctx.measureText(glyph);
+    const isSpace = glyph.trim() === "";
+    const left = isSpace ? 0 : metrics.actualBoundingBoxLeft;
+    const right = isSpace ? metrics.width : metrics.actualBoundingBoxRight;
+    return { glyph, left, width: Math.max(1, left + right) };
+  });
+  const naturalWidth = glyphs.reduce((sum, glyph) => sum + glyph.width, 0)
+    + tracking * Math.max(0, glyphs.length - 1);
+  const scale = Math.min(1, maxWidth / Math.max(1, naturalWidth));
+
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  let cursor = -naturalWidth / 2;
+  glyphs.forEach(({ glyph, left, width }) => {
+    ctx.strokeText(glyph, cursor + left, 0);
+    ctx.fillText(glyph, cursor + left, 0);
+    cursor += width + tracking;
+  });
+  ctx.restore();
+}
+
 function drawClassicWordmark(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, wordmark: HTMLCanvasElement) {
   const maxWidth = 320;
   const maxHeight = 168;
@@ -635,7 +676,7 @@ function drawBackDesign(
     const cityMaxWidth = cityLayout === "outer-star-span"
       ? outerStarSpanCityWidth(w, stars)
       : w * 0.86 * BACK_ARTWORK_SCALE;
-    const trackingRatio = cityLayout === "wide-letter-spacing" ? 0.14 : 0.035;
+    const trackingRatio = cityLayout === "wide-letter-spacing" ? 0.22 : 0.16;
     const preferredFontSize = 100 * BACK_ARTWORK_SCALE;
 
     if (cityLayout === "fill-width") {
@@ -757,18 +798,16 @@ function drawBackDesign(
   }
 
   if (jacketEdition === "Footballers") {
-    if (footballersEstMark) {
-      drawClassicEstMark(ctx, canvas, footballersEstMark);
-    } else {
-      cursiveEmbroidery(
-        ctx,
-        "Est. 2026",
-        w / 2,
-        approvedJacketLayout.fallbackEstMarkY,
-        89.6 * BACK_ARTWORK_SCALE,
-        w * 0.88 * BACK_ARTWORK_SCALE,
-      );
-    }
+    // Draw each character separately so the cursive E, s and t remain
+    // readable instead of joining into one solid patch at jacket scale.
+    trackedCursiveEmbroidery(
+      ctx,
+      "Est. 2026",
+      w / 2,
+      approvedJacketLayout.fallbackEstMarkY,
+      89.6 * BACK_ARTWORK_SCALE,
+      w * 0.88 * BACK_ARTWORK_SCALE,
+    );
   } else if (classicEstMark) {
     drawClassicEstMark(ctx, canvas, classicEstMark);
   } else {
@@ -1730,7 +1769,13 @@ export function VarsityJacketViewer(props: VarsityJacketViewerProps) {
         const orientation = new THREE.Euler().setFromRotationMatrix(lookM);
         for (const { i } of anchors) {
           const t = first.i === last.i ? 0 : (i - first.i) / (last.i - first.i);
-          const point = first.p.clone().lerp(last.p, t);
+          const linePoint = first.p.clone().lerp(last.p, t);
+          // Keep the column visually straight while pulling every patch back
+          // onto its measured sleeve surface. A fully flat interpolated line
+          // can float outside the curved arm and make digits clip or tilt.
+          const point = slotPoints[i]
+            ? linePoint.lerp(slotPoints[i]!, 0.65)
+            : linePoint;
           // A Studio sleeve can hold ten numbers, but designs with five or
           // fewer should retain the larger public-builder patch size. Build
           // both footprints once and toggle them when the design changes so a

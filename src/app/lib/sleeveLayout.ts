@@ -19,10 +19,10 @@ export function sleeveNumberSlots(slotCount: number, valueCount: number) {
   const slots = Math.max(0, Math.floor(slotCount));
   const values = Math.max(0, Math.min(slots, Math.floor(valueCount)));
   if (slots === 10 && values <= 5) {
+    if (values === 4) return [0, 3, 6, 9];
     // The public five-number layout occupies Studio slots 0 through 8. Space
-    // partial sets across that same physical span instead of snapping them to
-    // a subset of five anchors, which created a large middle gap for four
-    // numbers (0, 2, 6, 8).
+    // smaller sets across that physical span. Four values use the complete
+    // Studio column because ten slots are required for truly even thirds.
     return evenlySpacedSleeveSlots(9, values);
   }
   return evenlySpacedSleeveSlots(slots, values);

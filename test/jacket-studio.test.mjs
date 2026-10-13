@@ -165,7 +165,8 @@ test("the private studio exposes custom names, sleeve numbers, and zero to ten s
   assert.match(builder, /Right Sleeve Numbers \(up to \$\{sleeveNumberLimit\}\)/);
   assert.match(viewer, /Math\.min\(10, propsRef\.current\.sleeveSlotLimit \?\? 5\)/);
   assert.match(viewer, /Math\.min\(10, Math\.round\(design\.stars\)\)/);
-  assert.match(viewer, /fittedStarStepDegrees\(w, stars\)/);
+  assert.match(viewer, /fittedStarLayout\(w, stars\)/);
+  assert.match(viewer, /drawStarMark\(ctx, starMark, x, y, starLayout\.radius, a\)/);
   assert.match(app, /path="\/studio"/);
   assert.match(app, /studioIdentity \? \(/);
   assert.match(app, /getStudioSession/);

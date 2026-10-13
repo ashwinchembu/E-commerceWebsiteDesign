@@ -13,6 +13,7 @@ import starMarkImage from "../../assets/manoir-kits-star.png";
 import approvedJacketLayout from "../config/approvedJacketLayout.json";
 import { balancedTextLines, fitUniformFontSize } from "../lib/jacketArtworkFit";
 import { sleeveNumberSlots } from "../lib/sleeveLayout";
+import { fittedStarArcLayout } from "../lib/starLayout";
 
 const MODEL_PATH = "/models/varsitybase/VarsityBase.glb";
 const BRAND_GOLD = "#EFBF04";
@@ -531,28 +532,24 @@ function measuredTrackedTextWidth(
   return glyphs.reduce((sum, width) => sum + width, 0) + tracking * Math.max(0, glyphs.length - 1);
 }
 
-function fittedStarStepDegrees(canvasWidth: number, starCount: number) {
-  if (starCount < 2) return approvedJacketLayout.starStepDegrees;
-  const renderedStarRadius = approvedJacketLayout.starRadius * BACK_ARTWORK_SCALE;
-  const availableHalfWidth = Math.max(0, canvasWidth / 2 - renderedStarRadius - 10);
-  const maxHalfAngle = Math.asin(
-    Math.min(1, availableHalfWidth / approvedJacketLayout.starArc),
-  );
-  const halfStepCount = (starCount - 1) / 2;
-  return Math.min(
-    approvedJacketLayout.starStepDegrees,
-    (maxHalfAngle * 180) / Math.PI / halfStepCount,
-  );
+function fittedStarLayout(canvasWidth: number, starCount: number) {
+  return fittedStarArcLayout({
+    canvasWidth,
+    starCount,
+    starArc: approvedJacketLayout.starArc,
+    preferredStepDegrees: approvedJacketLayout.starStepDegrees,
+    preferredRadius: approvedJacketLayout.starRadius * BACK_ARTWORK_SCALE,
+  });
 }
 
 function outerStarSpanCityWidth(canvasWidth: number, starCount: number) {
   const fallbackWidth = canvasWidth * 0.86 * BACK_ARTWORK_SCALE;
   if (starCount < 2) return fallbackWidth;
 
-  const outerStarAngle = ((starCount - 1) / 2) * fittedStarStepDegrees(canvasWidth, starCount) * Math.PI / 180;
+  const starLayout = fittedStarLayout(canvasWidth, starCount);
+  const outerStarAngle = ((starCount - 1) / 2) * starLayout.stepDegrees * Math.PI / 180;
   const outerStarCenterOffset = approvedJacketLayout.starArc * Math.sin(outerStarAngle);
-  const renderedStarRadius = approvedJacketLayout.starRadius * BACK_ARTWORK_SCALE;
-  const outerEdgeWidth = (outerStarCenterOffset + renderedStarRadius) * 2;
+  const outerEdgeWidth = (outerStarCenterOffset + starLayout.radius) * 2;
 
   return Math.min(canvasWidth * 0.94, Math.max(fallbackWidth, outerEdgeWidth));
 }
@@ -621,12 +618,13 @@ function drawBackDesign(
   const stars = Math.max(0, Math.min(10, Math.round(design.stars)));
   const starArc = approvedJacketLayout.starArc;
   const starCenterY = approvedJacketLayout.starCenterOffset + starArc;
-  const stepDeg = fittedStarStepDegrees(w, stars);
+  const starLayout = fittedStarLayout(w, stars);
+  const stepDeg = starLayout.stepDegrees;
   for (let i = 0; i < stars; i += 1) {
     const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
     const x = w / 2 + starArc * Math.sin(a);
     const y = starCenterY - starArc * Math.cos(a);
-    drawStarMark(ctx, starMark, x, y, approvedJacketLayout.starRadius * BACK_ARTWORK_SCALE, a);
+    drawStarMark(ctx, starMark, x, y, starLayout.radius, a);
   }
 
   // The approved live default uses two balanced lines whenever a long name

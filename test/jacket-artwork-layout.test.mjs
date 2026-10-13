@@ -18,7 +18,7 @@ const viewerUrl = new URL("../src/app/components/VarsityJacketViewer.tsx", impor
 const builderUrl = new URL("../src/app/pages/JacketBuilderPage.tsx", import.meta.url);
 
 const approvedLayout = {
-  version: "approved-2026-08-29",
+  version: "approved-2026-10-12",
   frontAndSleeveArtworkScale: 0.8,
   backArtworkScale: 0.8,
   estMarkBaseHeight: 96,
@@ -26,6 +26,7 @@ const approvedLayout = {
   backProjectionWidth: 0.64,
   backProjectionYOffset: 0.04,
   starArc: 560,
+  starCurveScale: 1.4,
   starCenterOffset: 52,
   starStepDegrees: 11,
   starRadius: 33,

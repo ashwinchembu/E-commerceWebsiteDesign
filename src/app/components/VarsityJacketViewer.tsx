@@ -654,17 +654,17 @@ function drawBackDesign(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // Stars ride high across the traps in a wide, shallow arc: the center star
-  // crowns the collar and the outer ones reach toward the shoulder seams.
+  // Stars ride high across the traps in a pronounced arc: the center star
+  // crowns the collar and the outer ones drop toward the shoulder seams.
   const stars = Math.max(0, Math.min(10, Math.round(design.stars)));
   const starArc = approvedJacketLayout.starArc;
-  const starCenterY = approvedJacketLayout.starCenterOffset + starArc;
   const starLayout = fittedStarLayout(w, stars);
   const stepDeg = starLayout.stepDegrees;
   for (let i = 0; i < stars; i += 1) {
     const a = ((i - (stars - 1) / 2) * stepDeg * Math.PI) / 180;
     const x = w / 2 + starArc * Math.sin(a);
-    const y = starCenterY - starArc * Math.cos(a);
+    const y = approvedJacketLayout.starCenterOffset
+      + (starArc - starArc * Math.cos(a)) * approvedJacketLayout.starCurveScale;
     drawStarMark(ctx, starMark, x, y, starLayout.radius, a);
   }
 
